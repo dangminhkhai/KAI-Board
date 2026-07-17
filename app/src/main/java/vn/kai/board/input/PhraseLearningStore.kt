@@ -35,6 +35,8 @@ object PhraseLearningStore {
         return (learned + defaults[left].orEmpty()).distinct().take(limit)
     }
 
+    fun invalidateCache() { cachedPairs = null }
+
     private fun clean(value: String?): String? = value?.trim()?.lowercase(Locale.ROOT)
         ?.takeIf { it.matches(Regex("[\\p{L}Đđ]{2,32}")) }
 

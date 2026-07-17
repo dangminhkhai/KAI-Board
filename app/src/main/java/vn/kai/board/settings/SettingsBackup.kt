@@ -3,10 +3,17 @@ package vn.kai.board.settings
 import android.content.Context
 import org.json.JSONObject
 import vn.kai.board.input.UserLexiconStore
+import vn.kai.board.input.PhraseLearningStore
 
 object SettingsBackup {
     private const val VERSION = 1
-    private val allowedFiles = listOf("keyboard_preferences", "translation_preferences", "ai_preferences")
+    private val allowedFiles = listOf(
+        "keyboard_preferences",
+        "translation_preferences",
+        "ai_preferences",
+        "user_lexicon",
+        "phrase_learning",
+    )
 
     fun export(context: Context): String {
         val root = JSONObject().put("version", VERSION)
@@ -42,7 +49,10 @@ object SettingsBackup {
             editor.commit()
         }
         UserLexiconStore.invalidateCache()
+        PhraseLearningStore.invalidateCache()
     }
 
     fun containsSecrets(raw: String): Boolean = raw.contains("ai_secret") || raw.contains("api_key", ignoreCase = true)
+
+    internal fun includedDataFiles(): List<String> = allowedFiles.toList()
 }

@@ -29,8 +29,8 @@ import com.google.android.material.textfield.TextInputLayout
 import com.google.android.material.dialog.MaterialAlertDialogBuilder
 import vn.kai.board.settings.KeyboardPreferences
 import vn.kai.board.settings.ThemeMode
-import vn.kai.board.settings.KeyboardColorStyle
 import vn.kai.board.settings.SettingsBackup
+import vn.kai.board.settings.KeyboardThemePalette
 import vn.kai.board.input.UserLexiconStore
 import vn.kai.board.input.AutoCorrectionStatsStore
 import vn.kai.board.translation.TranslationModelsActivity
@@ -52,6 +52,8 @@ class MainActivity : Activity() {
             ThemeMode.SYSTEM -> setTheme(R.style.Theme_KAIBoard)
         }
         super.onCreate(savedInstanceState)
+        val restoreAppearance = intent.getBooleanExtra(EXTRA_RESTORE_APPEARANCE, false)
+        intent.removeExtra(EXTRA_RESTORE_APPEARANCE)
         WindowCompat.setDecorFitsSystemWindows(window, false)
         window.setSoftInputMode(WindowManager.LayoutParams.SOFT_INPUT_ADJUST_RESIZE)
         val density = resources.displayMetrics.density
@@ -60,20 +62,15 @@ class MainActivity : Activity() {
         val isDark = themeMode == ThemeMode.DARK || themeMode == ThemeMode.SYSTEM &&
             resources.configuration.uiMode and Configuration.UI_MODE_NIGHT_MASK == Configuration.UI_MODE_NIGHT_YES
         val colorStyle = KeyboardPreferences.colorStyle(this)
-        val isAiGradient = colorStyle == KeyboardColorStyle.AI_GRADIENT_2026
-        val background = if (isDark) Color.rgb(15, 23, 42) else Color.WHITE
-        val primaryText = if (isDark) Color.rgb(248, 250, 252) else Color.rgb(17, 24, 39)
-        val secondaryText = if (isDark) Color.rgb(203, 213, 225) else Color.rgb(75, 85, 99)
-        val selectedColor = if (isAiGradient) {
-            if (isDark) Color.rgb(139, 92, 246) else Color.rgb(79, 70, 229)
-        } else Color.rgb(37, 99, 235)
-        val idleColor = if (isDark) Color.rgb(51, 65, 85) else Color.rgb(226, 232, 240)
-        val cardColor = if (isAiGradient) {
-            if (isDark) Color.argb(224, 15, 23, 42) else Color.argb(224, 255, 255, 255)
-        } else if (isDark) Color.rgb(30, 41, 59) else Color.rgb(248, 250, 252)
-        val outlineColor = if (isAiGradient) {
-            if (isDark) Color.rgb(124, 58, 237) else Color.rgb(165, 180, 252)
-        } else if (isDark) Color.rgb(71, 85, 105) else Color.rgb(203, 213, 225)
+        val palette = KeyboardThemePalette.resolve(this, colorStyle, isDark)
+        val isAiGradient = palette.gradientColors != null
+        val background = palette.background
+        val primaryText = palette.text
+        val secondaryText = palette.hint
+        val selectedColor = palette.accent
+        val idleColor = palette.specialKey
+        val cardColor = palette.key
+        val outlineColor = palette.specialKey
         val controlInactive = if (isDark) Color.rgb(100, 116, 139) else Color.rgb(148, 163, 184)
         val controlTrackInactive = if (isDark) Color.rgb(51, 65, 85) else Color.rgb(203, 213, 225)
         val checkedColors = ColorStateList(
@@ -84,15 +81,10 @@ class MainActivity : Activity() {
             arrayOf(intArrayOf(android.R.attr.state_checked), intArrayOf()),
             intArrayOf(Color.argb(150, Color.red(selectedColor), Color.green(selectedColor), Color.blue(selectedColor)), controlTrackInactive),
         )
-        val gradientColors = if (isDark) {
-            intArrayOf(Color.rgb(7, 17, 31), Color.rgb(23, 37, 84), Color.rgb(59, 7, 100))
-        } else intArrayOf(Color.rgb(207, 250, 254), Color.rgb(221, 214, 254), Color.rgb(252, 231, 243))
-        val screenGradient = if (isAiGradient) {
-            GradientDrawable(GradientDrawable.Orientation.TL_BR, gradientColors)
-        } else null
-        window.statusBarColor = if (isAiGradient) gradientColors.first() else background
-        window.navigationBarColor = if (isAiGradient) gradientColors.last() else
-            if (isDark) Color.rgb(17, 24, 39) else Color.rgb(243, 244, 246)
+        val gradientColors = palette.gradientColors
+        val screenGradient = gradientColors?.let { GradientDrawable(GradientDrawable.Orientation.TL_BR, it) }
+        window.statusBarColor = gradientColors?.first() ?: background
+        window.navigationBarColor = gradientColors?.last() ?: background
         window.decorView.systemUiVisibility = if (isDark) 0 else
             android.view.View.SYSTEM_UI_FLAG_LIGHT_STATUS_BAR or android.view.View.SYSTEM_UI_FLAG_LIGHT_NAVIGATION_BAR
 
@@ -124,7 +116,7 @@ class MainActivity : Activity() {
         }, LinearLayout.LayoutParams(-1, -2).apply { bottomMargin = dp(16) })
         val navigationItems = listOf(
             "Thiết lập" to "setup", "Nhập liệu" to "input", "KAI AI" to "ai",
-            "Bố cục" to "layout", "Giao diện" to "appearance",
+            "Bố cục" to "layout", "Giao diện" to "appearance", "Sao lưu" to "backup",
         )
         content.addView(HorizontalScrollView(this).apply {
             isHorizontalScrollBarEnabled = false
@@ -270,6 +262,7 @@ class MainActivity : Activity() {
             addSwitch(section, R.string.setting_long_press_symbols, KeyboardPreferences.LONG_PRESS_SYMBOLS, KeyboardPreferences.longPressSymbols(this))
             addSwitch(section, R.string.setting_word_suggestions, KeyboardPreferences.WORD_SUGGESTIONS, KeyboardPreferences.wordSuggestions(this))
             addSwitch(section, R.string.setting_auto_correct, KeyboardPreferences.AUTO_CORRECT, KeyboardPreferences.autoCorrect(this))
+            addSwitch(section, R.string.setting_offline_mode, KeyboardPreferences.OFFLINE_MODE, KeyboardPreferences.offlineMode(this))
             val correctionStats = AutoCorrectionStatsStore.summary(this)
             section.addView(textView(
                 getString(R.string.auto_correct_stats, correctionStats.first, correctionStats.second),
@@ -369,6 +362,10 @@ class MainActivity : Activity() {
                 text = "Lưu key và tự quét model"; setTextColor(Color.WHITE)
                 backgroundTintList = ColorStateList.valueOf(selectedColor)
                 setOnClickListener {
+                    if (KeyboardPreferences.offlineMode(this@MainActivity)) {
+                        Toast.makeText(this@MainActivity, "Tắt chế độ offline để kiểm tra API", Toast.LENGTH_SHORT).show()
+                        return@setOnClickListener
+                    }
                     val apiKeys = vn.kai.board.ai.ApiKeyPool.parse(keyInput.text?.toString().orEmpty())
                     if (apiKeys.isEmpty()) { Toast.makeText(this@MainActivity, "Nhập API key trước", Toast.LENGTH_SHORT).show(); return@setOnClickListener }
                     isEnabled = false; modelStatus.text = "Đang nhận diện nhà cung cấp và model…"
@@ -449,10 +446,48 @@ class MainActivity : Activity() {
         }
         addSection(R.string.tab_appearance, "appearance") { section ->
             section.addView(createThemeSpinner(themeMode, primaryText, cardColor, selectedColor, ::dp))
-            section.addView(createColorStyleSpinner(primaryText, cardColor, selectedColor), LinearLayout.LayoutParams(-1, -2).apply { topMargin = dp(10) })
-            section.addView(textView("Sao lưu cài đặt", 17f, primaryText).apply { setPadding(0, dp(16), 0, dp(4)) })
+            section.addView(MaterialCardView(this).apply {
+                radius = dp(16).toFloat()
+                cardElevation = 0f
+                setCardBackgroundColor(cardColor)
+                strokeColor = outlineColor
+                strokeWidth = dp(1)
+                addView(LinearLayout(this@MainActivity).apply {
+                    orientation = LinearLayout.VERTICAL
+                    setPadding(dp(14), dp(12), dp(14), dp(12))
+                    addView(textView(getString(R.string.keyboard_templates_title), 17f, primaryText).apply {
+                        setTypeface(typeface, Typeface.BOLD)
+                    })
+                    addView(textView(getString(R.string.keyboard_templates_coming_soon), 13f, secondaryText).apply {
+                        setPadding(0, dp(4), 0, 0)
+                    })
+                })
+            }, LinearLayout.LayoutParams(-1, -2).apply { topMargin = dp(12) })
+            val radiusLabel = textView("", 16f, primaryText).apply { setPadding(0, dp(14), 0, 0) }
+            fun updateRadiusLabel(value: Int) { radiusLabel.text = getString(R.string.setting_key_radius_value, value) }
+            val initialRadius = KeyboardPreferences.keyRadiusDp(this)
+            updateRadiusLabel(initialRadius)
+            section.addView(radiusLabel)
+            section.addView(SeekBar(this).apply {
+                max = 24
+                progress = initialRadius
+                thumbTintList = ColorStateList.valueOf(selectedColor)
+                progressTintList = ColorStateList.valueOf(selectedColor)
+                progressBackgroundTintList = ColorStateList.valueOf(controlTrackInactive)
+                setOnSeekBarChangeListener(object : SeekBar.OnSeekBarChangeListener {
+                    override fun onProgressChanged(seekBar: SeekBar?, progress: Int, fromUser: Boolean) {
+                        if (!fromUser) return
+                        KeyboardPreferences.setKeyRadiusDp(this@MainActivity, progress)
+                        updateRadiusLabel(progress)
+                    }
+                    override fun onStartTrackingTouch(seekBar: SeekBar?) = Unit
+                    override fun onStopTrackingTouch(seekBar: SeekBar?) = Unit
+                })
+            })
+        }
+        addSection(R.string.backup_settings_title, "backup") { section ->
             section.addView(MaterialButton(this).apply {
-                text = "Xuất cài đặt"
+                text = getString(R.string.export_settings)
                 setOnClickListener {
                     startActivityForResult(Intent(Intent.ACTION_CREATE_DOCUMENT).apply {
                         type = "application/json"
@@ -461,7 +496,7 @@ class MainActivity : Activity() {
                 }
             })
             section.addView(MaterialButton(this).apply {
-                text = "Nhập cài đặt"
+                text = getString(R.string.import_settings)
                 setOnClickListener {
                     startActivityForResult(Intent(Intent.ACTION_OPEN_DOCUMENT).apply {
                         type = "application/json"
@@ -469,7 +504,7 @@ class MainActivity : Activity() {
                     }, REQUEST_IMPORT_SETTINGS)
                 }
             })
-            section.addView(textView("Không xuất API key, clipboard hoặc dữ liệu đã học.", 13f, secondaryText))
+            section.addView(textView(getString(R.string.backup_settings_note), 13f, secondaryText))
         }
         settingsScroll = ScrollView(this).apply {
             clipToPadding = false
@@ -488,8 +523,15 @@ class MainActivity : Activity() {
         }
         setContentView(settingsScroll)
         ViewCompat.requestApplyInsets(settingsScroll)
+        if (restoreAppearance) {
+            settingsScroll.post {
+                sectionTargets["appearance"]?.let { target ->
+                    settingsScroll.scrollTo(0, (target.top - dp(12)).coerceAtLeast(0))
+                }
+            }
+        }
 
-        if (applicationInfo.flags and ApplicationInfo.FLAG_DEBUGGABLE != 0) {
+        if (!restoreAppearance && applicationInfo.flags and ApplicationInfo.FLAG_DEBUGGABLE != 0) {
             window.setSoftInputMode(
                 WindowManager.LayoutParams.SOFT_INPUT_ADJUST_RESIZE or
                     WindowManager.LayoutParams.SOFT_INPUT_STATE_ALWAYS_VISIBLE,
@@ -527,6 +569,12 @@ class MainActivity : Activity() {
     companion object {
         private const val REQUEST_EXPORT_SETTINGS = 501
         private const val REQUEST_IMPORT_SETTINGS = 502
+        private const val EXTRA_RESTORE_APPEARANCE = "restore_appearance"
+    }
+
+    private fun recreateAtAppearance() {
+        intent.putExtra(EXTRA_RESTORE_APPEARANCE, true)
+        recreate()
     }
 
     private fun createThemeSpinner(themeMode: ThemeMode, primaryText: Int, fieldColor: Int, outlineColor: Int, dp: (Int) -> Int): TextInputLayout {
@@ -539,7 +587,7 @@ class MainActivity : Activity() {
             setOnItemClickListener { _, _, position, _ ->
                 if (modes[position] != KeyboardPreferences.theme(this@MainActivity)) {
                     KeyboardPreferences.setTheme(this@MainActivity, modes[position])
-                    recreate()
+                    recreateAtAppearance()
                 }
             }
         }
@@ -600,31 +648,4 @@ class MainActivity : Activity() {
         }
     }
 
-    private fun createColorStyleSpinner(primaryText: Int, fieldColor: Int, outlineColor: Int): TextInputLayout {
-        val styles = KeyboardColorStyle.entries
-        val labels = listOf(getString(R.string.color_classic), getString(R.string.color_ai_gradient_2026))
-        val current = KeyboardPreferences.colorStyle(this)
-        val dropdown = MaterialAutoCompleteTextView(this).apply {
-            inputType = 0
-            setTextColor(primaryText)
-            setAdapter(ArrayAdapter(this@MainActivity, android.R.layout.simple_dropdown_item_1line, labels))
-            setText(labels[styles.indexOf(current)], false)
-            setOnItemClickListener { _, _, position, _ ->
-                if (styles[position] != KeyboardPreferences.colorStyle(this@MainActivity)) {
-                    KeyboardPreferences.setColorStyle(this@MainActivity, styles[position])
-                    recreate()
-                }
-            }
-        }
-        return TextInputLayout(this).apply {
-            hint = getString(R.string.setting_color_style)
-            boxBackgroundMode = TextInputLayout.BOX_BACKGROUND_OUTLINE
-            boxBackgroundColor = fieldColor
-            boxStrokeColor = outlineColor
-            hintTextColor = ColorStateList.valueOf(outlineColor)
-            setEndIconTintList(ColorStateList.valueOf(outlineColor))
-            endIconMode = TextInputLayout.END_ICON_DROPDOWN_MENU
-            addView(dropdown, LinearLayout.LayoutParams(-1, -2))
-        }
-    }
 }

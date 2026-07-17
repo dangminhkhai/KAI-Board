@@ -30,6 +30,7 @@ import vn.kai.board.input.EmojiRecentStore
 import vn.kai.board.settings.KeyboardPreferences
 import vn.kai.board.settings.ThemeMode
 import vn.kai.board.settings.KeyboardColorStyle
+import vn.kai.board.settings.KeyboardThemePalette
 import vn.kai.board.touch.KeyGeometry
 import vn.kai.board.touch.TouchTargetPolicy
 import vn.kai.board.touch.TouchDispatcher
@@ -77,6 +78,7 @@ class KeyboardView(context: Context) : View(context) {
     private var popupEnabled = true
     private var dark = false
     private var colorStyle = KeyboardColorStyle.CLASSIC
+    private var themePalette = KeyboardThemePalette.resolve(context, colorStyle, false)
     private var backgroundGradient: LinearGradient? = null
     private var suggestionsEnabled = false
     private var suggestions: List<String> = emptyList()
@@ -94,6 +96,7 @@ class KeyboardView(context: Context) : View(context) {
     private var aiToneLabel = "Tự động ngẫu nhiên"
     private var spaceLabel = "Tiếng Việt"
     private var keyboardHeightDp = 220
+    private var keyRadiusDp = 7
     private var numberRowEnabled = false
     private var extendedSymbolsEnabled = true
     private var longPressSymbolsEnabled = false
@@ -169,7 +172,9 @@ class KeyboardView(context: Context) : View(context) {
             ThemeMode.SYSTEM -> resources.configuration.uiMode and Configuration.UI_MODE_NIGHT_MASK == Configuration.UI_MODE_NIGHT_YES
         }
         colorStyle = KeyboardPreferences.colorStyle(context)
+        themePalette = KeyboardThemePalette.resolve(context, colorStyle, dark)
         keyboardHeightDp = KeyboardPreferences.heightDp(context)
+        keyRadiusDp = KeyboardPreferences.keyRadiusDp(context)
         numberRowEnabled = KeyboardPreferences.numberRow(context)
         extendedSymbolsEnabled = KeyboardPreferences.extendedSymbols(context)
         longPressSymbolsEnabled = KeyboardPreferences.longPressSymbols(context)
@@ -278,16 +283,16 @@ class KeyboardView(context: Context) : View(context) {
 
     override fun onDraw(canvas: Canvas) {
         super.onDraw(canvas)
-        if (colorStyle == KeyboardColorStyle.AI_GRADIENT_2026) {
+        if (backgroundGradient != null) {
             keyPaint.shader = backgroundGradient
             canvas.drawRect(0f, 0f, width.toFloat(), height.toFloat(), keyPaint)
             keyPaint.shader = null
         } else {
-            canvas.drawColor(if (dark) Color.rgb(17, 24, 39) else Color.rgb(226, 232, 240))
+            canvas.drawColor(themePalette.background)
         }
-        textPaint.color = if (dark) Color.rgb(248, 250, 252) else if (colorStyle == KeyboardColorStyle.AI_GRADIENT_2026) Color.rgb(15, 23, 55) else Color.rgb(15, 23, 42)
+        textPaint.color = themePalette.text
         popupTextPaint.color = textPaint.color
-        hintPaint.color = if (dark) Color.rgb(148, 163, 184) else Color.rgb(100, 116, 139)
+        hintPaint.color = themePalette.hint
         val scaleX = widthPercent / 100f
         val translateX = effectiveLeftPx(scaleX)
         canvas.save()
@@ -296,30 +301,15 @@ class KeyboardView(context: Context) : View(context) {
         textPaint.textScaleX = 1f / scaleX
         popupTextPaint.textScaleX = 1f / scaleX
         hintPaint.textScaleX = 1f / scaleX
-        val radius = 7f * density
+        val radius = keyRadiusDp * density
         keys.forEach { key ->
             val toolbarKey = key.id.startsWith("toolbar-") || key.id.startsWith("translate-") && key.id != "translate-input" || key.id.startsWith("ai-") && key.id != "ai-input"
             val clipboardUiKey = key.id.startsWith("clipboard-")
             val floatingIcon = toolbarKey || key.id.startsWith("suggestion-") || clipboardUiKey
             keyPaint.color = when {
-                pointers.values.any { it.key == key } -> when {
-                    colorStyle == KeyboardColorStyle.AI_GRADIENT_2026 && dark -> Color.rgb(167, 139, 250)
-                    colorStyle == KeyboardColorStyle.AI_GRADIENT_2026 -> Color.rgb(103, 232, 249)
-                    dark -> Color.rgb(59, 130, 246)
-                    else -> Color.rgb(147, 197, 253)
-                }
-                key.id == "translate-input" || key.id == "ai-input" || key.action is KeyAction.Character || key.action is KeyAction.CommitText || key.action == KeyAction.Space -> when {
-                    colorStyle == KeyboardColorStyle.AI_GRADIENT_2026 && dark -> Color.argb(225, 15, 23, 42)
-                    colorStyle == KeyboardColorStyle.AI_GRADIENT_2026 -> Color.argb(225, 255, 255, 255)
-                    dark -> Color.rgb(51, 65, 85)
-                    else -> Color.WHITE
-                }
-                else -> when {
-                    colorStyle == KeyboardColorStyle.AI_GRADIENT_2026 && dark -> Color.argb(205, 30, 41, 59)
-                    colorStyle == KeyboardColorStyle.AI_GRADIENT_2026 -> Color.argb(190, 224, 231, 255)
-                    dark -> Color.rgb(30, 41, 59)
-                    else -> Color.rgb(203, 213, 225)
-                }
+                pointers.values.any { it.key == key } -> themePalette.pressed
+                key.id == "translate-input" || key.id == "ai-input" || key.action is KeyAction.Character || key.action is KeyAction.CommitText || key.action == KeyAction.Space -> themePalette.key
+                else -> themePalette.specialKey
             }
             if (!floatingIcon) {
                 val keyRadius = if (key.id == "translate-input") 16f * density else radius
@@ -363,15 +353,11 @@ class KeyboardView(context: Context) : View(context) {
     }
 
     private fun updateBackgroundGradient(targetWidth: Int = width, targetHeight: Int = height) {
-        if (colorStyle != KeyboardColorStyle.AI_GRADIENT_2026 || targetWidth <= 0 || targetHeight <= 0) {
+        val colors = themePalette.gradientColors
+        if (colors == null || targetWidth <= 0 || targetHeight <= 0) {
             backgroundGradient = null
             return
         }
-        val colors = if (dark) intArrayOf(
-            Color.rgb(7, 17, 31), Color.rgb(23, 37, 84), Color.rgb(59, 7, 100),
-        ) else intArrayOf(
-            Color.rgb(207, 250, 254), Color.rgb(221, 214, 254), Color.rgb(252, 231, 243),
-        )
         backgroundGradient = LinearGradient(0f, 0f, targetWidth.toFloat(), targetHeight.toFloat(), colors, null, Shader.TileMode.CLAMP)
     }
 
@@ -409,26 +395,11 @@ class KeyboardView(context: Context) : View(context) {
         keyPaint.style = Paint.Style.FILL
     }
 
-    private fun clipboardCardColor(): Int = when {
-        colorStyle == KeyboardColorStyle.AI_GRADIENT_2026 && dark -> Color.argb(224, 15, 23, 42)
-        colorStyle == KeyboardColorStyle.AI_GRADIENT_2026 -> Color.argb(232, 255, 255, 255)
-        dark -> Color.rgb(30, 41, 59)
-        else -> Color.rgb(248, 250, 252)
-    }
+    private fun clipboardCardColor(): Int = themePalette.key
 
-    private fun clipboardOutlineColor(): Int = when {
-        colorStyle == KeyboardColorStyle.AI_GRADIENT_2026 && dark -> Color.rgb(124, 58, 237)
-        colorStyle == KeyboardColorStyle.AI_GRADIENT_2026 -> Color.rgb(165, 180, 252)
-        dark -> Color.rgb(51, 65, 85)
-        else -> Color.rgb(203, 213, 225)
-    }
+    private fun clipboardOutlineColor(): Int = themePalette.specialKey
 
-    private fun clipboardAccentColor(): Int = when {
-        colorStyle == KeyboardColorStyle.AI_GRADIENT_2026 && dark -> Color.rgb(167, 139, 250)
-        colorStyle == KeyboardColorStyle.AI_GRADIENT_2026 -> Color.rgb(79, 70, 229)
-        dark -> Color.rgb(96, 165, 250)
-        else -> Color.rgb(37, 99, 235)
-    }
+    private fun clipboardAccentColor(): Int = themePalette.accent
 
     private fun drawClipboardCard(canvas: Canvas, key: KeyGeometry, selected: Boolean = false) {
         keyPaint.style = Paint.Style.FILL
@@ -712,7 +683,7 @@ class KeyboardView(context: Context) : View(context) {
             canvas.drawText(shown, left, baseline, textPaint)
             val cursorPrefix = aiPrompt.substring(window.start, aiCursor.coerceIn(window.start, window.end))
             val cursorX = left + textPaint.measureText(cursorPrefix)
-            keyPaint.color = if (dark) Color.WHITE else Color.rgb(37, 99, 235)
+            keyPaint.color = themePalette.accent
             keyPaint.strokeWidth = 1.6f * density
             canvas.drawLine(cursorX, baseline + textPaint.ascent(), cursorX, baseline + textPaint.descent(), keyPaint)
         }
@@ -1480,7 +1451,7 @@ class KeyboardView(context: Context) : View(context) {
             keyPaint.color = if (index == 1) Color.WHITE else green
             canvas.drawCircle(x, centerY, radius, keyPaint)
         }
-        popupTextPaint.color = if (dark) Color.WHITE else Color.rgb(15, 23, 42)
+        popupTextPaint.color = themePalette.text
         val baseline = centerY - (popupTextPaint.ascent() + popupTextPaint.descent()) / 2f
         canvas.drawText("↻", centers[0], baseline, popupTextPaint)
         popupTextPaint.color = green

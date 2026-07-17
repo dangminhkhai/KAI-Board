@@ -21,6 +21,8 @@ object KeyboardPreferences {
     const val LEFT_OFFSET_DP = "left_offset_dp"
     const val AUTO_CORRECT = "auto_correct"
     const val WORD_SUGGESTIONS = "word_suggestions"
+    const val OFFLINE_MODE = "offline_mode"
+    const val KEY_RADIUS_DP = "key_radius_dp"
 
     fun haptic(context: Context) = prefs(context).getBoolean(HAPTIC, true)
     fun hapticIntensity(context: Context): Int {
@@ -48,12 +50,17 @@ object KeyboardPreferences {
     fun leftOffsetDp(context: Context) = prefs(context).getInt(LEFT_OFFSET_DP, 0).coerceAtLeast(0)
     fun autoCorrect(context: Context) = prefs(context).getBoolean(AUTO_CORRECT, false)
     fun wordSuggestions(context: Context) = prefs(context).getBoolean(WORD_SUGGESTIONS, true)
+    fun offlineMode(context: Context) = prefs(context).getBoolean(OFFLINE_MODE, false)
+    fun keyRadiusDp(context: Context) = prefs(context).getInt(KEY_RADIUS_DP, 7).coerceIn(0, 24)
 
     fun setBoolean(context: Context, key: String, value: Boolean) =
         prefs(context).edit().putBoolean(key, value).apply()
 
     fun setHeightDp(context: Context, value: Int) =
         prefs(context).edit().putInt(HEIGHT_DP, value.coerceIn(170, 280)).apply()
+
+    fun setKeyRadiusDp(context: Context, value: Int) =
+        prefs(context).edit().putInt(KEY_RADIUS_DP, value.coerceIn(0, 24)).apply()
 
     fun setIntensity(context: Context, key: String, value: Int) =
         prefs(context).edit().putInt(key, value.coerceIn(0, 100)).apply()
@@ -93,7 +100,7 @@ enum class ThemeMode(val storageValue: String) {
 }
 
 enum class KeyboardColorStyle(val storageValue: String) {
-    CLASSIC("classic"), AI_GRADIENT_2026("ai_gradient_2026");
+    CLASSIC("classic");
 
     companion object {
         fun fromStorage(value: String?) = entries.firstOrNull { it.storageValue == value } ?: CLASSIC

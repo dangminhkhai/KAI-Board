@@ -15,6 +15,7 @@ import com.google.mlkit.common.model.DownloadConditions
 import com.google.mlkit.nl.translate.TranslateLanguage
 import com.google.mlkit.nl.translate.Translation
 import com.google.mlkit.nl.translate.TranslatorOptions
+import vn.kai.board.settings.KeyboardPreferences
 
 class TranslationActivity : Activity() {
     override fun onCreate(savedInstanceState: Bundle?) {
@@ -58,9 +59,13 @@ class TranslationActivity : Activity() {
                     output.text = error.localizedMessage; translate.isEnabled = true; client.close()
                 }
             }
-            client.downloadModelIfNeeded(DownloadConditions.Builder().build())
-                .addOnSuccessListener { runTranslation() }
-                .addOnFailureListener { output.text = it.localizedMessage; translate.isEnabled = true; client.close() }
+            if (KeyboardPreferences.offlineMode(this)) {
+                runTranslation()
+            } else {
+                client.downloadModelIfNeeded(DownloadConditions.Builder().build())
+                    .addOnSuccessListener { runTranslation() }
+                    .addOnFailureListener { output.text = it.localizedMessage; translate.isEnabled = true; client.close() }
+            }
         }
         insert.setOnClickListener {
             receiver()?.send(RESULT_TRANSLATION, Bundle().apply { putString(EXTRA_RESULT, output.text.toString()) })

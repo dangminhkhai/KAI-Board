@@ -10,6 +10,7 @@ import android.text.InputType
 import android.view.View
 import android.view.inputmethod.EditorInfo
 import android.view.inputmethod.InputMethodManager
+import android.widget.Toast
 import android.os.Build
 import java.util.Locale
 import vn.kai.board.input.KeyAction
@@ -24,6 +25,7 @@ import vn.kai.board.input.LearnSource
 import vn.kai.board.input.PhraseLearningStore
 import vn.kai.board.input.AutoCorrectionStatsStore
 import vn.kai.board.input.SelectionDeletionPolicy
+import vn.kai.board.input.InputPrivacyPolicy
 import vn.kai.board.settings.KeyboardPreferences
 import vn.kai.board.telex.TelexEngine
 import vn.kai.board.ui.KeyboardView
@@ -149,18 +151,20 @@ class KaiBoardImeService : InputMethodService() {
                     val token = EmailSuggestionEngine.currentToken(before)
                     if (token.isNotEmpty()) connection.deleteSurroundingText(token.length, 0)
                     connection.commitText(action.value, 1)
-                    EmailSuggestionStore.remember(this, action.value)
+                    if (learningAllowed()) EmailSuggestionStore.remember(this, action.value)
                     updateSuggestions()
                 } else if (composing.isNotEmpty()) {
                     composing = action.value
                     connection.setComposingText(composing, 1)
-                    UserLexiconStore.record(this, composing, LearnSource.SUGGESTION, 3)
+                    if (learningAllowed()) UserLexiconStore.record(this, composing, LearnSource.SUGGESTION, 3)
                     updateSuggestions()
                 } else {
                     val previous = previousWord()
                     connection.commitText("${action.value} ", 1)
-                    UserLexiconStore.record(this, action.value, LearnSource.SUGGESTION, 3)
-                    PhraseLearningStore.record(this, previous, action.value)
+                    if (learningAllowed()) {
+                        UserLexiconStore.record(this, action.value, LearnSource.SUGGESTION, 3)
+                        PhraseLearningStore.record(this, previous, action.value)
+                    }
                     updateSuggestions()
                 }
             }
@@ -249,7 +253,7 @@ class KaiBoardImeService : InputMethodService() {
                     }
                     finishComposing()
                     connection.commitText(" ", 1)
-                    if (original.isNotEmpty()) {
+                    if (original.isNotEmpty() && learningAllowed()) {
                         if (corrected != null) UserLexiconStore.record(this, corrected, LearnSource.AUTO_CORRECT, 2)
                         else UserLexiconStore.learn(this, original)
                         PhraseLearningStore.record(this, previous, corrected ?: original)
@@ -333,7 +337,13 @@ class KaiBoardImeService : InputMethodService() {
 
     private fun suggestionsAllowed(info: EditorInfo?): Boolean =
         KeyboardPreferences.wordSuggestions(this) &&
+            !isSensitiveInput(info) &&
             (isEmailInput(info) || (info?.let { TelexInputPolicy.isEnabled(it.inputType) } ?: false))
+
+    private fun isSensitiveInput(info: EditorInfo?): Boolean =
+        info?.let { InputPrivacyPolicy.isSensitive(it.inputType) } == true
+
+    private fun learningAllowed(): Boolean = !isSensitiveInput(currentInputEditorInfo)
 
     private fun isEmailInput(info: EditorInfo?): Boolean {
         val inputType = info?.inputType ?: return false
@@ -346,7 +356,7 @@ class KaiBoardImeService : InputMethodService() {
     }
 
     private fun rememberCurrentEmail() {
-        if (!isEmailInput(currentInputEditorInfo)) return
+        if (!learningAllowed() || !isEmailInput(currentInputEditorInfo)) return
         val before = currentInputConnection?.getTextBeforeCursor(120, 0) ?: ""
         EmailSuggestionStore.remember(this, EmailSuggestionEngine.currentToken(before))
     }
@@ -370,6 +380,10 @@ class KaiBoardImeService : InputMethodService() {
     }
 
     private fun openVoiceInput() {
+        if (KeyboardPreferences.offlineMode(this)) {
+            Toast.makeText(this, "Chế độ offline đang bật", Toast.LENGTH_SHORT).show()
+            return
+        }
         finishComposing()
         val manager = getSystemService(InputMethodManager::class.java)
         val googleVoice = manager?.enabledInputMethodList?.firstOrNull { info ->
@@ -398,6 +412,10 @@ class KaiBoardImeService : InputMethodService() {
 
     private fun openAi() {
         finishComposing()
+        if (KeyboardPreferences.offlineMode(this)) {
+            Toast.makeText(this, "AI bị tắt trong chế độ offline", Toast.LENGTH_SHORT).show()
+            return
+        }
         aiMode = true
         aiPrompt = currentInputConnection?.getSelectedText(0)?.toString().orEmpty().take(2_000)
         aiCursor = aiPrompt.length
@@ -468,6 +486,10 @@ class KaiBoardImeService : InputMethodService() {
         aiHandler.removeCallbacks(aiRunnable)
         val prompt = aiPrompt.trim()
         if (prompt.isEmpty()) return
+        if (KeyboardPreferences.offlineMode(this)) {
+            updateAiUi("AI bị tắt trong chế độ offline")
+            return
+        }
         val keys = SecureApiKeyStore.readAll(this)
         val provider = AiPreferences.provider(this)
         val models = AiPreferences.models(this)
@@ -594,9 +616,13 @@ class KaiBoardImeService : InputMethodService() {
                 client.close()
             }
         }
-        client.downloadModelIfNeeded(DownloadConditions.Builder().build())
-            .addOnSuccessListener { run() }
-            .addOnFailureListener { updateTranslationUi("Lỗi tải model"); client.close() }
+        if (KeyboardPreferences.offlineMode(this)) {
+            run()
+        } else {
+            client.downloadModelIfNeeded(DownloadConditions.Builder().build())
+                .addOnSuccessListener { run() }
+                .addOnFailureListener { updateTranslationUi("Lỗi tải model"); client.close() }
+        }
     }
 
     private fun cycleTranslationLanguage(source: Boolean) {
@@ -637,6 +663,10 @@ class KaiBoardImeService : InputMethodService() {
     }
 
     private fun startVoiceRecognitionActivity(target: VoiceTarget, language: String, prompt: String) {
+        if (KeyboardPreferences.offlineMode(this)) {
+            Toast.makeText(this, "Giọng nói bị tắt trong chế độ offline", Toast.LENGTH_SHORT).show()
+            return
+        }
         val receiver = object : ResultReceiver(Handler(Looper.getMainLooper())) {
             override fun onReceiveResult(resultCode: Int, resultData: Bundle?) {
                 if (resultCode == VoiceInputActivity.RESULT_ERROR) {

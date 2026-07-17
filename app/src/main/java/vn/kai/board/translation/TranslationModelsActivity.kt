@@ -21,6 +21,7 @@ import vn.kai.board.R
 import vn.kai.board.settings.KeyboardColorStyle
 import vn.kai.board.settings.KeyboardPreferences
 import vn.kai.board.settings.ThemeMode
+import vn.kai.board.settings.KeyboardThemePalette
 
 class TranslationModelsActivity : Activity() {
     private val manager = RemoteModelManager.getInstance()
@@ -45,27 +46,19 @@ class TranslationModelsActivity : Activity() {
         val themeMode = KeyboardPreferences.theme(this)
         val dark = themeMode == ThemeMode.DARK || themeMode == ThemeMode.SYSTEM &&
             resources.configuration.uiMode and Configuration.UI_MODE_NIGHT_MASK == Configuration.UI_MODE_NIGHT_YES
-        val gradient = KeyboardPreferences.colorStyle(this) == KeyboardColorStyle.AI_GRADIENT_2026
-        primaryText = if (dark) Color.rgb(248, 250, 252) else Color.rgb(17, 24, 39)
-        secondaryText = if (dark) Color.rgb(203, 213, 225) else Color.rgb(75, 85, 99)
-        selectedColor = if (gradient) {
-            if (dark) Color.rgb(139, 92, 246) else Color.rgb(79, 70, 229)
-        } else Color.rgb(37, 99, 235)
-        cardColor = if (gradient) {
-            if (dark) Color.argb(224, 15, 23, 42) else Color.argb(232, 255, 255, 255)
-        } else if (dark) Color.rgb(30, 41, 59) else Color.rgb(248, 250, 252)
-        outlineColor = if (gradient) {
-            if (dark) Color.rgb(124, 58, 237) else Color.rgb(165, 180, 252)
-        } else if (dark) Color.rgb(51, 65, 85) else Color.rgb(226, 232, 240)
+        val palette = KeyboardThemePalette.resolve(this, KeyboardPreferences.colorStyle(this), dark)
+        primaryText = palette.text
+        secondaryText = palette.hint
+        selectedColor = palette.accent
+        cardColor = palette.key
+        outlineColor = palette.specialKey
 
         content = LinearLayout(this).apply {
             orientation = LinearLayout.VERTICAL
             setPadding(dp(20), dp(52), dp(20), dp(24))
-            if (gradient) background = GradientDrawable(
-                GradientDrawable.Orientation.TL_BR,
-                if (dark) intArrayOf(Color.rgb(7, 17, 31), Color.rgb(23, 37, 84), Color.rgb(59, 7, 100))
-                else intArrayOf(Color.rgb(207, 250, 254), Color.rgb(221, 214, 254), Color.rgb(252, 231, 243)),
-            ) else setBackgroundColor(if (dark) Color.rgb(15, 23, 42) else Color.WHITE)
+            palette.gradientColors?.let {
+                background = GradientDrawable(GradientDrawable.Orientation.TL_BR, it)
+            } ?: setBackgroundColor(palette.background)
         }
         content.addView(TextView(this).apply {
             text = getString(R.string.translation_models_title); textSize = 28f; setTextColor(primaryText)
@@ -125,6 +118,10 @@ class TranslationModelsActivity : Activity() {
                     setTextColor(Color.WHITE); backgroundTintList = ColorStateList.valueOf(selectedColor)
                 }
                 setOnClickListener { button ->
+                    if (!installed && KeyboardPreferences.offlineMode(this@TranslationModelsActivity)) {
+                        Toast.makeText(this@TranslationModelsActivity, "Tắt chế độ offline để tải model", Toast.LENGTH_SHORT).show()
+                        return@setOnClickListener
+                    }
                     button.isEnabled = false
                     status.text = getString(if (installed) R.string.translation_model_deleting else R.string.translation_model_downloading, language.name)
                     changeModel(language.tag, installed)

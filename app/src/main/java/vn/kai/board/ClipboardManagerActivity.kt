@@ -18,6 +18,7 @@ import vn.kai.board.input.NoteStore
 import vn.kai.board.settings.KeyboardColorStyle
 import vn.kai.board.settings.KeyboardPreferences
 import vn.kai.board.settings.ThemeMode
+import vn.kai.board.settings.KeyboardThemePalette
 
 class ClipboardManagerActivity : Activity() {
     private val density get() = resources.displayMetrics.density
@@ -44,23 +45,15 @@ class ClipboardManagerActivity : Activity() {
         val mode = KeyboardPreferences.theme(this)
         val dark = mode == ThemeMode.DARK || mode == ThemeMode.SYSTEM &&
             resources.configuration.uiMode and Configuration.UI_MODE_NIGHT_MASK == Configuration.UI_MODE_NIGHT_YES
-        val gradient = KeyboardPreferences.colorStyle(this) == KeyboardColorStyle.AI_GRADIENT_2026
-        primaryText = if (dark) Color.rgb(248, 250, 252) else Color.rgb(17, 24, 39)
-        secondaryText = if (dark) Color.rgb(203, 213, 225) else Color.rgb(75, 85, 99)
-        selectedColor = if (gradient) {
-            if (dark) Color.rgb(139, 92, 246) else Color.rgb(79, 70, 229)
-        } else Color.rgb(37, 99, 235)
-        cardColor = if (gradient) {
-            if (dark) Color.argb(224, 15, 23, 42) else Color.argb(232, 255, 255, 255)
-        } else if (dark) Color.rgb(30, 41, 59) else Color.rgb(248, 250, 252)
-        outlineColor = if (gradient) {
-            if (dark) Color.rgb(124, 58, 237) else Color.rgb(165, 180, 252)
-        } else if (dark) Color.rgb(51, 65, 85) else Color.rgb(226, 232, 240)
-        screenBackground = if (gradient) GradientDrawable(
-            GradientDrawable.Orientation.TL_BR,
-            if (dark) intArrayOf(Color.rgb(7, 17, 31), Color.rgb(23, 37, 84), Color.rgb(59, 7, 100))
-            else intArrayOf(Color.rgb(207, 250, 254), Color.rgb(221, 214, 254), Color.rgb(252, 231, 243)),
-        ) else GradientDrawable().apply { setColor(if (dark) Color.rgb(15, 23, 42) else Color.WHITE) }
+        val palette = KeyboardThemePalette.resolve(this, KeyboardPreferences.colorStyle(this), dark)
+        primaryText = palette.text
+        secondaryText = palette.hint
+        selectedColor = palette.accent
+        cardColor = palette.key
+        outlineColor = palette.specialKey
+        screenBackground = palette.gradientColors?.let {
+            GradientDrawable(GradientDrawable.Orientation.TL_BR, it)
+        } ?: GradientDrawable().apply { setColor(palette.background) }
     }
 
     private fun showContent() {

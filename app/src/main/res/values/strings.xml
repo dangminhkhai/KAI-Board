@@ -27,6 +27,7 @@
     <string name="setting_auto_correct">Tự sửa khi bấm Space</string>
     <string name="auto_correct_stats">Thử nghiệm tự sửa: %1$d lần giữ sửa • %2$d lần hoàn tác</string>
     <string name="setting_word_suggestions">Hiện gợi ý từ</string>
+    <string name="setting_offline_mode">Chế độ offline (tắt AI, giọng nói và tải model)</string>
     <string name="clear_learned_words">Xóa từ đã học</string>
     <string name="learned_words_status">Đã học %1$d từ • %2$d lượt sử dụng\nGiữ một gợi ý để xóa riêng từ đó</string>
     <string name="clear_learned_words_title">Xóa toàn bộ từ đã học?</string>
@@ -43,6 +44,9 @@
     <string name="edit_learned_word">Sửa từ cá nhân</string>
     <string name="setting_theme">Giao diện</string>
     <string name="setting_color_style">Bộ màu bàn phím</string>
+    <string name="setting_key_radius_value">Bo góc phím: %1$d dp</string>
+    <string name="keyboard_templates_title">Mẫu phím</string>
+    <string name="keyboard_templates_coming_soon">Các mẫu phím trang trí sẽ được thêm sau.</string>
     <string name="color_classic">Cổ điển</string>
     <string name="color_ai_gradient_2026">Gradient AI 2026</string>
     <string name="theme_system">Theo hệ thống</string>
@@ -54,6 +58,10 @@
     <string name="tab_input">Nhập liệu</string>
     <string name="tab_layout">Bố cục</string>
     <string name="tab_appearance">Giao diện</string>
+    <string name="backup_settings_title">Sao lưu &amp; cài đặt</string>
+    <string name="export_settings">Xuất bản sao lưu</string>
+    <string name="import_settings">Khôi phục bản sao lưu</string>
+    <string name="backup_settings_note">Bao gồm cài đặt và từ điển cá nhân; không chứa API key hoặc clipboard.</string>
     <string name="translation_title">Dịch văn bản</string>
     <string name="translation_input_hint">Nhập hoặc chọn văn bản cần dịch</string>
     <string name="translation_auto_download">Tự tải gói ngôn ngữ còn thiếu khi có mạng</string>
