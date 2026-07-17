@@ -1,0 +1,101 @@
+package vn.kai.board.settings
+
+import android.content.Context
+import android.content.SharedPreferences
+
+object KeyboardPreferences {
+    private const val FILE = "keyboard_preferences"
+    const val HAPTIC = "haptic"
+    const val HAPTIC_INTENSITY = "haptic_intensity"
+    const val SOUND_INTENSITY = "sound_intensity"
+    const val POPUP = "popup"
+    const val THEME = "theme"
+    const val COLOR_STYLE = "color_style"
+    const val HEIGHT_DP = "height_dp"
+    const val NUMBER_ROW = "number_row"
+    const val EXTENDED_SYMBOLS = "extended_symbols"
+    const val LONG_PRESS_SYMBOLS = "long_press_symbols"
+    const val ADJUSTMENT_MODE = "adjustment_mode"
+    const val BOTTOM_OFFSET_DP = "bottom_offset_dp"
+    const val WIDTH_PERCENT = "width_percent"
+    const val LEFT_OFFSET_DP = "left_offset_dp"
+    const val AUTO_CORRECT = "auto_correct"
+    const val WORD_SUGGESTIONS = "word_suggestions"
+
+    fun haptic(context: Context) = prefs(context).getBoolean(HAPTIC, true)
+    fun hapticIntensity(context: Context): Int {
+        val preferences = prefs(context)
+        if (!preferences.contains(HAPTIC_INTENSITY) && !preferences.getBoolean(HAPTIC, true)) return 0
+        return preferences.getInt(HAPTIC_INTENSITY, -1).coerceIn(-1, 100)
+    }
+    fun soundIntensity(context: Context) = prefs(context).getInt(SOUND_INTENSITY, -1).coerceIn(-1, 100)
+    fun popup(context: Context) = prefs(context).getBoolean(POPUP, true)
+    fun theme(context: Context): ThemeMode {
+        val preferences = prefs(context)
+        if (preferences.contains("dark") && !preferences.contains(THEME)) {
+            return if (preferences.getBoolean("dark", false)) ThemeMode.DARK else ThemeMode.LIGHT
+        }
+        return ThemeMode.fromStorage(preferences.getString(THEME, null))
+    }
+    fun colorStyle(context: Context) = KeyboardColorStyle.fromStorage(prefs(context).getString(COLOR_STYLE, null))
+    fun heightDp(context: Context) = prefs(context).getInt(HEIGHT_DP, 220).coerceIn(170, 280)
+    fun numberRow(context: Context) = prefs(context).getBoolean(NUMBER_ROW, false)
+    fun extendedSymbols(context: Context) = prefs(context).getBoolean(EXTENDED_SYMBOLS, true)
+    fun longPressSymbols(context: Context) = prefs(context).getBoolean(LONG_PRESS_SYMBOLS, false)
+    fun adjustmentMode(context: Context) = prefs(context).getBoolean(ADJUSTMENT_MODE, false)
+    fun bottomOffsetDp(context: Context) = prefs(context).getInt(BOTTOM_OFFSET_DP, 0).coerceIn(0, 80)
+    fun widthPercent(context: Context) = prefs(context).getInt(WIDTH_PERCENT, 100).coerceIn(75, 100)
+    fun leftOffsetDp(context: Context) = prefs(context).getInt(LEFT_OFFSET_DP, 0).coerceAtLeast(0)
+    fun autoCorrect(context: Context) = prefs(context).getBoolean(AUTO_CORRECT, false)
+    fun wordSuggestions(context: Context) = prefs(context).getBoolean(WORD_SUGGESTIONS, true)
+
+    fun setBoolean(context: Context, key: String, value: Boolean) =
+        prefs(context).edit().putBoolean(key, value).apply()
+
+    fun setHeightDp(context: Context, value: Int) =
+        prefs(context).edit().putInt(HEIGHT_DP, value.coerceIn(170, 280)).apply()
+
+    fun setIntensity(context: Context, key: String, value: Int) =
+        prefs(context).edit().putInt(key, value.coerceIn(0, 100)).apply()
+
+    fun setBottomOffsetDp(context: Context, value: Int) =
+        prefs(context).edit().putInt(BOTTOM_OFFSET_DP, value.coerceIn(0, 80)).apply()
+
+    fun setKeyboardGeometry(context: Context, heightDp: Int, bottomDp: Int, widthPercent: Int, leftDp: Int) =
+        prefs(context).edit()
+            .putInt(HEIGHT_DP, heightDp.coerceIn(170, 280))
+            .putInt(BOTTOM_OFFSET_DP, bottomDp.coerceIn(0, 80))
+            .putInt(WIDTH_PERCENT, widthPercent.coerceIn(75, 100))
+            .putInt(LEFT_OFFSET_DP, leftDp.coerceAtLeast(0))
+            .apply()
+
+    fun setTheme(context: Context, value: ThemeMode) =
+        prefs(context).edit().putString(THEME, value.storageValue).apply()
+
+    fun setColorStyle(context: Context, value: KeyboardColorStyle) =
+        prefs(context).edit().putString(COLOR_STYLE, value.storageValue).apply()
+
+    fun register(context: Context, listener: SharedPreferences.OnSharedPreferenceChangeListener) =
+        prefs(context).registerOnSharedPreferenceChangeListener(listener)
+
+    fun unregister(context: Context, listener: SharedPreferences.OnSharedPreferenceChangeListener) =
+        prefs(context).unregisterOnSharedPreferenceChangeListener(listener)
+
+    private fun prefs(context: Context) = context.getSharedPreferences(FILE, Context.MODE_PRIVATE)
+}
+
+enum class ThemeMode(val storageValue: String) {
+    SYSTEM("system"), LIGHT("light"), DARK("dark");
+
+    companion object {
+        fun fromStorage(value: String?) = entries.firstOrNull { it.storageValue == value } ?: SYSTEM
+    }
+}
+
+enum class KeyboardColorStyle(val storageValue: String) {
+    CLASSIC("classic"), AI_GRADIENT_2026("ai_gradient_2026");
+
+    companion object {
+        fun fromStorage(value: String?) = entries.firstOrNull { it.storageValue == value } ?: CLASSIC
+    }
+}

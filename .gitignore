@@ -1,0 +1,33 @@
+# Android / Gradle build output
+.gradle/
+.kotlin/
+build/
+**/build/
+local.properties
+
+# IDE and OS files
+.idea/
+*.iml
+.DS_Store
+Thumbs.db
+
+# Signing keys and credentials
+*.jks
+*.keystore
+keystore.properties
+signing.properties
+signing-secret.xml
+*.pem
+*.p12
+
+# Generated APKs, reports and local validation artifacts
+outputs/
+work/
+*.apk
+*.aab
+*.apks
+
+# Local environment files
+.env
+.env.*
+!.env.example
