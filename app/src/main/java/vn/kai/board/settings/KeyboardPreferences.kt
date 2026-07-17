@@ -7,6 +7,7 @@ object KeyboardPreferences {
     private const val FILE = "keyboard_preferences"
     const val HAPTIC = "haptic"
     const val HAPTIC_INTENSITY = "haptic_intensity"
+    const val SOUND = "sound"
     const val SOUND_INTENSITY = "sound_intensity"
     const val POPUP = "popup"
     const val THEME = "theme"
@@ -25,12 +26,19 @@ object KeyboardPreferences {
     const val KEY_RADIUS_DP = "key_radius_dp"
 
     fun haptic(context: Context) = prefs(context).getBoolean(HAPTIC, true)
-    fun hapticIntensity(context: Context): Int {
-        val preferences = prefs(context)
-        if (!preferences.contains(HAPTIC_INTENSITY) && !preferences.getBoolean(HAPTIC, true)) return 0
-        return preferences.getInt(HAPTIC_INTENSITY, -1).coerceIn(-1, 100)
+    fun sound(context: Context) = prefs(context).getBoolean(SOUND, true)
+    fun hapticLevel(context: Context) = prefs(context).getInt(HAPTIC_INTENSITY, 0).coerceIn(0, 100)
+    fun soundLevel(context: Context) = prefs(context).getInt(SOUND_INTENSITY, 0).coerceIn(0, 100)
+    fun hapticIntensity(context: Context): Int = when {
+        !haptic(context) -> 0
+        hapticLevel(context) == 0 -> -1
+        else -> hapticLevel(context)
     }
-    fun soundIntensity(context: Context) = prefs(context).getInt(SOUND_INTENSITY, -1).coerceIn(-1, 100)
+    fun soundIntensity(context: Context): Int = when {
+        !sound(context) -> 0
+        soundLevel(context) == 0 -> -1
+        else -> soundLevel(context)
+    }
     fun popup(context: Context) = prefs(context).getBoolean(POPUP, true)
     fun theme(context: Context): ThemeMode {
         val preferences = prefs(context)

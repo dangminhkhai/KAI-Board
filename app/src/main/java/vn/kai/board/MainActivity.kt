@@ -19,7 +19,6 @@ import android.widget.ScrollView
 import android.widget.HorizontalScrollView
 import android.widget.TextView
 import android.widget.SeekBar
-import android.media.AudioManager
 import com.google.android.material.button.MaterialButton
 import com.google.android.material.card.MaterialCardView
 import com.google.android.material.materialswitch.MaterialSwitch
@@ -182,27 +181,26 @@ class MainActivity : Activity() {
             setPadding(0, dp(8), 0, dp(8))
         })
 
-        fun addSwitch(target: LinearLayout, label: Int, key: String, checked: Boolean) {
-            target.addView(MaterialSwitch(this).apply {
+        fun addSwitch(target: LinearLayout, label: Int, key: String, checked: Boolean): MaterialSwitch {
+            return MaterialSwitch(this).apply {
                 text = getString(label); textSize = 16f; isChecked = checked; setTextColor(primaryText)
                 thumbTintList = checkedColors
                 trackTintList = switchTrackColors
                 setPadding(0, dp(8), 0, dp(8))
                 setOnCheckedChangeListener { _, value -> KeyboardPreferences.setBoolean(this@MainActivity, key, value) }
-            })
+            }.also { target.addView(it) }
         }
-        fun addIntensitySlider(target: LinearLayout, label: Int, storedValue: Int, systemDefault: Int, key: String) {
+        fun addIntensitySlider(target: LinearLayout, label: Int, storedValue: Int, key: String): SeekBar {
             val title = textView("", 16f, primaryText)
-            fun update(value: Int, isDefault: Boolean) {
-                title.text = if (isDefault) "${getString(label)}: ${getString(R.string.system_default)} ($value%)"
+            fun update(value: Int) {
+                title.text = if (value == 0) "${getString(label)}: ${getString(R.string.system_default)}"
                 else "${getString(label)}: $value%"
             }
-            val initial = if (storedValue < 0) systemDefault else storedValue
-            update(initial, storedValue < 0)
+            update(storedValue)
             target.addView(title.apply { setPadding(0, dp(8), 0, 0) })
-            target.addView(SeekBar(this).apply {
+            return SeekBar(this).apply {
                 max = 100
-                progress = initial
+                progress = storedValue
                 thumbTintList = ColorStateList.valueOf(selectedColor)
                 progressTintList = ColorStateList.valueOf(selectedColor)
                 progressBackgroundTintList = ColorStateList.valueOf(controlTrackInactive)
@@ -210,12 +208,12 @@ class MainActivity : Activity() {
                     override fun onProgressChanged(seekBar: SeekBar?, progress: Int, fromUser: Boolean) {
                         if (!fromUser) return
                         KeyboardPreferences.setIntensity(this@MainActivity, key, progress)
-                        update(progress, false)
+                        update(progress)
                     }
                     override fun onStartTrackingTouch(seekBar: SeekBar?) = Unit
                     override fun onStopTrackingTouch(seekBar: SeekBar?) = Unit
                 })
-            })
+            }.also { target.addView(it) }
         }
         fun addSection(title: Int, key: String, build: (LinearLayout) -> Unit) {
             val section = LinearLayout(this).apply {
@@ -252,12 +250,20 @@ class MainActivity : Activity() {
             section.addView(textView(getString(R.string.setup_note), 14f, secondaryText).apply { setPadding(0, dp(8), 0, 0) })
         }
         addSection(R.string.tab_input, "input") { section ->
-            val audio = getSystemService(AudioManager::class.java)
-            val maxVolume = audio?.getStreamMaxVolume(AudioManager.STREAM_MUSIC)?.coerceAtLeast(1) ?: 1
-            val currentVolume = audio?.getStreamVolume(AudioManager.STREAM_MUSIC) ?: 0
-            val systemSound = (currentVolume * 100 / maxVolume).coerceIn(0, 100)
-            addIntensitySlider(section, R.string.setting_haptic, KeyboardPreferences.hapticIntensity(this), 50, KeyboardPreferences.HAPTIC_INTENSITY)
-            addIntensitySlider(section, R.string.setting_sound, KeyboardPreferences.soundIntensity(this), systemSound, KeyboardPreferences.SOUND_INTENSITY)
+            val hapticSwitch = addSwitch(section, R.string.setting_haptic_enabled, KeyboardPreferences.HAPTIC, KeyboardPreferences.haptic(this))
+            val hapticSlider = addIntensitySlider(section, R.string.setting_haptic_intensity, KeyboardPreferences.hapticLevel(this), KeyboardPreferences.HAPTIC_INTENSITY)
+            hapticSlider.isEnabled = hapticSwitch.isChecked
+            hapticSwitch.setOnCheckedChangeListener { _, enabled ->
+                KeyboardPreferences.setBoolean(this@MainActivity, KeyboardPreferences.HAPTIC, enabled)
+                hapticSlider.isEnabled = enabled
+            }
+            val soundSwitch = addSwitch(section, R.string.setting_sound_enabled, KeyboardPreferences.SOUND, KeyboardPreferences.sound(this))
+            val soundSlider = addIntensitySlider(section, R.string.setting_sound_intensity, KeyboardPreferences.soundLevel(this), KeyboardPreferences.SOUND_INTENSITY)
+            soundSlider.isEnabled = soundSwitch.isChecked
+            soundSwitch.setOnCheckedChangeListener { _, enabled ->
+                KeyboardPreferences.setBoolean(this@MainActivity, KeyboardPreferences.SOUND, enabled)
+                soundSlider.isEnabled = enabled
+            }
             addSwitch(section, R.string.setting_popup, KeyboardPreferences.POPUP, KeyboardPreferences.popup(this))
             addSwitch(section, R.string.setting_long_press_symbols, KeyboardPreferences.LONG_PRESS_SYMBOLS, KeyboardPreferences.longPressSymbols(this))
             addSwitch(section, R.string.setting_word_suggestions, KeyboardPreferences.WORD_SUGGESTIONS, KeyboardPreferences.wordSuggestions(this))

@@ -15,6 +15,10 @@
     <string name="settings_title">Cài đặt bàn phím</string>
     <string name="setting_haptic">Rung khi bấm phím</string>
     <string name="setting_sound">Âm thanh khi bấm phím</string>
+    <string name="setting_haptic_enabled">Bật rung khi bấm phím</string>
+    <string name="setting_sound_enabled">Bật âm thanh khi bấm phím</string>
+    <string name="setting_haptic_intensity">Cường độ rung</string>
+    <string name="setting_sound_intensity">Âm lượng phím</string>
     <string name="system_default">Mặc định máy</string>
     <string name="setting_popup">Hiện popup ký tự</string>
     <string name="setting_number_row">Hiện hàng phím số</string>
