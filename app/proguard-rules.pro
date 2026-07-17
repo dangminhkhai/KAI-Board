@@ -8,7 +8,10 @@
 -keep class vn.kai.board.ClipboardManagerActivity { *; }
 -keep class vn.kai.board.LearnedWordsActivity { *; }
 
-# ML Kit model registries rely on runtime class names and generic metadata.
--keep class com.google.mlkit.nl.translate.** { *; }
--keep class com.google.mlkit.common.model.** { *; }
+# ML Kit discovers registrars and component dependencies at runtime. Keeping
+# only Translate classes lets R8 merge common component interfaces, causing
+# MlKitInitProvider to fail before Application.onCreate on some OEM builds.
+-keepattributes Signature,RuntimeVisibleAnnotations,RuntimeInvisibleAnnotations,AnnotationDefault
+-keep class com.google.mlkit.** { *; }
+-keep class com.google.firebase.components.** { *; }
 -keep class com.google.android.gms.internal.mlkit_translate.** { *; }

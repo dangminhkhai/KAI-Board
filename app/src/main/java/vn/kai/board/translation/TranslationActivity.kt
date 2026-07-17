@@ -5,7 +5,6 @@ import android.os.Bundle
 import android.os.ResultReceiver
 import android.widget.ArrayAdapter
 import android.widget.Button
-import android.widget.CheckBox
 import android.widget.EditText
 import android.widget.LinearLayout
 import android.widget.Spinner
@@ -34,23 +33,19 @@ class TranslationActivity : Activity() {
             minLines = 3
         }
         val output = TextView(this).apply { textSize = 18f; setPadding(0, 20, 0, 20) }
-        val auto = CheckBox(this).apply {
-            text = getString(vn.kai.board.R.string.translation_auto_download)
-            isChecked = TranslationPreferences.autoDownload(this@TranslationActivity)
-        }
         val translate = Button(this).apply { text = getString(vn.kai.board.R.string.translate) }
         val insert = Button(this).apply { text = getString(vn.kai.board.R.string.insert_translation); isEnabled = false }
         setContentView(LinearLayout(this).apply {
             orientation = LinearLayout.VERTICAL; setPadding(36, 50, 36, 30)
             addView(TextView(this@TranslationActivity).apply { text = getString(vn.kai.board.R.string.translation_title); textSize = 25f })
-            addView(source); addView(target); addView(input); addView(auto); addView(translate); addView(output); addView(insert)
+            addView(source); addView(target); addView(input); addView(translate); addView(output); addView(insert)
             addView(TextView(this@TranslationActivity).apply { text = "Powered by Google"; textSize = 12f })
         })
         translate.setOnClickListener {
             val sourceTag = languages[source.selectedItemPosition].tag
             val targetTag = languages[target.selectedItemPosition].tag
             if (sourceTag == targetTag || input.text.isBlank()) return@setOnClickListener
-            TranslationPreferences.save(this, sourceTag, targetTag, auto.isChecked)
+            TranslationPreferences.save(this, sourceTag, targetTag, false)
             val sourceCode = TranslateLanguage.fromLanguageTag(sourceTag) ?: return@setOnClickListener
             val targetCode = TranslateLanguage.fromLanguageTag(targetTag) ?: return@setOnClickListener
             val client = Translation.getClient(TranslatorOptions.Builder().setSourceLanguage(sourceCode).setTargetLanguage(targetCode).build())
@@ -63,11 +58,9 @@ class TranslationActivity : Activity() {
                     output.text = error.localizedMessage; translate.isEnabled = true; client.close()
                 }
             }
-            if (auto.isChecked) {
-                client.downloadModelIfNeeded(DownloadConditions.Builder().build())
-                    .addOnSuccessListener { runTranslation() }
-                    .addOnFailureListener { output.text = it.localizedMessage; translate.isEnabled = true; client.close() }
-            } else runTranslation()
+            client.downloadModelIfNeeded(DownloadConditions.Builder().build())
+                .addOnSuccessListener { runTranslation() }
+                .addOnFailureListener { output.text = it.localizedMessage; translate.isEnabled = true; client.close() }
         }
         insert.setOnClickListener {
             receiver()?.send(RESULT_TRANSLATION, Bundle().apply { putString(EXTRA_RESULT, output.text.toString()) })

@@ -21,6 +21,7 @@ import android.view.View
 import kotlin.math.cos
 import kotlin.math.sin
 import vn.kai.board.input.KeyAction
+import vn.kai.board.input.KeyboardModeActionPolicy
 import vn.kai.board.input.LongPressSymbolMap
 import vn.kai.board.input.EmojiCatalog
 import vn.kai.board.input.ClipboardHistoryStore
@@ -333,12 +334,15 @@ class KeyboardView(context: Context) : View(context) {
                 key.id == "toolbar-back" -> drawBackIcon(canvas, key)
                 key.id == "toolbar-emoji" -> drawSmileyIcon(canvas, key)
                 key.id == "toolbar-mic" -> drawMicrophoneIcon(canvas, key)
+                key.id == "translate-mic" || key.id == "ai-mic" -> drawMicrophoneIcon(canvas, key)
                 key.id == "toolbar-clipboard" || (key.action as? KeyAction.SelectClipboardTab)?.index == 0 ->
                     drawClipboardIcon(canvas, key)
                 key.id == "toolbar-settings" -> drawSettingsIcon(canvas, key)
                 key.id == "toolbar-translate" -> drawTranslateIcon(canvas, key)
+                key.id == "translate-source" || key.id == "translate-swap" || key.id == "translate-target" ->
+                    drawTranslationControl(canvas, key)
                 key.id == "toolbar-ai" -> drawAiIcon(canvas, key)
-                key.id == "ai-send" -> drawAiSendIcon(canvas, key)
+                key.id == "ai-send" || key.id == "enter" && aiMode -> drawAiSendIcon(canvas, key)
                 key.id == "ai-input" -> drawAiInput(canvas, key)
                 key.id == "shift" -> drawShiftIcon(canvas, key)
                 key.id == "enter" -> drawEnterIcon(canvas, key)
@@ -577,6 +581,20 @@ class KeyboardView(context: Context) : View(context) {
         keyPaint.style = Paint.Style.FILL
     }
 
+    private fun drawTranslationControl(canvas: Canvas, key: KeyGeometry) {
+        val oldSize = textPaint.textSize
+        val availableWidth = key.right - key.left - 8f * density
+        var sizeSp = if (key.id == "translate-swap") 15f else 16f
+        textPaint.textSize = sizeSp * density
+        while (textPaint.measureText(key.label) > availableWidth && sizeSp > 12f) {
+            sizeSp -= 1f
+            textPaint.textSize = sizeSp * density
+        }
+        val baseline = key.centerY - (textPaint.ascent() + textPaint.descent()) / 2f
+        canvas.drawText(key.label, key.centerX, baseline, textPaint)
+        textPaint.textSize = oldSize
+    }
+
     private fun drawAiIcon(canvas: Canvas, key: KeyGeometry) {
         val cx = key.centerX; val cy = key.centerY
         prepareMonoIconPaint()
@@ -617,9 +635,7 @@ class KeyboardView(context: Context) : View(context) {
     }
 
     private fun drawAiSendIcon(canvas: Canvas, key: KeyGeometry) {
-        // Match the center of the rightmost Emoji cell in the seven-item toolbar.
-        val normalMenuHalfCell = (width.toFloat() - 10f * density) / 14f
-        val cx = key.right - normalMenuHalfCell
+        val cx = key.centerX
         val cy = key.centerY
         prepareMonoIconPaint()
         keyPaint.style = Paint.Style.FILL
@@ -1207,7 +1223,7 @@ class KeyboardView(context: Context) : View(context) {
         left += cellWidth + gap
         addKey("ai-mode", "", KeyAction.OpenAi, left, top, left + cellWidth, bottom)
         left += cellWidth + gap
-        addKey("ai-send", "", KeyAction.SendAi, left, top, totalWidth - margin, bottom)
+        addKey("ai-mic", "", KeyAction.VoiceAi, left, top, totalWidth - margin, bottom)
     }
 
     private fun addTranslationPanel(totalWidth: Float, margin: Float) {
@@ -1229,7 +1245,7 @@ class KeyboardView(context: Context) : View(context) {
         val bottom = translationInputHeight + toolbarHeight - 4f * density
         val gap = 4f * density
         val closeWidth = 48f * density
-        val cellWidth = (totalWidth - margin * 2 - closeWidth - gap * 3) / 3f
+        val cellWidth = (totalWidth - margin * 2 - closeWidth - gap * 4) / 4f
         var left = margin
         addKey("toolbar-back", "", KeyAction.CloseTranslator, left, top, left + closeWidth, bottom)
         left += closeWidth + gap
@@ -1237,7 +1253,9 @@ class KeyboardView(context: Context) : View(context) {
         left += cellWidth + gap
         addKey("translate-swap", "⇄", KeyAction.SwapTranslationLanguages, left, top, left + cellWidth, bottom)
         left += cellWidth + gap
-        addKey("translate-target", translationTargetLabel, KeyAction.CycleTranslationTarget, left, top, totalWidth - margin, bottom)
+        addKey("translate-target", translationTargetLabel, KeyAction.CycleTranslationTarget, left, top, left + cellWidth, bottom)
+        left += cellWidth + gap
+        addKey("translate-mic", "", KeyAction.VoiceTranslation, left, top, totalWidth - margin, bottom)
     }
 
     private fun addSuggestionToolbar(totalWidth: Float, margin: Float, bottom: Float) {
@@ -1402,7 +1420,10 @@ class KeyboardView(context: Context) : View(context) {
         addKey("comma", ",", KeyAction.Character(','), margin + modeWidth + gap, top, spaceLeft, top + rowHeight)
         addKey("space", spaceLabel, KeyAction.Space, spaceLeft + gap, top, spaceRight, top + rowHeight)
         addKey("period", ".", KeyAction.Character('.'), spaceRight + gap, top, spaceRight + gap + punctuationWidth, top + rowHeight)
-        addKey("enter", "↵", KeyAction.Enter, totalWidth - margin - enterWidth, top, totalWidth - margin, top + rowHeight)
+        addKey(
+            "enter", "↵", KeyboardModeActionPolicy.bottomRightAction(aiMode),
+            totalWidth - margin - enterWidth, top, totalWidth - margin, top + rowHeight,
+        )
     }
 
     private fun addCharacterRow(chars: String, row: Int, insetStart: Float, insetEnd: Float, rowHeight: Float, margin: Float, gap: Float) {

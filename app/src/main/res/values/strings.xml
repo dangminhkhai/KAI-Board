@@ -1,5 +1,7 @@
 <resources>
     <string name="voice_prompt">Nói để nhập văn bản</string>
+    <string name="voice_prompt_translation">Nói nội dung cần dịch</string>
+    <string name="voice_prompt_ai">Nói yêu cầu cho KAI AI</string>
     <string name="voice_unavailable">Không tìm thấy dịch vụ nhập giọng nói</string>
     <string name="app_name">KAI Board</string>
     <string name="subtype_vietnamese">KAI Board</string>
