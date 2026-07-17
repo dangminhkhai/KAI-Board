@@ -4,6 +4,7 @@ import android.content.Context
 import android.security.keystore.KeyGenParameterSpec
 import android.security.keystore.KeyProperties
 import android.util.Base64
+import org.json.JSONArray
 import java.security.KeyStore
 import javax.crypto.Cipher
 import javax.crypto.KeyGenerator
@@ -16,25 +17,36 @@ object SecureApiKeyStore {
     private const val VALUE = "value"
     private const val IV = "iv"
 
-    fun save(context: Context, apiKey: String) {
-        if (apiKey.isBlank()) return clear(context)
+    fun save(context: Context, apiKey: String) = saveAll(context, ApiKeyPool.parse(apiKey))
+
+    fun saveAll(context: Context, apiKeys: List<String>) {
+        val keys = ApiKeyPool.normalize(apiKeys)
+        if (keys.isEmpty()) return clear(context)
         val cipher = Cipher.getInstance("AES/GCM/NoPadding")
         cipher.init(Cipher.ENCRYPT_MODE, key())
         context.getSharedPreferences(FILE, Context.MODE_PRIVATE).edit()
-            .putString(VALUE, Base64.encodeToString(cipher.doFinal(apiKey.trim().toByteArray()), Base64.NO_WRAP))
+            .putString(VALUE, Base64.encodeToString(cipher.doFinal(JSONArray(keys).toString().toByteArray()), Base64.NO_WRAP))
             .putString(IV, Base64.encodeToString(cipher.iv, Base64.NO_WRAP))
             .apply()
     }
 
-    fun read(context: Context): String = runCatching {
+    fun read(context: Context): String = readAll(context).firstOrNull().orEmpty()
+
+    fun readAll(context: Context): List<String> = runCatching {
         val prefs = context.getSharedPreferences(FILE, Context.MODE_PRIVATE)
         val encrypted = Base64.decode(prefs.getString(VALUE, ""), Base64.NO_WRAP)
         val iv = Base64.decode(prefs.getString(IV, ""), Base64.NO_WRAP)
-        if (encrypted.isEmpty() || iv.isEmpty()) return ""
+        if (encrypted.isEmpty() || iv.isEmpty()) return emptyList()
         val cipher = Cipher.getInstance("AES/GCM/NoPadding")
         cipher.init(Cipher.DECRYPT_MODE, key(), GCMParameterSpec(128, iv))
-        String(cipher.doFinal(encrypted))
-    }.getOrDefault("")
+        val decrypted = String(cipher.doFinal(encrypted))
+        if (decrypted.trimStart().startsWith("[")) {
+            val array = JSONArray(decrypted)
+            ApiKeyPool.normalize(List(array.length()) { array.getString(it) })
+        } else {
+            ApiKeyPool.parse(decrypted)
+        }
+    }.getOrDefault(emptyList())
 
     fun clear(context: Context) = context.getSharedPreferences(FILE, Context.MODE_PRIVATE).edit().clear().apply()
 
@@ -49,4 +61,13 @@ object SecureApiKeyStore {
             generateKey()
         }
     }
+}
+
+object ApiKeyPool {
+    fun parse(value: String): List<String> = normalize(value.split('\n', '\r', ',', ';'))
+
+    fun normalize(values: List<String>): List<String> = values
+        .map(String::trim)
+        .filter(String::isNotBlank)
+        .distinct()
 }

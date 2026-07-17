@@ -23,17 +23,23 @@ import vn.kai.board.input.UserLexiconStore
 import vn.kai.board.input.LearnSource
 import vn.kai.board.input.PhraseLearningStore
 import vn.kai.board.input.AutoCorrectionStatsStore
+import vn.kai.board.input.SelectionDeletionPolicy
 import vn.kai.board.settings.KeyboardPreferences
 import vn.kai.board.telex.TelexEngine
 import vn.kai.board.ui.KeyboardView
 import vn.kai.board.MainActivity
+import vn.kai.board.R
 import vn.kai.board.ClipboardManagerActivity
 import vn.kai.board.voice.VoiceInputActivity
+import vn.kai.board.voice.VoiceLanguageResolver
+import vn.kai.board.voice.VoiceResultRouter
+import vn.kai.board.voice.VoiceTarget
 import vn.kai.board.translation.TranslationActivity
 import vn.kai.board.translation.TranslationLanguages
 import vn.kai.board.translation.TranslationPreferences
 import vn.kai.board.ai.AiPreferences
 import vn.kai.board.ai.AiProviderClient
+import vn.kai.board.ai.AiRequestCancellation
 import vn.kai.board.ai.SecureApiKeyStore
 import com.google.mlkit.common.model.DownloadConditions
 import com.google.mlkit.nl.translate.TranslateLanguage
@@ -57,6 +63,7 @@ class KaiBoardImeService : InputMethodService() {
     private var aiPrompt = ""
     private var aiCursor = 0
     private var aiGeneration = 0
+    private var aiCancellation: AiRequestCancellation? = null
     private val aiHandler = Handler(Looper.getMainLooper())
     private val aiRunnable = Runnable { sendAiNow() }
 
@@ -181,6 +188,16 @@ class KaiBoardImeService : InputMethodService() {
                 updateSuggestions()
             }
             KeyAction.Backspace -> {
+                val selectedText = connection.getSelectedText(0)
+                if (SelectionDeletionPolicy.shouldDeleteSelection(selectionActive, selectedText)) {
+                    composing = ""
+                    connection.finishComposingText()
+                    connection.commitText("", 1)
+                    selectionActive = false
+                    lastAutoCorrection = null
+                    updateSuggestions()
+                    return
+                }
                 val correction = lastAutoCorrection
                 if (correction != null) {
                     val before = connection.getTextBeforeCursor(correction.corrected.length + 1, 0)?.toString().orEmpty()
@@ -263,7 +280,9 @@ class KaiBoardImeService : InputMethodService() {
             KeyAction.CycleTranslationTarget,
             KeyAction.SwapTranslationLanguages,
             KeyAction.CloseAi,
-            KeyAction.SendAi -> Unit
+            KeyAction.SendAi,
+            KeyAction.VoiceTranslation,
+            KeyAction.VoiceAi -> Unit
             is KeyAction.SetAiCursor -> Unit
             KeyAction.ToggleEmoji,
             KeyAction.ToggleClipboard -> Unit
@@ -361,7 +380,11 @@ class KaiBoardImeService : InputMethodService() {
             switchInputMethod(googleVoice.id)
             return
         }
-        startVoiceRecognitionActivity()
+        startVoiceRecognitionActivity(
+            VoiceTarget.NORMAL,
+            resolveSpeechLanguage(currentInputEditorInfo),
+            getString(R.string.voice_prompt),
+        )
     }
 
     private fun openTranslator() {
@@ -387,6 +410,11 @@ class KaiBoardImeService : InputMethodService() {
             KeyAction.CloseAi -> stopAi(commit = true)
             KeyAction.OpenAi -> Unit
             KeyAction.SendAi -> sendAiNow()
+            KeyAction.VoiceAi -> startVoiceRecognitionActivity(
+                VoiceTarget.AI_COMMAND,
+                resolveSpeechLanguage(currentInputEditorInfo),
+                getString(R.string.voice_prompt_ai),
+            )
             is KeyAction.SetAiCursor -> {
                 aiCursor = action.index.coerceIn(0, aiPrompt.length)
                 updateAiUi()
@@ -412,7 +440,6 @@ class KaiBoardImeService : InputMethodService() {
                     aiPrompt = aiPrompt.removeRange(aiCursor - 1, aiCursor)
                     aiCursor--
                 }
-                if (aiPrompt.isEmpty()) currentInputConnection?.setComposingText("", 1)
                 updateAiUi(); scheduleAi()
             }
             KeyAction.Enter -> sendAiNow()
@@ -441,21 +468,24 @@ class KaiBoardImeService : InputMethodService() {
         aiHandler.removeCallbacks(aiRunnable)
         val prompt = aiPrompt.trim()
         if (prompt.isEmpty()) return
-        val key = SecureApiKeyStore.read(this)
+        val keys = SecureApiKeyStore.readAll(this)
         val provider = AiPreferences.provider(this)
         val models = AiPreferences.models(this)
-        if (key.isBlank() || provider.isBlank() || models.isEmpty()) {
+        if (keys.isEmpty() || provider.isBlank() || models.isEmpty()) {
             updateAiUi("Hãy thiết lập API key trong Cài đặt")
             return
         }
         val generation = ++aiGeneration
+        aiCancellation?.cancel()
+        val cancellation = AiRequestCancellation().also { aiCancellation = it }
         updateAiUi("AI đang xử lý…")
         Thread({
-            val result = runCatching { AiProviderClient.generate(provider, key, models, AiPreferences.tone(this), prompt) }
+            val result = runCatching { AiProviderClient.generate(provider, keys, models, AiPreferences.tone(this), prompt, cancellation) }
             aiHandler.post {
+                if (aiCancellation === cancellation) aiCancellation = null
                 if (generation != aiGeneration || !aiMode) return@post
                 result.onSuccess { (model, output) ->
-                    currentInputConnection?.setComposingText(output, 1)
+                    currentInputConnection?.commitText(output, 1)
                     updateAiUi("Đã xử lý • $model")
                 }.onFailure { updateAiUi(it.message ?: "AI không thể xử lý") }
             }
@@ -468,6 +498,8 @@ class KaiBoardImeService : InputMethodService() {
 
     private fun stopAi(commit: Boolean) {
         aiHandler.removeCallbacks(aiRunnable)
+        aiCancellation?.cancel()
+        aiCancellation = null
         aiGeneration++
         if (commit) currentInputConnection?.finishComposingText()
         aiMode = false; aiPrompt = ""; aiCursor = 0
@@ -488,6 +520,11 @@ class KaiBoardImeService : InputMethodService() {
                 translationResult = ""
                 updateTranslationUi(); scheduleTranslation()
             }
+            KeyAction.VoiceTranslation -> startVoiceRecognitionActivity(
+                VoiceTarget.TRANSLATION,
+                VoiceLanguageResolver.resolve(TranslationPreferences.source(this)),
+                getString(R.string.voice_prompt_translation),
+            )
             is KeyAction.Character -> {
                 val value = if (shifted) action.value.uppercaseChar() else action.value
                 translationSource = appendTranslatedInput(translationSource, value).takeLast(500)
@@ -557,11 +594,9 @@ class KaiBoardImeService : InputMethodService() {
                 client.close()
             }
         }
-        if (TranslationPreferences.autoDownload(this)) {
-            client.downloadModelIfNeeded(DownloadConditions.Builder().build())
-                .addOnSuccessListener { run() }
-                .addOnFailureListener { updateTranslationUi("Lỗi tải model"); client.close() }
-        } else run()
+        client.downloadModelIfNeeded(DownloadConditions.Builder().build())
+            .addOnSuccessListener { run() }
+            .addOnFailureListener { updateTranslationUi("Lỗi tải model"); client.close() }
     }
 
     private fun cycleTranslationLanguage(source: Boolean) {
@@ -601,18 +636,50 @@ class KaiBoardImeService : InputMethodService() {
         updateTranslationUi()
     }
 
-    private fun startVoiceRecognitionActivity() {
+    private fun startVoiceRecognitionActivity(target: VoiceTarget, language: String, prompt: String) {
         val receiver = object : ResultReceiver(Handler(Looper.getMainLooper())) {
             override fun onReceiveResult(resultCode: Int, resultData: Bundle?) {
+                if (resultCode == VoiceInputActivity.RESULT_ERROR) {
+                    val message = resultData?.getString(VoiceInputActivity.EXTRA_ERROR).orEmpty()
+                    when (runCatching { VoiceTarget.valueOf(resultData?.getString(VoiceInputActivity.EXTRA_TARGET).orEmpty()) }.getOrNull()) {
+                        VoiceTarget.AI_COMMAND -> updateAiUi(message)
+                        VoiceTarget.TRANSLATION -> updateTranslationUi(message)
+                        else -> Unit
+                    }
+                    return
+                }
                 if (resultCode != VoiceInputActivity.RESULT_SPEECH) return
-                val text = resultData?.getString(VoiceInputActivity.EXTRA_TEXT)?.trim().orEmpty()
-                if (text.isNotEmpty()) currentInputConnection?.commitText(text, 1)
+                val result = VoiceResultRouter.prepare(
+                    resultData?.getString(VoiceInputActivity.EXTRA_TARGET),
+                    resultData?.getString(VoiceInputActivity.EXTRA_TEXT),
+                ) ?: return
+                when (result.target) {
+                    VoiceTarget.NORMAL -> currentInputConnection?.commitText(result.text, 1)
+                    VoiceTarget.TRANSLATION -> {
+                        stopAi(commit = false)
+                        translationMode = true
+                        translationSource = result.text
+                        translationResult = ""
+                        updateTranslationUi("Đã nhận giọng nói • đang dịch…")
+                        scheduleTranslation()
+                    }
+                    VoiceTarget.AI_COMMAND -> {
+                        stopTranslation(commit = false)
+                        aiMode = true
+                        aiHandler.removeCallbacks(aiRunnable)
+                        aiPrompt = result.text
+                        aiCursor = aiPrompt.length
+                        updateAiUi("Đã nhận giọng nói • nhấn gửi AI")
+                    }
+                }
             }
         }
         startActivity(
             Intent(this, VoiceInputActivity::class.java)
                 .putExtra(VoiceInputActivity.EXTRA_RECEIVER, receiver)
-                .putExtra(VoiceInputActivity.EXTRA_LANGUAGE, resolveSpeechLanguage(currentInputEditorInfo))
+                .putExtra(VoiceInputActivity.EXTRA_LANGUAGE, language)
+                .putExtra(VoiceInputActivity.EXTRA_PROMPT, prompt)
+                .putExtra(VoiceInputActivity.EXTRA_TARGET, target.name)
                 .addFlags(Intent.FLAG_ACTIVITY_NEW_TASK),
         )
     }

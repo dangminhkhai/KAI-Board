@@ -30,6 +30,7 @@ import com.google.android.material.dialog.MaterialAlertDialogBuilder
 import vn.kai.board.settings.KeyboardPreferences
 import vn.kai.board.settings.ThemeMode
 import vn.kai.board.settings.KeyboardColorStyle
+import vn.kai.board.settings.SettingsBackup
 import vn.kai.board.input.UserLexiconStore
 import vn.kai.board.input.AutoCorrectionStatsStore
 import vn.kai.board.translation.TranslationModelsActivity
@@ -39,6 +40,9 @@ import vn.kai.board.ai.AiPreferences
 import vn.kai.board.ai.AiProviderClient
 import vn.kai.board.ai.AiTone
 import vn.kai.board.ai.SecureApiKeyStore
+import androidx.core.view.ViewCompat
+import androidx.core.view.WindowCompat
+import androidx.core.view.WindowInsetsCompat
 
 class MainActivity : Activity() {
     override fun onCreate(savedInstanceState: Bundle?) {
@@ -48,6 +52,8 @@ class MainActivity : Activity() {
             ThemeMode.SYSTEM -> setTheme(R.style.Theme_KAIBoard)
         }
         super.onCreate(savedInstanceState)
+        WindowCompat.setDecorFitsSystemWindows(window, false)
+        window.setSoftInputMode(WindowManager.LayoutParams.SOFT_INPUT_ADJUST_RESIZE)
         val density = resources.displayMetrics.density
         fun dp(value: Int) = (value * density).toInt()
         val themeMode = KeyboardPreferences.theme(this)
@@ -92,7 +98,7 @@ class MainActivity : Activity() {
 
         val content = LinearLayout(this).apply {
             orientation = LinearLayout.VERTICAL
-            setPadding(dp(24), dp(64), dp(24), dp(24))
+            setPadding(dp(24), dp(24), dp(24), dp(24))
             if (screenGradient != null) this.background = screenGradient else setBackgroundColor(background)
         }
         lateinit var settingsScroll: ScrollView
@@ -344,11 +350,12 @@ class MainActivity : Activity() {
                 addView(providerDrop, LinearLayout.LayoutParams(-1, -2))
             })
             val keyInput = TextInputEditText(this).apply {
-                setText(SecureApiKeyStore.read(this@MainActivity)); setTextColor(primaryText); setSingleLine(true)
-                inputType = InputType.TYPE_CLASS_TEXT or InputType.TYPE_TEXT_VARIATION_PASSWORD
+                setText(SecureApiKeyStore.readAll(this@MainActivity).joinToString("\n")); setTextColor(primaryText)
+                minLines = 2; maxLines = 5
+                inputType = InputType.TYPE_CLASS_TEXT or InputType.TYPE_TEXT_FLAG_MULTI_LINE or InputType.TYPE_TEXT_VARIATION_PASSWORD
             }
             section.addView(TextInputLayout(this).apply {
-                hint = "API key"; boxBackgroundMode = TextInputLayout.BOX_BACKGROUND_OUTLINE
+                hint = "API keys (mỗi dòng một key)"; boxBackgroundMode = TextInputLayout.BOX_BACKGROUND_OUTLINE
                 boxBackgroundColor = cardColor; boxStrokeColor = selectedColor
                 endIconMode = TextInputLayout.END_ICON_PASSWORD_TOGGLE
                 addView(keyInput, LinearLayout.LayoutParams(-1, -2))
@@ -362,17 +369,17 @@ class MainActivity : Activity() {
                 text = "Lưu key và tự quét model"; setTextColor(Color.WHITE)
                 backgroundTintList = ColorStateList.valueOf(selectedColor)
                 setOnClickListener {
-                    val apiKey = keyInput.text?.toString().orEmpty().trim()
-                    if (apiKey.isBlank()) { Toast.makeText(this@MainActivity, "Nhập API key trước", Toast.LENGTH_SHORT).show(); return@setOnClickListener }
+                    val apiKeys = vn.kai.board.ai.ApiKeyPool.parse(keyInput.text?.toString().orEmpty())
+                    if (apiKeys.isEmpty()) { Toast.makeText(this@MainActivity, "Nhập API key trước", Toast.LENGTH_SHORT).show(); return@setOnClickListener }
                     isEnabled = false; modelStatus.text = "Đang nhận diện nhà cung cấp và model…"
                     Thread {
-                        val result = runCatching { AiProviderClient.discover(apiKey, providerHint) }
+                        val result = runCatching { AiProviderClient.discover(apiKeys.first(), providerHint) }
                         runOnUiThread {
                             isEnabled = true
                             result.onSuccess { found ->
-                                SecureApiKeyStore.save(this@MainActivity, apiKey)
+                                SecureApiKeyStore.saveAll(this@MainActivity, apiKeys)
                                 AiPreferences.saveDiscovery(this@MainActivity, found.provider, found.models)
-                                modelStatus.text = "${found.provider} • ${found.models.size} model • ${found.freeCount} miễn phí"
+                                modelStatus.text = "${found.provider} • ${found.models.size} model • ${apiKeys.size} key • ${found.accessSummary()}"
                             }.onFailure { modelStatus.text = it.message ?: "Không thể quét model" }
                         }
                     }.start()
@@ -443,17 +450,83 @@ class MainActivity : Activity() {
         addSection(R.string.tab_appearance, "appearance") { section ->
             section.addView(createThemeSpinner(themeMode, primaryText, cardColor, selectedColor, ::dp))
             section.addView(createColorStyleSpinner(primaryText, cardColor, selectedColor), LinearLayout.LayoutParams(-1, -2).apply { topMargin = dp(10) })
+            section.addView(textView("Sao lưu cài đặt", 17f, primaryText).apply { setPadding(0, dp(16), 0, dp(4)) })
+            section.addView(MaterialButton(this).apply {
+                text = "Xuất cài đặt"
+                setOnClickListener {
+                    startActivityForResult(Intent(Intent.ACTION_CREATE_DOCUMENT).apply {
+                        type = "application/json"
+                        putExtra(Intent.EXTRA_TITLE, "kai-board-settings.json")
+                    }, REQUEST_EXPORT_SETTINGS)
+                }
+            })
+            section.addView(MaterialButton(this).apply {
+                text = "Nhập cài đặt"
+                setOnClickListener {
+                    startActivityForResult(Intent(Intent.ACTION_OPEN_DOCUMENT).apply {
+                        type = "application/json"
+                        addCategory(Intent.CATEGORY_OPENABLE)
+                    }, REQUEST_IMPORT_SETTINGS)
+                }
+            })
+            section.addView(textView("Không xuất API key, clipboard hoặc dữ liệu đã học.", 13f, secondaryText))
         }
-        settingsScroll = ScrollView(this).apply { addView(content) }
+        settingsScroll = ScrollView(this).apply {
+            clipToPadding = false
+            addView(content)
+            ViewCompat.setOnApplyWindowInsetsListener(this) { view, insets ->
+                val systemBars = insets.getInsets(WindowInsetsCompat.Type.systemBars())
+                val ime = insets.getInsets(WindowInsetsCompat.Type.ime())
+                view.setPadding(
+                    systemBars.left,
+                    systemBars.top,
+                    systemBars.right,
+                    maxOf(systemBars.bottom, ime.bottom),
+                )
+                insets
+            }
+        }
         setContentView(settingsScroll)
+        ViewCompat.requestApplyInsets(settingsScroll)
 
         if (applicationInfo.flags and ApplicationInfo.FLAG_DEBUGGABLE != 0) {
-            window.setSoftInputMode(WindowManager.LayoutParams.SOFT_INPUT_STATE_ALWAYS_VISIBLE)
+            window.setSoftInputMode(
+                WindowManager.LayoutParams.SOFT_INPUT_ADJUST_RESIZE or
+                    WindowManager.LayoutParams.SOFT_INPUT_STATE_ALWAYS_VISIBLE,
+            )
             typingTest.postDelayed({
                 typingTest.requestFocus()
                 (getSystemService(INPUT_METHOD_SERVICE) as InputMethodManager).showSoftInput(typingTest, 0)
             }, 250L)
         }
+    }
+
+    @Deprecated("Activity result callback for document picker")
+    override fun onActivityResult(requestCode: Int, resultCode: Int, data: Intent?) {
+        super.onActivityResult(requestCode, resultCode, data)
+        if (resultCode != RESULT_OK) return
+        val uri = data?.data ?: return
+        runCatching {
+            when (requestCode) {
+                REQUEST_EXPORT_SETTINGS -> contentResolver.openOutputStream(uri)?.bufferedWriter()?.use {
+                    it.write(SettingsBackup.export(this))
+                } ?: error("Không thể mở tệp")
+                REQUEST_IMPORT_SETTINGS -> {
+                    val raw = contentResolver.openInputStream(uri)?.bufferedReader()?.use { it.readText() }
+                        ?: error("Không thể đọc tệp")
+                    require(!SettingsBackup.containsSecrets(raw)) { "Tệp chứa trường bí mật không hợp lệ" }
+                    SettingsBackup.import(this, raw)
+                    recreate()
+                }
+                else -> return
+            }
+            Toast.makeText(this, if (requestCode == REQUEST_EXPORT_SETTINGS) "Đã xuất cài đặt" else "Đã nhập cài đặt", Toast.LENGTH_SHORT).show()
+        }.onFailure { Toast.makeText(this, it.message ?: "Không thể xử lý tệp", Toast.LENGTH_LONG).show() }
+    }
+
+    companion object {
+        private const val REQUEST_EXPORT_SETTINGS = 501
+        private const val REQUEST_IMPORT_SETTINGS = 502
     }
 
     private fun createThemeSpinner(themeMode: ThemeMode, primaryText: Int, fieldColor: Int, outlineColor: Int, dp: (Int) -> Int): TextInputLayout {

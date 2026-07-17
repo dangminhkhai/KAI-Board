@@ -20,11 +20,13 @@ object UserLexiconStore {
     private const val ENTRY_SEPARATOR = "\u001F"
     private const val FIELD_SEPARATOR = "\u001E"
     private const val LIMIT = 256
+    @Volatile private var cachedEntries: List<UserWord>? = null
 
     fun entries(context: Context): List<UserWord> {
+        cachedEntries?.let { return it }
         val preferences = context.getSharedPreferences(FILE, Context.MODE_PRIVATE)
         val encoded = preferences.getString(KEY, "").orEmpty()
-        if (encoded.isNotEmpty()) return decode(encoded)
+        if (encoded.isNotEmpty()) return decode(encoded).also { cachedEntries = it }
         val legacy = preferences.getString(LEGACY_KEY, "").orEmpty()
         val migrated = legacy.split(ENTRY_SEPARATOR).mapNotNull { row ->
             val parts = row.split(FIELD_SEPARATOR, limit = 2)
@@ -32,7 +34,7 @@ object UserLexiconStore {
             parts.firstOrNull()?.takeIf(String::isNotBlank)?.let { UserWord(it, typed = count) }
         }
         if (migrated.isNotEmpty()) write(context, migrated)
-        return migrated
+        return migrated.also { cachedEntries = it }
     }
 
     fun read(context: Context): Map<String, Int> = entries(context).associate { it.word to it.total }
@@ -84,9 +86,13 @@ object UserLexiconStore {
     }
 
     fun forget(context: Context, value: String) = write(context, entries(context).filterNot { it.word.equals(value, true) })
-    fun clear(context: Context) = context.getSharedPreferences(FILE, Context.MODE_PRIVATE).edit().clear().apply()
+    fun clear(context: Context) {
+        cachedEntries = emptyList()
+        context.getSharedPreferences(FILE, Context.MODE_PRIVATE).edit().clear().apply()
+    }
     fun count(context: Context): Int = entries(context).size
     fun totalUsage(context: Context): Int = entries(context).sumOf(UserWord::total)
+    fun invalidateCache() { cachedEntries = null }
 
     private fun decode(encoded: String): List<UserWord> = encoded.split(ENTRY_SEPARATOR).mapNotNull { row ->
         val p = row.split(FIELD_SEPARATOR)
@@ -96,6 +102,7 @@ object UserLexiconStore {
     }
 
     private fun write(context: Context, values: List<UserWord>) {
+        cachedEntries = values.toList()
         val encoded = values.joinToString(ENTRY_SEPARATOR) {
             listOf(it.word, it.typed, it.suggestion, it.autoCorrect).joinToString(FIELD_SEPARATOR)
         }
