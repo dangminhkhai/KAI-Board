@@ -4,9 +4,11 @@ KAI Board là bàn phím Android viết bằng Kotlin, tập trung vào cảm gi
 
 ## Tính năng chính
 
-- Gõ Telex kiểu UniKey, tự sửa, viết hoa khi bắt đầu nhập và gợi ý từ/cụm từ cá nhân; dấu câu không tự thêm Space hoặc bật Shift.
-- Học cục bộ từ, email và hashtag thường dùng theo tần suất.
-- Hàng số, ký hiệu giữ phím, emoji, clipboard và ghi chú.
+- Gõ Telex kiểu UniKey trong cả ô URL, tự sửa, viết hoa khi bắt đầu nhập và gợi ý từ/cụm từ cá nhân; dấu câu không tự thêm Space hoặc bật Shift.
+- Gợi ý ưu tiên dữ liệu AI, từ điển cá nhân có decay 14 ngày rồi từ điển Việt/Anh tải tùy chọn; tự nhận biết ngôn ngữ bằng luật nhẹ, offline.
+- Học cục bộ từ, email, hashtag và câu lệnh AI thường dùng.
+- Hàng số, ký hiệu giữ phím, tìm kiếm emoji, clipboard và ghi chú.
+- Vuốt Space để di chuyển con trỏ; giữ Backspace để xóa tăng tốc; giữ hoặc chạm hai lần Shift để khóa viết hoa.
 - Chế độ một tay, preset kích thước/vị trí và kéo chỉnh trực tiếp trên bàn phím.
 - Dịch offline theo từng model ngôn ngữ bằng ML Kit.
 - Mic AI/Dịch hiển thị lời nói theo thời gian thực, hỗ trợ tạm dừng, sửa và dịch tự động.

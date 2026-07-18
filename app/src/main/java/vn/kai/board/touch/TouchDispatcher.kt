@@ -3,9 +3,11 @@ package vn.kai.board.touch
 class TouchDispatcher(private val slideThreshold: Float) {
     data class PointerState(
         var key: KeyGeometry?,
+        val downKey: KeyGeometry?,
         val downX: Float,
         val downY: Float,
         var longPressed: Boolean = false,
+        var cursorSteps: Int = 0,
     )
 
     private val states = linkedMapOf<Int, PointerState>()
@@ -13,7 +15,7 @@ class TouchDispatcher(private val slideThreshold: Float) {
 
     operator fun get(pointerId: Int): PointerState? = states[pointerId]
     fun down(pointerId: Int, key: KeyGeometry?, x: Float, y: Float) {
-        states[pointerId] = PointerState(key, x, y)
+        states[pointerId] = PointerState(key, key, x, y)
     }
     fun crossedSlideThreshold(pointerId: Int, x: Float, y: Float): Boolean {
         val state = states[pointerId] ?: return false

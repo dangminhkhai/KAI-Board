@@ -5,6 +5,7 @@ import android.content.res.ColorStateList
 import android.content.res.Configuration
 import android.graphics.Color
 import android.graphics.drawable.GradientDrawable
+import android.graphics.Typeface
 import android.os.Bundle
 import android.view.Gravity
 import android.widget.LinearLayout
@@ -52,6 +53,8 @@ class TranslationModelsActivity : Activity() {
         selectedColor = palette.accent
         cardColor = palette.key
         outlineColor = palette.specialKey
+        window.statusBarColor = palette.gradientColors?.first() ?: palette.background
+        window.navigationBarColor = palette.gradientColors?.last() ?: palette.background
 
         content = LinearLayout(this).apply {
             orientation = LinearLayout.VERTICAL
@@ -62,6 +65,7 @@ class TranslationModelsActivity : Activity() {
         }
         content.addView(TextView(this).apply {
             text = getString(R.string.translation_models_title); textSize = 28f; setTextColor(primaryText)
+            setTypeface(typeface, Typeface.BOLD)
         })
         content.addView(TextView(this).apply {
             text = getString(R.string.translation_model_note); textSize = 14f; setTextColor(secondaryText)

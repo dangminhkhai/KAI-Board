@@ -23,7 +23,9 @@ Tùy chọn dùng SharedPreferences. API key được mã hóa AES-GCM với kh�
 
 `TelexWordComposer` giữ trạng thái hoàn tác phím theo từng từ; `SentenceAutomationPolicy` chỉ bật viết hoa khi bắt đầu nhập hoặc xuống dòng mới, không tự thêm Space/bật Shift sau dấu câu. Email và hashtag được xếp hạng bằng bộ đếm tần suất có giới hạn.
 
-`PhraseLearningStore` học bigram/trigram cá nhân và ưu tiên trigram đúng hai từ ngữ cảnh. `VietnameseNGramModel` là gói tùy chọn: tải corpus UD Vietnamese VTB từ commit cố định, rút gọn thành tối đa 6.000 mẫu (~100 KB trên thiết bị), lưu trong `filesDir` và dùng hoàn toàn offline. APK không chứa corpus/model nặng.
+`PhraseLearningStore` chỉ học bigram/trigram cá nhân và ưu tiên trigram đúng hai từ ngữ cảnh. `WordDictionaryPack` tải riêng gói Việt/Anh vào `filesDir`; `SuggestionLanguageDetector` dùng luật ký tự/prefix nhẹ để ưu tiên nguồn phù hợp mà không dùng model hoặc I/O trên đường gõ.
+
+`AiCommandSuggestionStore` chỉ học chuyển tiếp từ câu lệnh AI người dùng thực sự gửi. Thanh AI gộp gợi ý theo thứ tự AI → cá nhân → offline. `SpaceCursorGesturePolicy`, `ShiftGesturePolicy` và `RepeatKeyState` giữ logic cử chỉ thuần, có unit test và không đọc đĩa/mạng.
 
 Mỗi API key có profile provider/model riêng trong `AiKeyStatsStore`. Thứ tự trong `SecureApiKeyStore` là thứ tự fallback thực tế và được chỉnh bằng RecyclerView/ItemTouchHelper trong Quản lý API; thứ tự chỉ lưu khi thả card. DS2API dùng `GET /v1/models` và `POST /v1/chat/completions`. Lỗi xác thực được ghi trạng thái; quota/rate-limit, timeout, model không tương thích hoặc lỗi máy chủ cho phép chuyển sang key tiếp theo. Lỗi yêu cầu `400` không tự chuyển để tránh lặp một yêu cầu sai và tốn quota.
 

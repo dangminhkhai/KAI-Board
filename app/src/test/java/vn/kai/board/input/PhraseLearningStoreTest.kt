@@ -24,9 +24,7 @@ class PhraseLearningStoreTest {
     }
 
     @Test
-    fun builtInPhraseContinuesWithoutPriorLearning() {
-        assertEquals("chào", PhraseLearningStore.rankCandidates(emptyList(), listOf("xin")).first())
-        assertEquals("bạn", PhraseLearningStore.rankCandidates(emptyList(), listOf("xin", "chào")).first())
-        assertEquals("nhé", PhraseLearningStore.rankCandidates(emptyList(), listOf("chào", "bạn")).first())
+    fun emptyPersonalDictionaryHasNoCannedContinuation() {
+        assertEquals(emptyList<String>(), PhraseLearningStore.rankCandidates(emptyList(), listOf("xin")))
     }
 }

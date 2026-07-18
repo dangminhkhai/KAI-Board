@@ -20,23 +20,34 @@ object VietnameseSuggestionEngine {
         "the", "this", "that", "with", "from", "android", "application", "keyboard",
     )
 
-    @Volatile private var dictionary = DictionaryIndex(fallbackWords)
+    @Volatile private var dictionary = DictionaryIndex(fallbackWords.map { Seed(it, SuggestionLanguage.UNKNOWN) })
     private val contextPairs = mapOf("cam" to setOf("on"), "xin" to setOf("chao"), "viet" to setOf("nam"))
     private val autoCorrectOverrides = mapOf("dang" to "đang")
 
     /** Replaces the fallback with the ranked asset plus the useful built-in phrases. */
     fun load(reader: Reader): Int {
-        val loaded = ArrayList<String>(20_000)
-        BufferedReader(reader).useLines { lines ->
-            lines.forEach { line ->
-                if (line.isNotBlank() && !line.startsWith('#')) {
-                    val word = line.substringAfter('\t', "").trim()
-                    if (word.isNotEmpty()) loaded += word
+        return loadSources(listOf(reader to SuggestionLanguage.UNKNOWN))
+    }
+
+    fun loadSources(sources: List<Pair<Reader, SuggestionLanguage>>): Int {
+        val loaded = ArrayList<Seed>(70_000)
+        sources.forEach { (reader, language) ->
+            BufferedReader(reader).useLines { lines ->
+                lines.forEach { line ->
+                    if (line.isNotBlank() && !line.startsWith('#')) {
+                        val word = line.substringAfter('\t', "").trim()
+                        val taggedLanguage = if (language != SuggestionLanguage.UNKNOWN) language else when (line.substringBefore('\t')) {
+                            "vi" -> SuggestionLanguage.VIETNAMESE
+                            "en" -> SuggestionLanguage.ENGLISH
+                            else -> SuggestionLanguage.UNKNOWN
+                        }
+                        if (word.isNotEmpty()) loaded += Seed(word, taggedLanguage)
+                    }
                 }
             }
         }
         if (loaded.isEmpty()) return 0
-        dictionary = DictionaryIndex(loaded + fallbackWords)
+        dictionary = DictionaryIndex(loaded + fallbackWords.map { Seed(it, SuggestionLanguage.UNKNOWN) })
         return loaded.size
     }
 
@@ -51,8 +62,9 @@ object VietnameseSuggestionEngine {
         val needle = normalized(trimmed)
         if (needle.isEmpty()) return emptyList()
         val previous = previousWord?.let(::normalized)
+        val detectedLanguage = SuggestionLanguageDetector.detect(trimmed, previousWord)
         val learnedEntries = learned.entries.mapIndexed { rank, item ->
-            Entry(item.key, normalized(item.key), -rank, item.value)
+            Entry(item.key, normalized(item.key), -rank, item.value, SuggestionLanguage.UNKNOWN)
         }
         val candidates = dictionary.candidates(needle) + learnedEntries
         val matches = candidates.asSequence()
@@ -66,13 +78,31 @@ object VietnameseSuggestionEngine {
                     else -> 2_500
                 }
                 val contextBoost = if (previous != null && entry.normalized in contextPairs[previous].orEmpty()) 400 else 0
-                match + entry.rank - entry.frequency * 120 - contextBoost
+                val languageScore = when {
+                    detectedLanguage == SuggestionLanguage.UNKNOWN || entry.language == SuggestionLanguage.UNKNOWN -> 0
+                    detectedLanguage == entry.language -> -900
+                    else -> 900
+                }
+                match + entry.rank - entry.frequency * 120 - contextBoost + languageScore
             }
             .map { matchCase(it.word, trimmed) }
             .take(limit)
             .toMutableList()
         if (matches.none { it == trimmed }) matches.add(0, trimmed)
         return matches.distinct().take(limit)
+    }
+
+    fun suggestLearnedOnly(query: String, learned: Map<String, Int>, limit: Int = 3): List<String> {
+        val trimmed = query.trim()
+        if (trimmed.isEmpty() || limit <= 0 || trimmed.length > 32) return emptyList()
+        val needle = normalized(trimmed)
+        return learned.entries.asSequence()
+            .filter { (word, _) -> normalized(word).startsWith(needle) }
+            .sortedByDescending { it.value }
+            .map { matchCase(it.key, trimmed) }
+            .distinctBy { it.lowercase(Locale.ROOT) }
+            .take(limit)
+            .toList()
     }
 
     fun bestAutoCorrection(
@@ -103,18 +133,20 @@ object VietnameseSuggestionEngine {
     }
 
     internal fun candidatePoolSizeForTest(words: List<String>, query: String): Int =
-        DictionaryIndex(words).candidates(normalized(query)).size
+        DictionaryIndex(words.map { Seed(it, SuggestionLanguage.UNKNOWN) }).candidates(normalized(query)).size
 
-    private class DictionaryIndex(words: List<String>) {
+    private class DictionaryIndex(words: List<Seed>) {
         private val exact: Set<String>
         private val prefixes: Map<String, List<Entry>>
         private val fuzzy: Map<String, List<Entry>>
 
         init {
             val unique = LinkedHashMap<String, Entry>(words.size)
-            words.forEachIndexed { rank, word ->
-                val normalized = normalized(word)
-                if (normalized.isNotEmpty()) unique.putIfAbsent(word.lowercase(Locale.ROOT), Entry(word, normalized, rank))
+            words.forEachIndexed { rank, seed ->
+                val normalized = normalized(seed.word)
+                if (normalized.isNotEmpty()) unique.putIfAbsent(
+                    seed.word.lowercase(Locale.ROOT), Entry(seed.word, normalized, rank, language = seed.language),
+                )
             }
             val entries = unique.values.toList()
             exact = entries.mapTo(HashSet(entries.size)) { it.word.lowercase(Locale.ROOT) }
@@ -176,5 +208,12 @@ object VietnameseSuggestionEngine {
         else -> value
     }
 
-    private data class Entry(val word: String, val normalized: String, val rank: Int, val frequency: Int = 0)
+    private data class Seed(val word: String, val language: SuggestionLanguage)
+    private data class Entry(
+        val word: String,
+        val normalized: String,
+        val rank: Int,
+        val frequency: Int = 0,
+        val language: SuggestionLanguage = SuggestionLanguage.UNKNOWN,
+    )
 }

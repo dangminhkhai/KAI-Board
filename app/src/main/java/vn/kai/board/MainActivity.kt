@@ -32,7 +32,8 @@ import vn.kai.board.input.UserLexiconStore
 import vn.kai.board.input.EmailSuggestionStore
 import vn.kai.board.input.HashtagSuggestionStore
 import vn.kai.board.input.AutoCorrectionStatsStore
-import vn.kai.board.input.VietnameseNGramModel
+import vn.kai.board.input.WordDictionaryPack
+import vn.kai.board.input.DictionaryLanguagePack
 import vn.kai.board.translation.TranslationModelsActivity
 import android.widget.Toast
 import vn.kai.board.ai.AiPreferences
@@ -290,62 +291,84 @@ class MainActivity : Activity() {
                 setContentPadding(dp(14), dp(12), dp(14), dp(12))
                 addView(LinearLayout(this@MainActivity).apply {
                     orientation = LinearLayout.VERTICAL
-                    addView(textView(getString(R.string.ngram_model_title), 16f, primaryText).apply {
+                    addView(textView(getString(R.string.word_pack_title), 16f, primaryText).apply {
                         setTypeface(typeface, Typeface.BOLD)
                     })
-                    val modelStatus = textView("", 13f, secondaryText).apply { setPadding(0, dp(4), 0, dp(4)) }
-                    val modelAction = MaterialButton(this@MainActivity).apply {
-                        setTextColor(Color.WHITE)
-                        backgroundTintList = ColorStateList.valueOf(selectedColor)
+                    val packStatus = textView("", 13f, secondaryText).apply { setPadding(0, dp(4), 0, dp(4)) }
+                    fun secondaryButton() = MaterialButton(this@MainActivity).apply {
+                        minWidth = 0
+                        minimumHeight = dp(36)
+                        textSize = 12f
+                        insetTop = 0
+                        insetBottom = 0
+                        setTextColor(selectedColor)
+                        backgroundTintList = ColorStateList.valueOf(Color.TRANSPARENT)
+                        strokeColor = ColorStateList.valueOf(selectedColor)
+                        strokeWidth = dp(1)
                     }
-                    fun refreshModel() {
-                        val downloaded = VietnameseNGramModel.isDownloaded(this@MainActivity)
-                        modelStatus.text = if (downloaded) getString(
-                            R.string.ngram_model_downloaded,
-                            VietnameseNGramModel.entryCount(this@MainActivity),
-                            (VietnameseNGramModel.sizeBytes(this@MainActivity) / 1024L).coerceAtLeast(1L),
-                        ) else getString(R.string.ngram_model_not_downloaded)
-                        modelAction.text = getString(if (downloaded) R.string.ngram_model_delete else R.string.ngram_model_download)
-                        modelAction.isEnabled = true
+                    val viAction = secondaryButton()
+                    val enAction = secondaryButton()
+                    fun refreshPack() {
+                        val viReady = WordDictionaryPack.isDownloaded(this@MainActivity, DictionaryLanguagePack.VIETNAMESE)
+                        val enReady = WordDictionaryPack.isDownloaded(this@MainActivity, DictionaryLanguagePack.ENGLISH)
+                        packStatus.text = getString(
+                            R.string.word_pack_status,
+                            if (viReady) "✓" else "—",
+                            if (enReady) "✓" else "—",
+                        )
+                        viAction.text = getString(if (viReady) R.string.word_pack_vi_ready else R.string.word_pack_vi_download)
+                        enAction.text = getString(if (enReady) R.string.word_pack_en_ready else R.string.word_pack_en_download)
+                        viAction.isEnabled = true
+                        enAction.isEnabled = true
                     }
-                    modelAction.setOnClickListener {
-                        if (VietnameseNGramModel.isDownloaded(this@MainActivity)) {
-                            MaterialAlertDialogBuilder(this@MainActivity)
-                                .setTitle(R.string.ngram_model_delete_title)
-                                .setMessage(R.string.ngram_model_delete_message)
-                                .setNegativeButton(R.string.cancel, null)
-                                .setPositiveButton(R.string.ngram_model_delete) { _, _ ->
-                                    VietnameseNGramModel.delete(this@MainActivity)
-                                    refreshModel()
-                                }.show()
-                        } else {
-                            if (KeyboardPreferences.offlineMode(this@MainActivity)) {
-                                Toast.makeText(this@MainActivity, R.string.ngram_model_offline_error, Toast.LENGTH_SHORT).show()
-                                return@setOnClickListener
-                            }
-                            modelAction.isEnabled = false
-                            modelStatus.text = getString(R.string.ngram_model_downloading)
-                            Thread({
-                                val result = runCatching { VietnameseNGramModel.download(this@MainActivity) }
-                                runOnUiThread {
-                                    if (isDestroyed) return@runOnUiThread
-                                    result.onSuccess {
-                                        refreshModel()
-                                        Toast.makeText(this@MainActivity, R.string.ngram_model_ready, Toast.LENGTH_SHORT).show()
-                                    }.onFailure {
-                                        modelStatus.text = it.message ?: getString(R.string.ngram_model_download_error)
-                                        modelAction.isEnabled = true
-                                    }
+                    fun bindAction(button: MaterialButton, pack: DictionaryLanguagePack) {
+                        button.setOnClickListener {
+                            if (WordDictionaryPack.isDownloaded(this@MainActivity, pack)) {
+                                MaterialAlertDialogBuilder(this@MainActivity)
+                                    .setTitle(R.string.word_pack_delete_title)
+                                    .setMessage(R.string.word_pack_delete_message)
+                                    .setNegativeButton(R.string.cancel, null)
+                                    .setPositiveButton(R.string.word_pack_delete) { _, _ ->
+                                        Thread({
+                                            WordDictionaryPack.delete(this@MainActivity, pack)
+                                            runOnUiThread { if (!isDestroyed) refreshPack() }
+                                        }, "kai-word-pack-delete").start()
+                                    }.show()
+                            } else {
+                                if (KeyboardPreferences.offlineMode(this@MainActivity)) {
+                                    Toast.makeText(this@MainActivity, R.string.ngram_model_offline_error, Toast.LENGTH_SHORT).show()
+                                    return@setOnClickListener
                                 }
-                            }, "kai-ngram-download").start()
+                                button.isEnabled = false
+                                packStatus.text = getString(R.string.word_pack_downloading)
+                                Thread({
+                                    val result = runCatching { WordDictionaryPack.download(this@MainActivity, pack) }
+                                    runOnUiThread {
+                                        if (isDestroyed) return@runOnUiThread
+                                        result.onSuccess {
+                                            refreshPack()
+                                            Toast.makeText(this@MainActivity, R.string.word_pack_ready, Toast.LENGTH_SHORT).show()
+                                        }.onFailure {
+                                            packStatus.text = it.message ?: getString(R.string.word_pack_download_error)
+                                            button.isEnabled = true
+                                        }
+                                    }
+                                }, "kai-word-pack-download").start()
+                            }
                         }
                     }
-                    addView(modelStatus)
-                    addView(modelAction, LinearLayout.LayoutParams(-1, -2))
-                    addView(textView(getString(R.string.ngram_model_attribution), 11f, secondaryText).apply {
+                    addView(packStatus)
+                    addView(LinearLayout(this@MainActivity).apply {
+                        orientation = LinearLayout.HORIZONTAL
+                        addView(viAction, LinearLayout.LayoutParams(0, dp(40), 1f).apply { marginEnd = dp(4) })
+                        addView(enAction, LinearLayout.LayoutParams(0, dp(40), 1f).apply { marginStart = dp(4) })
+                    }, LinearLayout.LayoutParams(-1, -2))
+                    addView(textView(getString(R.string.word_pack_attribution), 11f, secondaryText).apply {
                         setPadding(0, dp(4), 0, 0)
                     })
-                    refreshModel()
+                    bindAction(viAction, DictionaryLanguagePack.VIETNAMESE)
+                    bindAction(enAction, DictionaryLanguagePack.ENGLISH)
+                    refreshPack()
                 })
             }, LinearLayout.LayoutParams(-1, -2).apply {
                 topMargin = dp(10)

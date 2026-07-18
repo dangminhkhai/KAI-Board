@@ -2,10 +2,16 @@
 
 ## Chưa phát hành
 
+- Thêm gói từ điển mở rộng tùy chọn gồm 40.000 từ Việt và 15.000 từ Anh; tải một lần và dùng offline, không tăng dung lượng APK.
+- Từ điển cá nhân dùng decay 14 ngày để từ lâu không dùng tự giảm ưu tiên.
+- Gợi ý trong ô AI tự học từ câu lệnh người dùng và dùng chung thanh gợi ý theo thứ tự AI → cá nhân → từ điển offline.
+- Tự nhận biết tiếng Việt/Anh bằng luật nhẹ để ưu tiên đúng nguồn từ điển; thêm tìm kiếm emoji bằng từ khóa Việt không dấu hoặc tiếng Anh.
+- Vuốt Space để di chuyển con trỏ; giữ Backspace xóa tăng tốc và xóa ngay ký tự composing cuối cùng; giữ/chạm hai lần Shift để bật Caps Lock.
+- Cho phép Telex trong ô URL và đồng bộ palette/gradient cho Quản lý API, từ cá nhân và model dịch.
 - Thêm DS2API OpenAI-compatible qua deployment HTTPS, tự nhận diện key prefix `khaids-`, quét model và tham gia failover nhiều key.
 - Quản lý API cho phép chạm giữ trực tiếp card để kéo thả thứ tự ưu tiên; card đang kéo nổi viền accent và các card khác tự tạo vị trí chèn.
 - Thứ tự API key được dùng trực tiếp khi gửi AI và chỉ được lưu sau khi thả card.
-- Thêm gói N-gram tiếng Việt tùy chọn tải về để gợi ý cụm từ offline, không làm tăng đáng kể dung lượng APK.
+- Loại bỏ gói N-gram/cụm từ dựng sẵn; gợi ý cụm từ chỉ học từ dữ liệu cá nhân trên thiết bị.
 
 Định dạng theo Keep a Changelog; phiên bản theo Semantic Versioning khi phù hợp.
 

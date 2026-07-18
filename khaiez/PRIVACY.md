@@ -20,10 +20,10 @@ File sao lưu cài đặt có thể chứa từ/cụm từ, email và hashtag đ
 
 KAI Board không được âm thầm gửi clipboard, lịch sử gõ, từ đã học, định danh thiết bị hoặc dữ liệu tài khoản. Trước khi phát hành công khai, nội dung này cần được rà soát thành chính sách pháp lý phù hợp khu vực phân phối.
 
-## Gói gợi ý cụm từ offline
+## Gói từ điển mở rộng
 
-- Chỉ tải khi người dùng bấm **Tải gói tiếng Việt** và chế độ offline đang tắt.
-- Ứng dụng tải corpus công khai UD Vietnamese VTB từ commit cố định, tạo N-gram trên thiết bị rồi dùng offline.
-- Nội dung người dùng gõ và dữ liệu cá nhân đã học không được gửi khi tải hoặc tạo model.
-- Người dùng có thể xóa gói bất kỳ lúc nào mà không xóa dữ liệu cụm từ cá nhân.
+- Chỉ tải khi người dùng bấm tải và chế độ offline đang tắt.
+- Gồm tối đa 40.000 từ Việt và 15.000 từ Anh từ FrequencyWords/OpenSubtitles.
+- Sau khi tải, gợi ý chạy cục bộ; nội dung người dùng gõ không được gửi khi tải gói.
+- Từ điển cá nhân dùng điểm gần đây với chu kỳ bán rã 14 ngày; không có tác vụ mạng hoặc decay chạy nền.
 

@@ -147,4 +147,20 @@
     <string name="keyboard_preset_custom">Tùy chỉnh</string>
     <string name="keyboard_preset_applied">Đã áp dụng preset bàn phím</string>
     <string name="manage_ai">Thiết lập API, model và giọng văn</string>
+    <string name="word_pack_title">Từ điển mở rộng Việt–Anh</string>
+    <string name="word_pack_not_downloaded">Chưa tải • APK vẫn dùng từ điển gọn có sẵn</string>
+    <string name="word_pack_downloaded">Đã sẵn sàng • 40.000 từ Việt + 15.000 từ Anh • %1$d KB</string>
+    <string name="word_pack_download">Tải từ điển mở rộng</string>
+    <string name="word_pack_delete">Xóa gói</string>
+    <string name="word_pack_delete_title">Xóa từ điển mở rộng?</string>
+    <string name="word_pack_delete_message">Bàn phím sẽ quay lại từ điển gọn có sẵn trong APK.</string>
+    <string name="word_pack_downloading">Đang tải và tạo chỉ mục ngoài luồng gõ…</string>
+    <string name="word_pack_ready">Từ điển mở rộng đã sẵn sàng</string>
+    <string name="word_pack_download_error">Không thể tải từ điển mở rộng</string>
+    <string name="word_pack_attribution">Nguồn FrequencyWords/OpenSubtitles • nội dung CC BY-SA 4.0 • chỉ tải khi bạn yêu cầu</string>
+    <string name="word_pack_status">Tiếng Việt %1$s  •  Tiếng Anh %2$s</string>
+    <string name="word_pack_vi_download">Tải tiếng Việt</string>
+    <string name="word_pack_en_download">Tải tiếng Anh</string>
+    <string name="word_pack_vi_ready">Đã tải Việt</string>
+    <string name="word_pack_en_ready">Đã tải Anh</string>
 </resources>
