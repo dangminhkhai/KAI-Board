@@ -8,9 +8,11 @@ Không đăng công khai API key, dữ liệu người dùng hoặc chi tiết k
 
 - API key chỉ lưu qua `SecureApiKeyStore`.
 - Release signing lấy từ các biến môi trường `KAI_RELEASE_*`.
+- `Res/signing-secret.xml` dùng DPAPI cục bộ và `Res/*.jks` phải luôn nằm ngoài Git; sao lưu keystore ở nơi bảo mật riêng.
 - Không ghi authorization header, prompt, response hoặc nội dung gõ vào log/crash report.
 - Không theo redirect mạng có thể làm lộ header xác thực.
 - Khi key lộ, thu hồi ngay và tạo key mới.
+- Không ghi toàn bộ API key trong ảnh, docs, log hoặc trạng thái UI; chỉ dùng dạng che bớt.
 
 ## Phạm vi ưu tiên
 

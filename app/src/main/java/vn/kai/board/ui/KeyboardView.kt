@@ -78,7 +78,7 @@ class KeyboardView(context: Context) : View(context) {
     private var popupEnabled = true
     private var dark = false
     private var colorStyle = KeyboardColorStyle.CLASSIC
-    private var themePalette = KeyboardThemePalette.resolve(context, colorStyle, false)
+    private var themePalette = KeyboardThemePalette.resolve(colorStyle, false)
     private var backgroundGradient: LinearGradient? = null
     private var suggestionsEnabled = false
     private var suggestions: List<String> = emptyList()
@@ -94,9 +94,16 @@ class KeyboardView(context: Context) : View(context) {
     private var aiStatus = ""
     private var aiAnimationFrame = 0
     private var aiToneLabel = "Tự động ngẫu nhiên"
+    private var voicePanel = false
+    private var voiceStatus = ""
+    private var voicePartial = ""
+    private var voiceLevel = 0f
+    private var voicePaused = false
     private var spaceLabel = "Tiếng Việt"
     private var keyboardHeightDp = 220
     private var keyRadiusDp = 7
+    private var keyBorderEnabled = false
+    private var keyBorderWidthDp = 1
     private var numberRowEnabled = false
     private var extendedSymbolsEnabled = true
     private var longPressSymbolsEnabled = false
@@ -172,9 +179,11 @@ class KeyboardView(context: Context) : View(context) {
             ThemeMode.SYSTEM -> resources.configuration.uiMode and Configuration.UI_MODE_NIGHT_MASK == Configuration.UI_MODE_NIGHT_YES
         }
         colorStyle = KeyboardPreferences.colorStyle(context)
-        themePalette = KeyboardThemePalette.resolve(context, colorStyle, dark)
+        themePalette = KeyboardThemePalette.resolve(colorStyle, dark)
         keyboardHeightDp = KeyboardPreferences.heightDp(context)
         keyRadiusDp = KeyboardPreferences.keyRadiusDp(context)
+        keyBorderEnabled = KeyboardPreferences.keyBorder(context)
+        keyBorderWidthDp = KeyboardPreferences.keyBorderWidthDp(context)
         numberRowEnabled = KeyboardPreferences.numberRow(context)
         extendedSymbolsEnabled = KeyboardPreferences.extendedSymbols(context)
         longPressSymbolsEnabled = KeyboardPreferences.longPressSymbols(context)
@@ -281,6 +290,17 @@ class KeyboardView(context: Context) : View(context) {
         invalidate()
     }
 
+    fun setVoicePanel(enabled: Boolean, status: String = "", partial: String = "", level: Float = 0f, paused: Boolean = false) {
+        val structureChanged = voicePanel != enabled || voicePaused != paused
+        voicePanel = enabled
+        voiceStatus = status
+        voicePartial = partial
+        voiceLevel = level.coerceIn(0f, 1f)
+        voicePaused = paused
+        if (structureChanged) rebuildKeys(width.toFloat(), height.toFloat())
+        invalidate()
+    }
+
     override fun onDraw(canvas: Canvas) {
         super.onDraw(canvas)
         if (backgroundGradient != null) {
@@ -302,10 +322,11 @@ class KeyboardView(context: Context) : View(context) {
         popupTextPaint.textScaleX = 1f / scaleX
         hintPaint.textScaleX = 1f / scaleX
         val radius = keyRadiusDp * density
+        if (voicePanel) drawVoicePanel(canvas)
         keys.forEach { key ->
             val toolbarKey = key.id.startsWith("toolbar-") || key.id.startsWith("translate-") && key.id != "translate-input" || key.id.startsWith("ai-") && key.id != "ai-input"
             val clipboardUiKey = key.id.startsWith("clipboard-")
-            val floatingIcon = toolbarKey || key.id.startsWith("suggestion-") || clipboardUiKey
+            val floatingIcon = toolbarKey || key.id.startsWith("suggestion-") || clipboardUiKey || key.id == "voice-toggle"
             keyPaint.color = when {
                 pointers.values.any { it.key == key } -> themePalette.pressed
                 key.id == "translate-input" || key.id == "ai-input" || key.action is KeyAction.Character || key.action is KeyAction.CommitText || key.action == KeyAction.Space -> themePalette.key
@@ -313,7 +334,28 @@ class KeyboardView(context: Context) : View(context) {
             }
             if (!floatingIcon) {
                 val keyRadius = if (key.id == "translate-input") 16f * density else radius
-                canvas.drawRoundRect(RectF(key.left, key.top, key.right, key.bottom), keyRadius, keyRadius, keyPaint)
+                keyPaint.style = Paint.Style.FILL
+                val rect = RectF(key.left, key.top, key.right, key.bottom)
+                canvas.drawRoundRect(rect, keyRadius, keyRadius, keyPaint)
+                if (keyBorderEnabled) {
+                    val stroke = keyBorderWidthDp * density
+                    val inset = stroke / 2f
+                    keyPaint.style = Paint.Style.STROKE
+                    keyPaint.strokeWidth = stroke
+                    keyPaint.color = Color.argb(
+                        if (dark) 175 else 120,
+                        Color.red(themePalette.accent),
+                        Color.green(themePalette.accent),
+                        Color.blue(themePalette.accent),
+                    )
+                    canvas.drawRoundRect(
+                        RectF(rect.left + inset, rect.top + inset, rect.right - inset, rect.bottom - inset),
+                        (keyRadius - inset).coerceAtLeast(0f),
+                        (keyRadius - inset).coerceAtLeast(0f),
+                        keyPaint,
+                    )
+                    keyPaint.style = Paint.Style.FILL
+                }
             }
             val baseline = key.centerY - (textPaint.ascent() + textPaint.descent()) / 2f
             when {
@@ -1064,6 +1106,8 @@ class KeyboardView(context: Context) : View(context) {
             addEmojiPanel(totalWidth, rowCount, rowHeight, margin, gap)
         } else if (panel == Panel.CLIPBOARD) {
             addClipboardPanel(totalWidth, rowCount, rowHeight, margin, gap)
+        } else if (voicePanel) {
+            addVoicePanel(totalWidth, totalHeight, margin)
         } else if (symbols) {
             if (symbolPage == 0) {
                 addCharacterRow("1234567890", 0, 0f, 0f, rowHeight, margin, gap)
@@ -1089,7 +1133,7 @@ class KeyboardView(context: Context) : View(context) {
             addCharacterRow("asdfghjkl", offset + 1, totalWidth * 0.035f, totalWidth * 0.035f, rowHeight, margin, gap)
             addActionCharacterRow("zxcvbnm", offset + 2, totalWidth, rowHeight, margin, gap)
         }
-        if (panel == Panel.NONE) addBottomRow(totalWidth, rowCount - 1, rowHeight, margin, gap)
+        if (panel == Panel.NONE && !voicePanel) addBottomRow(totalWidth, rowCount - 1, rowHeight, margin, gap)
     }
 
     @Suppress("unused")
@@ -1188,7 +1232,7 @@ class KeyboardView(context: Context) : View(context) {
         val closeWidth = 48f * density
         val cellWidth = (totalWidth - margin * 2 - closeWidth - gap * 3) / 3f
         var left = margin
-        addKey("toolbar-back", "", KeyAction.CloseAi, left, top, left + closeWidth, bottom)
+        addKey("toolbar-back", "", if (voicePanel) KeyAction.CancelVoice else KeyAction.CloseAi, left, top, left + closeWidth, bottom)
         left += closeWidth + gap
         addKey("ai-tone", "", KeyAction.OpenAi, left, top, left + cellWidth, bottom)
         left += cellWidth + gap
@@ -1199,9 +1243,9 @@ class KeyboardView(context: Context) : View(context) {
 
     private fun addTranslationPanel(totalWidth: Float, margin: Float) {
         val display = when {
+            translationInput.isNotEmpty() -> translationInput.takeLast(48)
             translationStatus.isNotEmpty() -> translationStatus
-            translationInput.isEmpty() -> "Nhập vào đây để dịch"
-            else -> translationInput.takeLast(48)
+            else -> "Nhập vào đây để dịch"
         }
         addKey(
             "translate-input",
@@ -1218,7 +1262,7 @@ class KeyboardView(context: Context) : View(context) {
         val closeWidth = 48f * density
         val cellWidth = (totalWidth - margin * 2 - closeWidth - gap * 4) / 4f
         var left = margin
-        addKey("toolbar-back", "", KeyAction.CloseTranslator, left, top, left + closeWidth, bottom)
+        addKey("toolbar-back", "", if (voicePanel) KeyAction.CancelVoice else KeyAction.CloseTranslator, left, top, left + closeWidth, bottom)
         left += closeWidth + gap
         addKey("translate-source", translationSourceLabel, KeyAction.CycleTranslationSource, left, top, left + cellWidth, bottom)
         left += cellWidth + gap
@@ -1227,6 +1271,123 @@ class KeyboardView(context: Context) : View(context) {
         addKey("translate-target", translationTargetLabel, KeyAction.CycleTranslationTarget, left, top, left + cellWidth, bottom)
         left += cellWidth + gap
         addKey("translate-mic", "", KeyAction.VoiceTranslation, left, top, totalWidth - margin, bottom)
+    }
+
+    private fun addVoicePanel(totalWidth: Float, totalHeight: Float, margin: Float) {
+        val buttonWidth = 104f * density
+        val bottom = totalHeight - bottomOffsetDp * density - margin
+        addKey(
+            "voice-toggle",
+            "",
+            KeyAction.ToggleVoicePause,
+            margin,
+            keyboardTop + margin,
+            totalWidth - margin,
+            bottom - 68f * density,
+        )
+        addKey(
+            "voice-cancel",
+            "Hủy",
+            KeyAction.CancelVoice,
+            (totalWidth - buttonWidth) / 2f,
+            bottom - 60f * density,
+            (totalWidth + buttonWidth) / 2f,
+            bottom - 12f * density,
+        )
+        if (voicePaused) {
+            val backspaceWidth = 56f * density
+            addKey(
+                "voice-backspace",
+                "⌫",
+                KeyAction.Backspace,
+                totalWidth - margin - backspaceWidth,
+                bottom - 60f * density,
+                totalWidth - margin,
+                bottom - 12f * density,
+            )
+        }
+    }
+
+    private fun drawVoicePanel(canvas: Canvas) {
+        val margin = 8f * density
+        val top = keyboardTop + margin
+        val bottom = height - bottomOffsetDp * density - margin
+        val card = RectF(margin, top, width - margin, bottom)
+        keyPaint.style = Paint.Style.FILL
+        keyPaint.color = themePalette.specialKey
+        canvas.drawRoundRect(card, 20f * density, 20f * density, keyPaint)
+
+        val centerX = width / 2f
+        val waveY = bottom - 88f * density
+
+        textPaint.textSize = 13f * density
+        textPaint.color = themePalette.hint
+        canvas.drawText(voiceStatus.ifEmpty { "Đang nghe…" }, centerX, top + 25f * density, textPaint)
+
+        val liveText = voicePartial.ifBlank { "Hãy nói, nội dung sẽ hiện ở đây" }
+        drawVoiceLiveText(
+            canvas = canvas,
+            text = liveText,
+            left = margin + 18f * density,
+            right = width - margin - 18f * density,
+            firstBaseline = top + 55f * density,
+            maxLines = 3,
+        )
+
+        val baseHeight = 10f * density
+        repeat(5) { index ->
+            val distance = kotlin.math.abs(index - 2)
+            val factor = (1f - distance * 0.18f).coerceAtLeast(0.55f)
+            val barHeight = baseHeight + 34f * density * voiceLevel * factor
+            val x = centerX + (index - 2) * 13f * density
+            keyPaint.color = themePalette.accent
+            canvas.drawRoundRect(
+                RectF(x - 3f * density, waveY - barHeight / 2f, x + 3f * density, waveY + barHeight / 2f),
+                3f * density,
+                3f * density,
+                keyPaint,
+            )
+        }
+
+        textPaint.textSize = 13f * density
+        textPaint.color = themePalette.accent
+        canvas.drawText(if (voicePaused) "Nhấn để tiếp tục" else "Nhấn để tạm dừng", centerX, bottom - 66f * density, textPaint)
+        textPaint.textSize = 22f * density
+        textPaint.color = themePalette.text
+    }
+
+    private fun drawVoiceLiveText(
+        canvas: Canvas,
+        text: String,
+        left: Float,
+        right: Float,
+        firstBaseline: Float,
+        maxLines: Int,
+    ) {
+        val availableWidth = (right - left).coerceAtLeast(1f)
+        textPaint.textSize = 18f * density
+        textPaint.color = if (voicePartial.isBlank()) themePalette.hint else themePalette.text
+        val previousAlign = textPaint.textAlign
+        textPaint.textAlign = Paint.Align.LEFT
+
+        val lines = mutableListOf<String>()
+        var remaining = text.trim()
+        while (remaining.isNotEmpty()) {
+            var count = textPaint.breakText(remaining, true, availableWidth, null).coerceAtLeast(1)
+            if (count < remaining.length) {
+                val wordBreak = remaining.lastIndexOf(' ', count - 1)
+                if (wordBreak > 0) count = wordBreak
+            }
+            lines += remaining.take(count).trim()
+            remaining = remaining.drop(count).trimStart()
+        }
+        val visibleLines = lines.takeLast(maxLines)
+        val lineHeight = 22f * density
+        visibleLines.forEachIndexed { index, line ->
+            val prefix = if (index == 0 && lines.size > maxLines) "…" else ""
+            canvas.drawText(prefix + line, left, firstBaseline + index * lineHeight, textPaint)
+        }
+        textPaint.textAlign = previousAlign
     }
 
     private fun addSuggestionToolbar(totalWidth: Float, margin: Float, bottom: Float) {

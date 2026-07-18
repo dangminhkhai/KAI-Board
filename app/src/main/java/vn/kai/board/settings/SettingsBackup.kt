@@ -13,6 +13,8 @@ object SettingsBackup {
         "ai_preferences",
         "user_lexicon",
         "phrase_learning",
+        "email_suggestions",
+        "hashtag_suggestions",
     )
 
     fun export(context: Context): String {

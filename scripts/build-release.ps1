@@ -1,13 +1,22 @@
 param(
-    [string]$VersionName = "1.0.0"
+    [string]$VersionName = "1.2.0"
 )
 
 $ErrorActionPreference = "Stop"
 
 $projectRoot = Split-Path -Parent $PSScriptRoot
 $releaseHome = Join-Path $env:USERPROFILE ".kai-board"
-$keyStorePath = Join-Path $releaseHome "kai-board-release.jks"
-$secretPath = Join-Path $releaseHome "signing-secret.xml"
+$localReleaseDir = Join-Path $projectRoot "Res"
+$keyStorePath = if (Test-Path -LiteralPath (Join-Path $localReleaseDir "kai-board-release.jks")) {
+    Join-Path $localReleaseDir "kai-board-release.jks"
+} else {
+    Join-Path $releaseHome "kai-board-release.jks"
+}
+$secretPath = if (Test-Path -LiteralPath (Join-Path $localReleaseDir "signing-secret.xml")) {
+    Join-Path $localReleaseDir "signing-secret.xml"
+} else {
+    Join-Path $releaseHome "signing-secret.xml"
+}
 
 if (-not (Test-Path -LiteralPath $keyStorePath)) {
     throw "Khong tim thay khoa ky phat hanh: $keyStorePath"

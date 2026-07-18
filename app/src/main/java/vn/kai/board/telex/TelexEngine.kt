@@ -36,6 +36,21 @@ object TelexEngine {
         return applyShape(word, lower)
     }
 
+    /** True when [key] explicitly undoes a tone, shape, horn/breve, or đ. */
+    fun isRepeatedModifierEscape(word: String, key: Char): Boolean {
+        val lower = key.lowercaseChar()
+        val tone = toneKeys.indexOf(lower)
+        if (tone > 0 && word.any { toneIndex(it) == tone }) return true
+        return when (lower) {
+            'a' -> word.any { baseShape(it) == 'â' }
+            'e' -> word.any { baseShape(it) == 'ê' }
+            'o' -> word.any { baseShape(it) == 'ô' }
+            'w' -> word.any { baseShape(it) in setOf('ă', 'ơ', 'ư') }
+            'd' -> word.lastOrNull()?.lowercaseChar() == 'đ'
+            else -> false
+        }
+    }
+
     /**
      * On QWERTY, S is directly beside D, so the intended `dd...` for đ is
      * sometimes entered as `ds...`. Wait for a following vowel before repairing

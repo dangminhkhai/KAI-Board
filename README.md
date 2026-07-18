@@ -4,12 +4,15 @@ KAI Board là bàn phím Android viết bằng Kotlin, tập trung vào cảm gi
 
 ## Tính năng chính
 
-- Gõ Telex tiếng Việt, tự sửa và gợi ý từ/cụm từ cá nhân.
+- Gõ Telex kiểu UniKey, tự sửa, viết hoa đầu câu và gợi ý từ/cụm từ cá nhân.
+- Học cục bộ từ, email và hashtag thường dùng theo tần suất.
 - Hàng số, ký hiệu giữ phím, emoji, clipboard và ghi chú.
-- Chế độ một tay và điều chỉnh trực tiếp kích thước/vị trí bàn phím.
+- Chế độ một tay, preset kích thước/vị trí và kéo chỉnh trực tiếp trên bàn phím.
 - Dịch offline theo từng model ngôn ngữ bằng ML Kit.
-- KAI AI hỗ trợ nhiều nhà cung cấp API; khóa API chỉ được lưu cục bộ trên thiết bị.
-- Theme sáng, tối, theo hệ thống và Gradient AI.
+- Mic AI/Dịch hiển thị lời nói theo thời gian thực, hỗ trợ tạm dừng, sửa và dịch tự động.
+- KAI AI hỗ trợ nhiều nhà cung cấp, nhiều API key, quét model và thống kê trạng thái từng key.
+- Theme sáng, tối, theo hệ thống với màu nhấn mint đồng bộ.
+- Cài đặt dùng nhóm button nhỏ thay dropdown; ô thử gõ sticky không tự mở bàn phím.
 
 ## Yêu cầu
 
@@ -29,4 +32,10 @@ Cài nhanh bản debug lên thiết bị đang kết nối ADB:
 .\dev-install.cmd -WithTests
 ```
 
-Khóa ký release và API key không nằm trong repository.
+Build release tối ưu R8/resource shrinking sau khi cấu hình bộ ký theo `khaiez/RELEASE.md`:
+
+```powershell
+.\build-release.cmd
+```
+
+API key không nằm trong source hoặc file sao lưu. Bộ ký release cục bộ nằm trong `Res/`, đã bị `.gitignore` loại khỏi Git; xem `khaiez/RELEASE.md` trước khi phát hành.

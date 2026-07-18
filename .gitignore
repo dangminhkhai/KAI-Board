@@ -26,6 +26,8 @@ work/
 *.apk
 *.aab
 *.apks
+Res/*.sha256
+Res/signing-secret*.xml
 
 # Local environment files
 .env

@@ -20,4 +20,14 @@ class WordCursorContextTest {
     @Test fun returnsNullOutsideAWord() {
         assertNull(WordCursorContext.read("xin ", " chao"))
     }
+
+    @Test fun keepsVietnameseLettersAcrossCursor() {
+        assertEquals("tiếng", WordCursorContext.read("xin ti", "ếng")?.word)
+        assertEquals("Đặng", WordCursorContext.read("gặp Đ", "ặng Minh")?.word)
+    }
+
+    @Test fun emptyBuffersReturnNull() {
+        assertNull(WordCursorContext.read("", ""))
+        assertNull(WordCursorContext.read("   ", "\n"))
+    }
 }

@@ -2,26 +2,49 @@
 
 Định dạng theo Keep a Changelog; phiên bản theo Semantic Versioning khi phù hợp.
 
-## Chưa phát hành
+## 1.2.0 - 2026-07-18
 
 ### Thêm
+
+- Preset bàn phím dạng button: Mặc định, Nâng lên, Cao dễ bấm và Tùy chỉnh.
+- Trạng thái API key theo từng key, gồm provider, số model, hạn mức và hiệu ứng quét/thành công/lỗi.
+- Card danh sách API key; ô nhập chỉ dùng cho key mới và chỉ lưu sau khi quét thành công.
+- Nhập giọng nói trực tiếp trong vùng bàn phím cho AI và Dịch, có text thời gian thực, tạm dừng/tiếp tục và Backspace.
+- Tự động viết hoa đầu câu; tùy chọn tự thêm một khoảng trắng sau dấu chấm, mặc định tắt.
+- Học email và hashtag thường dùng, xếp hạng gợi ý theo tần suất trên thiết bị.
+- Tùy chọn bật/tắt viền phím và chỉnh độ dày.
+
+### Sửa
+
+- Tối giản và ghim ô thử KAI Board khi cuộn cài đặt; không tự bật bàn phím khi mở ứng dụng.
+- Thay dropdown cài đặt bằng nhóm button nhỏ cho theme, một tay, giọng văn AI và provider API.
+- Đồng bộ nền sáng/tối và màu nhấn mint trong cài đặt và bàn phím.
+- Dịch tự chạy khi tạm dừng mic và đưa kết quả vào ô đang nhập.
+- Telex tương thích thao tác hoàn tác kiểu UniKey: sau khi bấm lặp dấu/biến âm, phần còn lại của từ giữ dạng Latin.
+- Sửa màu phím trắng/đen theo chế độ sáng/tối và hoàn thiện unit test palette thuần JVM.
+
+## 1.1.0
+
+### Thêm
+
+- Màn hình **Quản lý API** riêng: nhiều key, quét model, thống kê key, xóa key an toàn.
+- Bộ màu bàn phím: **Mint**, **Gradient AI**, **Ocean** (sáng/tối).
+- Thông báo quyền riêng tư ngắn trong mục Thiết lập.
+- Ô thử gõ sticky trên màn cài đặt.
+
+### Sửa
+
+- Khôi phục Gradient AI sau khi palette bị rút gọn về một tone.
+- Legacy `gemini_ai_gradient` map lại sang Gradient AI.
+
+### Bao gồm từ 1.0.x
 
 - Nhập giọng nói cho AI và dịch.
 - Nhiều API key với tự chuyển khi hết quota.
 - Xuất/nhập cấu hình không chứa secret.
-- Icon ứng dụng và adaptive icon mới.
-
-### Sửa
-
-- Backspace xóa selection và tách kết quả AI khỏi ô yêu cầu.
-- Khôi phục đúng chế độ sau nhận dạng giọng nói.
-- Bố cục micro và nhãn ngôn ngữ trong thanh dịch.
-
-### Hiệu năng
-
-- Cache từ/cặp từ đã học để giảm phân tích SharedPreferences trên đường gõ.
+- Cache từ/cặp từ đã học trên đường gõ.
 
 ## 1.0.0
 
-- Mốc phiên bản cấu hình hiện tại; cần cập nhật ngày và nội dung chính thức khi phát hành.
+- Mốc phát hành cấu hình; build release có sẵn.
 

@@ -1,8 +1,10 @@
 package vn.kai.board.voice
 
 import android.app.Activity
+import android.Manifest
 import android.content.ActivityNotFoundException
 import android.content.Intent
+import android.content.pm.PackageManager
 import android.os.Build
 import android.os.Bundle
 import android.os.ResultReceiver
@@ -16,7 +18,26 @@ class VoiceInputActivity : Activity() {
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         receiver = readReceiver(intent)
-        if (savedInstanceState == null) launchRecognizer()
+        if (savedInstanceState == null) {
+            if (intent.getBooleanExtra(EXTRA_PERMISSION_ONLY, false)) requestMicrophonePermission()
+            else launchRecognizer()
+        }
+    }
+
+    private fun requestMicrophonePermission() {
+        if (checkSelfPermission(Manifest.permission.RECORD_AUDIO) == PackageManager.PERMISSION_GRANTED) {
+            receiver?.send(RESULT_PERMISSION_GRANTED, Bundle())
+            finish()
+        } else requestPermissions(arrayOf(Manifest.permission.RECORD_AUDIO), REQUEST_MICROPHONE)
+    }
+
+    override fun onRequestPermissionsResult(requestCode: Int, permissions: Array<out String>, grantResults: IntArray) {
+        super.onRequestPermissionsResult(requestCode, permissions, grantResults)
+        if (requestCode != REQUEST_MICROPHONE) return
+        if (grantResults.firstOrNull() == PackageManager.PERMISSION_GRANTED) {
+            receiver?.send(RESULT_PERMISSION_GRANTED, Bundle())
+        } else sendError("Chưa cấp quyền micro")
+        finish()
     }
 
     private fun launchRecognizer() {
@@ -76,6 +97,9 @@ class VoiceInputActivity : Activity() {
         const val EXTRA_ERROR = "vn.kai.board.voice.ERROR"
         const val RESULT_SPEECH = 1
         const val RESULT_ERROR = 2
+        const val RESULT_PERMISSION_GRANTED = 3
+        const val EXTRA_PERMISSION_ONLY = "vn.kai.board.voice.PERMISSION_ONLY"
         private const val REQUEST_SPEECH = 10
+        private const val REQUEST_MICROPHONE = 11
     }
 }

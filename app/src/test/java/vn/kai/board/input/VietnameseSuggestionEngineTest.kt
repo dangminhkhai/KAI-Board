@@ -65,4 +65,5 @@ class VietnameseSuggestionEngineTest {
         assertEquals(null, VietnameseSuggestionEngine.bestAutoCorrection("kai2026"))
         assertTrue(VietnameseSuggestionEngine.isAutoCorrectionEligible("đặng"))
     }
+
 }

@@ -21,9 +21,13 @@ object KeyboardPreferences {
     const val WIDTH_PERCENT = "width_percent"
     const val LEFT_OFFSET_DP = "left_offset_dp"
     const val AUTO_CORRECT = "auto_correct"
+    const val AUTO_CAPITALIZATION = "auto_capitalization"
+    const val AUTO_SPACE_AFTER_PERIOD = "auto_space_after_period"
     const val WORD_SUGGESTIONS = "word_suggestions"
     const val OFFLINE_MODE = "offline_mode"
     const val KEY_RADIUS_DP = "key_radius_dp"
+    const val KEY_BORDER = "key_border"
+    const val KEY_BORDER_WIDTH_DP = "key_border_width_dp"
 
     fun haptic(context: Context) = prefs(context).getBoolean(HAPTIC, true)
     fun sound(context: Context) = prefs(context).getBoolean(SOUND, true)
@@ -57,9 +61,13 @@ object KeyboardPreferences {
     fun widthPercent(context: Context) = prefs(context).getInt(WIDTH_PERCENT, 100).coerceIn(75, 100)
     fun leftOffsetDp(context: Context) = prefs(context).getInt(LEFT_OFFSET_DP, 0).coerceAtLeast(0)
     fun autoCorrect(context: Context) = prefs(context).getBoolean(AUTO_CORRECT, false)
+    fun autoCapitalization(context: Context) = prefs(context).getBoolean(AUTO_CAPITALIZATION, true)
+    fun autoSpaceAfterPeriod(context: Context) = prefs(context).getBoolean(AUTO_SPACE_AFTER_PERIOD, false)
     fun wordSuggestions(context: Context) = prefs(context).getBoolean(WORD_SUGGESTIONS, true)
     fun offlineMode(context: Context) = prefs(context).getBoolean(OFFLINE_MODE, false)
     fun keyRadiusDp(context: Context) = prefs(context).getInt(KEY_RADIUS_DP, 7).coerceIn(0, 24)
+    fun keyBorder(context: Context) = prefs(context).getBoolean(KEY_BORDER, false)
+    fun keyBorderWidthDp(context: Context) = prefs(context).getInt(KEY_BORDER_WIDTH_DP, 1).coerceIn(1, 5)
 
     fun setBoolean(context: Context, key: String, value: Boolean) =
         prefs(context).edit().putBoolean(key, value).apply()
@@ -69,6 +77,9 @@ object KeyboardPreferences {
 
     fun setKeyRadiusDp(context: Context, value: Int) =
         prefs(context).edit().putInt(KEY_RADIUS_DP, value.coerceIn(0, 24)).apply()
+
+    fun setKeyBorderWidthDp(context: Context, value: Int) =
+        prefs(context).edit().putInt(KEY_BORDER_WIDTH_DP, value.coerceIn(1, 5)).apply()
 
     fun setIntensity(context: Context, key: String, value: Int) =
         prefs(context).edit().putInt(key, value.coerceIn(0, 100)).apply()
@@ -108,9 +119,14 @@ enum class ThemeMode(val storageValue: String) {
 }
 
 enum class KeyboardColorStyle(val storageValue: String) {
-    CLASSIC("classic");
+    CLASSIC("classic"),
+    AI_GRADIENT_2026("ai_gradient_2026"),
+    OCEAN("ocean");
 
     companion object {
-        fun fromStorage(value: String?) = entries.firstOrNull { it.storageValue == value } ?: CLASSIC
+        fun fromStorage(value: String?): KeyboardColorStyle = when (value) {
+            "gemini_ai_gradient" -> AI_GRADIENT_2026
+            else -> entries.firstOrNull { it.storageValue == value } ?: CLASSIC
+        }
     }
 }

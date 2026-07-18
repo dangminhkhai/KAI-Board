@@ -6,9 +6,9 @@
 - `ui/KeyboardView`: vẽ bàn phím, geometry và chuyển action; không chứa mạng hay model.
 - `touch/`: hit testing, pointer ownership, slide, giữ phím và repeat.
 - `input/` và `telex/`: chính sách nhập, Telex, gợi ý, học từ, clipboard và emoji.
-- `ai/`: nhận diện provider/model, request AI, xoay API key và lưu key bằng Android Keystore.
+- `ai/`: nhận diện provider/model, request AI, xoay API key, lưu key bằng Android Keystore và lưu thống kê không chứa secret theo fingerprint SHA-256.
 - `translation/`: ngôn ngữ, model ML Kit và tùy chọn dịch.
-- `voice/`: bridge tới dịch vụ nhận dạng giọng nói của hệ thống.
+- `voice/`: nhận dạng giọng nói hệ thống cho mic thường và panel inline AI/Dịch.
 - `settings/`: tùy chọn bàn phím và xuất/nhập cấu hình.
 
 ## Luồng nhập
@@ -19,5 +19,9 @@ Core typing phải hoạt động khi AI, mạng, micro hoặc model dịch lỗ
 
 ## Dữ liệu
 
-Tùy chọn dùng SharedPreferences. API key được mã hóa AES-GCM với khóa trong Android Keystore. Dữ liệu học và clipboard ở cục bộ; file sao lưu cấu hình không chứa secret, clipboard hoặc dữ liệu học.
+Tùy chọn dùng SharedPreferences. API key được mã hóa AES-GCM với khóa trong Android Keystore; card quản lý chỉ hiện đầu/cuối key đã che bớt. Metadata provider/số model/hạn mức được lưu riêng theo fingerprint, không lưu lại key dạng rõ. Từ, cụm từ, email và hashtag đã học cùng clipboard đều ở cục bộ. File sao lưu có thể chứa dữ liệu học nhưng không chứa API key, clipboard hoặc ghi chú.
+
+`TelexWordComposer` giữ trạng thái hoàn tác phím theo từng từ; `SentenceAutomationPolicy` xử lý viết hoa/khoảng trắng; email và hashtag được xếp hạng bằng bộ đếm tần suất có giới hạn.
+
+Hình học bàn phím gồm chiều cao, khoảng nâng đáy, phần trăm chiều rộng và lệch trái. Preset chỉ ghi bốn giá trị này qua `KeyboardPreferences`; đường xử lý chạm và timing commit không thay đổi.
 

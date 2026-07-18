@@ -1,7 +1,9 @@
 package vn.kai.board.ime
 
 import android.inputmethodservice.InputMethodService
+import android.Manifest
 import android.content.Intent
+import android.content.pm.PackageManager
 import android.os.Bundle
 import android.os.Handler
 import android.os.Looper
@@ -20,6 +22,8 @@ import vn.kai.board.input.WordRecomposer
 import vn.kai.board.input.VietnameseSuggestionEngine
 import vn.kai.board.input.EmailSuggestionEngine
 import vn.kai.board.input.EmailSuggestionStore
+import vn.kai.board.input.HashtagSuggestionEngine
+import vn.kai.board.input.HashtagSuggestionStore
 import vn.kai.board.input.UserLexiconStore
 import vn.kai.board.input.LearnSource
 import vn.kai.board.input.PhraseLearningStore
@@ -28,11 +32,14 @@ import vn.kai.board.input.SelectionDeletionPolicy
 import vn.kai.board.input.InputPrivacyPolicy
 import vn.kai.board.settings.KeyboardPreferences
 import vn.kai.board.telex.TelexEngine
+import vn.kai.board.input.TelexWordComposer
+import vn.kai.board.input.SentenceAutomationPolicy
 import vn.kai.board.ui.KeyboardView
 import vn.kai.board.MainActivity
 import vn.kai.board.R
 import vn.kai.board.ClipboardManagerActivity
 import vn.kai.board.voice.VoiceInputActivity
+import vn.kai.board.voice.InlineVoiceRecognizer
 import vn.kai.board.voice.VoiceLanguageResolver
 import vn.kai.board.voice.VoiceResultRouter
 import vn.kai.board.voice.VoiceTarget
@@ -52,6 +59,7 @@ class KaiBoardImeService : InputMethodService() {
     private var shifted = false
     private var keyboardView: KeyboardView? = null
     private var composing = ""
+    private var literalTelexLockLength = 0
     private var telexEnabled = true
     private var selectionActive = false
     private var lastAutoCorrection: AutoCorrection? = null
@@ -68,6 +76,13 @@ class KaiBoardImeService : InputMethodService() {
     private var aiCancellation: AiRequestCancellation? = null
     private val aiHandler = Handler(Looper.getMainLooper())
     private val aiRunnable = Runnable { sendAiNow() }
+    private var inlineVoiceRecognizer: InlineVoiceRecognizer? = null
+    private var voiceGeneration = 0
+    private var activeVoiceTarget: VoiceTarget? = null
+    private var activeVoiceLanguage = ""
+    private var activeVoicePrompt = ""
+    private var activeVoicePartial = ""
+    private var voicePaused = false
 
     override fun onCreate() {
         super.onCreate()
@@ -90,11 +105,11 @@ class KaiBoardImeService : InputMethodService() {
     override fun onStartInputView(info: EditorInfo?, restarting: Boolean) {
         super.onStartInputView(info, restarting)
         composing = ""
+        literalTelexLockLength = 0
         telexEnabled = info?.let { TelexInputPolicy.isEnabled(it.inputType) } ?: true
         selectionActive = false
         lastAutoCorrection = null
-        shifted = false
-        keyboardView?.setShifted(false)
+        updateAutomaticShift()
         keyboardView?.setSpaceLabel(resolveSpaceLabel(info))
         keyboardView?.setSuggestionsEnabled(suggestionsAllowed(info))
         updateSuggestions()
@@ -103,11 +118,14 @@ class KaiBoardImeService : InputMethodService() {
     override fun onFinishInputView(finishingInput: Boolean) {
         confirmPendingCorrection()
         rememberCurrentEmail()
+        rememberCurrentHashtag()
         keyboardView?.cancelActiveGesture()
         keyboardView?.setSuggestions(emptyList())
+        cancelInlineVoice()
         stopTranslation(commit = true)
         stopAi(commit = true)
         composing = ""
+        literalTelexLockLength = 0
         selectionActive = false
         super.onFinishInputView(finishingInput)
     }
@@ -128,6 +146,7 @@ class KaiBoardImeService : InputMethodService() {
             val hasSelection = newSelStart != newSelEnd
             if (cursorOutside || hasSelection) {
                 composing = ""
+                literalTelexLockLength = 0
                 currentInputConnection?.finishComposingText()
                 updateSuggestions()
             }
@@ -136,6 +155,12 @@ class KaiBoardImeService : InputMethodService() {
 
     private fun handleAction(action: KeyAction) {
         val connection = currentInputConnection ?: return
+        if (voicePaused && action == KeyAction.Backspace && activeVoiceTarget != null) {
+            activeVoicePartial = activeVoicePartial.dropLast(1)
+            syncVoiceTextToFeatureInput(activeVoicePartial)
+            keyboardView?.setVoicePanel(true, "Đã tạm dừng", activeVoicePartial, paused = true)
+            return
+        }
         if (translationMode && handleTranslationAction(action)) return
         if (aiMode && handleAiAction(action)) return
         if (action != KeyAction.Backspace) confirmPendingCorrection()
@@ -146,7 +171,14 @@ class KaiBoardImeService : InputMethodService() {
                 updateSuggestions()
             }
             is KeyAction.SelectSuggestion -> {
-                if (isEmailInput(currentInputEditorInfo)) {
+                val hashtagToken = currentHashtagToken()
+                if (action.value.startsWith('#') && hashtagToken.isNotEmpty()) {
+                    finishComposing()
+                    connection.deleteSurroundingText(hashtagToken.length, 0)
+                    connection.commitText(action.value, 1)
+                    if (learningAllowed()) HashtagSuggestionStore.remember(this, action.value)
+                    updateSuggestions()
+                } else if (isEmailInput(currentInputEditorInfo)) {
                     val before = connection.getTextBeforeCursor(120, 0) ?: ""
                     val token = EmailSuggestionEngine.currentToken(before)
                     if (token.isNotEmpty()) connection.deleteSurroundingText(token.length, 0)
@@ -155,6 +187,7 @@ class KaiBoardImeService : InputMethodService() {
                     updateSuggestions()
                 } else if (composing.isNotEmpty()) {
                     composing = action.value
+                    literalTelexLockLength = 0
                     connection.setComposingText(composing, 1)
                     if (learningAllowed()) UserLexiconStore.record(this, composing, LearnSource.SUGGESTION, 3)
                     updateSuggestions()
@@ -174,21 +207,29 @@ class KaiBoardImeService : InputMethodService() {
             }
             is KeyAction.Character -> {
                 val value = if (shifted) action.value.uppercaseChar() else action.value
+                val sentenceEnded = value in ".!?" && sentenceAutomationAllowed()
                 if (value.isLetter() && telexEnabled) {
                     if (composing.isEmpty() && !selectionActive && isTelexModifier(value) && transformWordAtCursor(value)) {
                         Unit
                     } else {
-                        composing = TelexEngine.apply(composing, value) ?: "$composing$value"
+                        val result = TelexWordComposer.append(composing, value, literalTelexLockLength)
+                        composing = result.text
+                        literalTelexLockLength = result.literalLockLength
                         connection.setComposingText(composing, 1)
                     }
                 } else {
+                    rememberCurrentHashtag()
                     finishComposing()
-                    connection.commitText(value.toString(), 1)
+                    val output = if (
+                        value == '.' && sentenceAutomationAllowed() && KeyboardPreferences.autoSpaceAfterPeriod(this)
+                    ) SentenceAutomationPolicy.periodOutput(autoSpace = true) else value.toString()
+                    connection.commitText(output, 1)
                 }
                 if (shifted) {
                     shifted = false
                     keyboardView?.setShifted(false)
                 }
+                if (sentenceEnded) updateAutomaticShift(forceCapital = true)
                 updateSuggestions()
             }
             KeyAction.Backspace -> {
@@ -208,6 +249,7 @@ class KaiBoardImeService : InputMethodService() {
                     if (before == "${correction.corrected} ") {
                         connection.deleteSurroundingText(correction.corrected.length + 1, 0)
                         composing = correction.original
+                        literalTelexLockLength = 0
                         connection.setComposingText(composing, 1)
                         // Undo means the original spelling was intentional. Learn it
                         // immediately so the next Space does not apply the same fix again.
@@ -222,6 +264,7 @@ class KaiBoardImeService : InputMethodService() {
                 }
                 if (composing.isNotEmpty()) {
                     composing = composing.dropLast(1)
+                    literalTelexLockLength = TelexWordComposer.lockAfterBackspace(composing.length, literalTelexLockLength)
                     if (composing.isEmpty()) connection.finishComposingText()
                     else connection.setComposingText(composing, 1)
                 } else {
@@ -230,6 +273,7 @@ class KaiBoardImeService : InputMethodService() {
                     if (previousWord != null) {
                         connection.deleteSurroundingText(previousWord.length + 1, 0)
                         composing = previousWord
+                        literalTelexLockLength = 0
                         connection.setComposingText(composing, 1)
                     } else {
                         connection.deleteSurroundingText(1, 0)
@@ -238,6 +282,19 @@ class KaiBoardImeService : InputMethodService() {
                 updateSuggestions()
             }
             KeyAction.Space -> {
+                if (
+                    sentenceAutomationAllowed() &&
+                    KeyboardPreferences.autoSpaceAfterPeriod(this) &&
+                    SentenceAutomationPolicy.alreadyHasAutomaticPeriodSpace(connection.getTextBeforeCursor(2, 0))
+                ) return
+                val hashtag = currentHashtagToken()
+                if (HashtagSuggestionEngine.isComplete(hashtag) && learningAllowed()) {
+                    HashtagSuggestionStore.remember(this, hashtag)
+                    finishComposing()
+                    connection.commitText(" ", 1)
+                    updateSuggestions()
+                    return
+                }
                 if (isEmailInput(currentInputEditorInfo)) {
                     rememberCurrentEmail(); finishComposing(); connection.commitText(" ", 1)
                 } else {
@@ -265,12 +322,14 @@ class KaiBoardImeService : InputMethodService() {
             KeyAction.Enter -> {
                 lastAutoCorrection = null
                 rememberCurrentEmail()
+                rememberCurrentHashtag()
                 finishComposing()
                 val info = currentInputEditorInfo
                 val multiline = ((info?.inputType ?: 0) and InputType.TYPE_TEXT_FLAG_MULTI_LINE) != 0
                 val actionId = info?.imeOptions?.and(EditorInfo.IME_MASK_ACTION) ?: EditorInfo.IME_ACTION_NONE
                 if (multiline || actionId == EditorInfo.IME_ACTION_NONE) connection.commitText("\n", 1)
                 else connection.performEditorAction(actionId)
+                if (sentenceAutomationAllowed()) updateAutomaticShift(forceCapital = true)
             }
             KeyAction.OpenSettings -> {
                 finishComposing()
@@ -286,7 +345,9 @@ class KaiBoardImeService : InputMethodService() {
             KeyAction.CloseAi,
             KeyAction.SendAi,
             KeyAction.VoiceTranslation,
-            KeyAction.VoiceAi -> Unit
+            KeyAction.VoiceAi,
+            KeyAction.CancelVoice,
+            KeyAction.ToggleVoicePause -> Unit
             is KeyAction.SetAiCursor -> Unit
             KeyAction.ToggleEmoji,
             KeyAction.ToggleClipboard -> Unit
@@ -311,15 +372,34 @@ class KaiBoardImeService : InputMethodService() {
     }
 
     private fun finishComposing() {
+        literalTelexLockLength = 0
         if (composing.isEmpty()) return
         composing = ""
         currentInputConnection?.finishComposingText()
         updateSuggestions()
     }
 
+    private fun sentenceAutomationAllowed(): Boolean = telexEnabled && !selectionActive
+
+    private fun updateAutomaticShift(forceCapital: Boolean = false) {
+        if (!KeyboardPreferences.autoCapitalization(this) || !sentenceAutomationAllowed()) {
+            shifted = false
+            keyboardView?.setShifted(false)
+            return
+        }
+        val shouldShift = forceCapital || SentenceAutomationPolicy.shouldCapitalize(
+            currentInputConnection?.getTextBeforeCursor(120, 0),
+        )
+        shifted = shouldShift
+        keyboardView?.setShifted(shouldShift)
+    }
+
     private fun updateSuggestions() {
         val info = currentInputEditorInfo
+        val hashtagToken = currentHashtagToken()
         val values = when {
+            hashtagToken.isNotEmpty() && learningAllowed() ->
+                HashtagSuggestionEngine.suggest(hashtagToken, HashtagSuggestionStore.read(this))
             isEmailInput(info) -> {
                 val before = currentInputConnection?.getTextBeforeCursor(120, 0) ?: ""
                 EmailSuggestionEngine.suggest(
@@ -359,6 +439,18 @@ class KaiBoardImeService : InputMethodService() {
         if (!learningAllowed() || !isEmailInput(currentInputEditorInfo)) return
         val before = currentInputConnection?.getTextBeforeCursor(120, 0) ?: ""
         EmailSuggestionStore.remember(this, EmailSuggestionEngine.currentToken(before))
+    }
+
+    private fun currentHashtagToken(): String {
+        if (isEmailInput(currentInputEditorInfo)) return ""
+        val before = currentInputConnection?.getTextBeforeCursor(120, 0) ?: return ""
+        return HashtagSuggestionEngine.currentToken(before)
+    }
+
+    private fun rememberCurrentHashtag() {
+        if (!learningAllowed()) return
+        val hashtag = currentHashtagToken()
+        if (HashtagSuggestionEngine.isComplete(hashtag)) HashtagSuggestionStore.remember(this, hashtag)
     }
 
     private fun previousWord(): String? {
@@ -433,6 +525,8 @@ class KaiBoardImeService : InputMethodService() {
                 resolveSpeechLanguage(currentInputEditorInfo),
                 getString(R.string.voice_prompt_ai),
             )
+            KeyAction.CancelVoice -> cancelInlineVoice()
+            KeyAction.ToggleVoicePause -> toggleInlineVoicePause()
             is KeyAction.SetAiCursor -> {
                 aiCursor = action.index.coerceIn(0, aiPrompt.length)
                 updateAiUi()
@@ -547,6 +641,8 @@ class KaiBoardImeService : InputMethodService() {
                 VoiceLanguageResolver.resolve(TranslationPreferences.source(this)),
                 getString(R.string.voice_prompt_translation),
             )
+            KeyAction.CancelVoice -> cancelInlineVoice()
+            KeyAction.ToggleVoicePause -> toggleInlineVoicePause()
             is KeyAction.Character -> {
                 val value = if (shifted) action.value.uppercaseChar() else action.value
                 translationSource = appendTranslatedInput(translationSource, value).takeLast(500)
@@ -667,6 +763,10 @@ class KaiBoardImeService : InputMethodService() {
             Toast.makeText(this, "Giọng nói bị tắt trong chế độ offline", Toast.LENGTH_SHORT).show()
             return
         }
+        if (target != VoiceTarget.NORMAL) {
+            startInlineVoiceWithPermission(target, language, prompt)
+            return
+        }
         val receiver = object : ResultReceiver(Handler(Looper.getMainLooper())) {
             override fun onReceiveResult(resultCode: Int, resultData: Bundle?) {
                 if (resultCode == VoiceInputActivity.RESULT_ERROR) {
@@ -712,6 +812,179 @@ class KaiBoardImeService : InputMethodService() {
                 .putExtra(VoiceInputActivity.EXTRA_TARGET, target.name)
                 .addFlags(Intent.FLAG_ACTIVITY_NEW_TASK),
         )
+    }
+
+    private fun startInlineVoiceWithPermission(target: VoiceTarget, language: String, prompt: String) {
+        if (checkSelfPermission(Manifest.permission.RECORD_AUDIO) == PackageManager.PERMISSION_GRANTED) {
+            startInlineVoice(target, language, prompt)
+            return
+        }
+        val receiver = object : ResultReceiver(Handler(Looper.getMainLooper())) {
+            override fun onReceiveResult(resultCode: Int, resultData: Bundle?) {
+                if (resultCode == VoiceInputActivity.RESULT_PERMISSION_GRANTED) {
+                    startInlineVoice(target, language, prompt)
+                } else {
+                    val message = resultData?.getString(VoiceInputActivity.EXTRA_ERROR).orEmpty()
+                        .ifEmpty { "Chưa cấp quyền micro" }
+                    if (target == VoiceTarget.AI_COMMAND) updateAiUi(message) else updateTranslationUi(message)
+                }
+            }
+        }
+        startActivity(Intent(this, VoiceInputActivity::class.java)
+            .putExtra(VoiceInputActivity.EXTRA_RECEIVER, receiver)
+            .putExtra(VoiceInputActivity.EXTRA_TARGET, target.name)
+            .putExtra(VoiceInputActivity.EXTRA_PERMISSION_ONLY, true)
+            .addFlags(Intent.FLAG_ACTIVITY_NEW_TASK))
+    }
+
+    private fun startInlineVoice(target: VoiceTarget, language: String, prompt: String) {
+        val resuming = voicePaused && activeVoiceTarget == target
+        val resumedPrefix = if (resuming) activeVoicePartial.trim() else ""
+        if (!resuming) cancelInlineVoice()
+        if (!android.speech.SpeechRecognizer.isRecognitionAvailable(this)) {
+            val message = getString(R.string.voice_unavailable)
+            if (target == VoiceTarget.AI_COMMAND) updateAiUi(message) else updateTranslationUi(message)
+            return
+        }
+        activeVoiceTarget = target
+        activeVoiceLanguage = language
+        activeVoicePrompt = prompt
+        if (!resuming) activeVoicePartial = ""
+        voicePaused = false
+        val generation = ++voiceGeneration
+        var partial = activeVoicePartial
+        keyboardView?.setVoicePanel(true, "Đang chuẩn bị micro…")
+        inlineVoiceRecognizer = InlineVoiceRecognizer(this, object : InlineVoiceRecognizer.Callback {
+            override fun onReady() {
+                if (generation == voiceGeneration) keyboardView?.setVoicePanel(true, "Đang nghe…", partial)
+            }
+
+            override fun onLevel(level: Float) {
+                if (generation == voiceGeneration) keyboardView?.setVoicePanel(true, "Đang nghe…", partial, level)
+            }
+
+            override fun onPartial(text: String) {
+                if (generation != voiceGeneration) return
+                partial = joinVoiceSegments(resumedPrefix, text).take(target.maxCharacters)
+                activeVoicePartial = partial
+                keyboardView?.setVoicePanel(true, "Đang nghe…", partial)
+            }
+
+            override fun onResult(text: String) {
+                if (generation != voiceGeneration) return
+                val liveText = joinVoiceSegments(resumedPrefix, text)
+                val result = VoiceResultRouter.prepare(target.name, liveText) ?: return onError("Không nhận được giọng nói")
+                releaseInlineVoice(generation)
+                applyVoiceResult(result.target, result.text)
+            }
+
+            override fun onError(message: String) {
+                if (generation != voiceGeneration) return
+                inlineVoiceRecognizer?.destroy()
+                inlineVoiceRecognizer = null
+                keyboardView?.setVoicePanel(true, message, partial)
+                aiHandler.postDelayed({
+                    if (generation == voiceGeneration) cancelInlineVoice()
+                }, 1_500L)
+            }
+        })
+        runCatching { inlineVoiceRecognizer?.start(language, prompt) }
+            .onFailure { inlineVoiceRecognizer?.let { it.destroy() }; inlineVoiceRecognizer = null; keyboardView?.setVoicePanel(false) }
+    }
+
+    private fun joinVoiceSegments(prefix: String, current: String): String = when {
+        prefix.isBlank() -> current.trim()
+        current.isBlank() -> prefix.trim()
+        else -> "${prefix.trim()} ${current.trim()}"
+    }
+
+    private fun applyVoiceResult(target: VoiceTarget, text: String) {
+        when (target) {
+            VoiceTarget.NORMAL -> currentInputConnection?.commitText(text, 1)
+            VoiceTarget.TRANSLATION -> {
+                stopAi(commit = false)
+                translationMode = true
+                translationSource = text
+                translationResult = ""
+                updateTranslationUi("Đã nhận giọng nói • đang dịch…")
+                scheduleTranslation()
+            }
+            VoiceTarget.AI_COMMAND -> {
+                stopTranslation(commit = false)
+                aiMode = true
+                aiHandler.removeCallbacks(aiRunnable)
+                aiPrompt = text
+                aiCursor = aiPrompt.length
+                updateAiUi("Đã nhận giọng nói • nhấn gửi AI")
+            }
+        }
+    }
+
+    private fun releaseInlineVoice(generation: Int) {
+        if (generation != voiceGeneration) return
+        inlineVoiceRecognizer?.destroy()
+        inlineVoiceRecognizer = null
+        voicePaused = false
+        activeVoiceTarget = null
+        activeVoicePartial = ""
+        keyboardView?.setVoicePanel(false)
+    }
+
+    private fun cancelInlineVoice() {
+        voiceGeneration++
+        inlineVoiceRecognizer?.cancel()
+        inlineVoiceRecognizer?.destroy()
+        inlineVoiceRecognizer = null
+        voicePaused = false
+        activeVoiceTarget = null
+        activeVoiceLanguage = ""
+        activeVoicePrompt = ""
+        activeVoicePartial = ""
+        keyboardView?.setVoicePanel(false)
+    }
+
+    private fun toggleInlineVoicePause() {
+        if (voicePaused) {
+            val target = activeVoiceTarget ?: return cancelInlineVoice()
+            startInlineVoice(target, activeVoiceLanguage, activeVoicePrompt)
+            return
+        }
+        if (inlineVoiceRecognizer == null) return
+        voiceGeneration++
+        inlineVoiceRecognizer?.cancel()
+        inlineVoiceRecognizer?.destroy()
+        inlineVoiceRecognizer = null
+        voicePaused = true
+        syncPausedVoiceToFeatureInput()
+        keyboardView?.setVoicePanel(true, "Đã tạm dừng", activeVoicePartial, paused = true)
+    }
+
+    private fun syncPausedVoiceToFeatureInput() {
+        val text = activeVoicePartial.trim()
+        if (text.isEmpty()) return
+        syncVoiceTextToFeatureInput(text)
+    }
+
+    private fun syncVoiceTextToFeatureInput(text: String) {
+        when (activeVoiceTarget) {
+            VoiceTarget.AI_COMMAND -> {
+                aiMode = true
+                aiHandler.removeCallbacks(aiRunnable)
+                aiPrompt = text.take(VoiceTarget.AI_COMMAND.maxCharacters)
+                aiCursor = aiPrompt.length
+                updateAiUi("Đã tạm dừng • có thể sửa hoặc tiếp tục nói")
+            }
+            VoiceTarget.TRANSLATION -> {
+                translationHandler.removeCallbacks(translationRunnable)
+                translationGeneration++
+                translationMode = true
+                translationSource = text.take(VoiceTarget.TRANSLATION.maxCharacters)
+                translationResult = ""
+                updateTranslationUi("Đã tạm dừng • đang dịch…")
+                scheduleTranslation()
+            }
+            VoiceTarget.NORMAL, null -> Unit
+        }
     }
 
     private fun resolveSpeechLanguage(info: EditorInfo?): String {

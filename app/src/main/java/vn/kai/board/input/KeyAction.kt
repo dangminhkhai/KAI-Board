@@ -13,6 +13,8 @@ sealed interface KeyAction {
     data object VoiceInput : KeyAction
     data object VoiceTranslation : KeyAction
     data object VoiceAi : KeyAction
+    data object CancelVoice : KeyAction
+    data object ToggleVoicePause : KeyAction
     data object OpenTranslator : KeyAction
     data object CloseTranslator : KeyAction
     data object CycleTranslationSource : KeyAction
