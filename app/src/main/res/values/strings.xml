@@ -29,8 +29,7 @@
     <string name="one_hand_right">Bên phải</string>
     <string name="setting_long_press_symbols">Gợi ý ký hiệu khi giữ phím</string>
     <string name="setting_auto_correct">Tự sửa khi bấm Space</string>
-    <string name="setting_auto_capitalization">Tự động viết hoa đầu câu</string>
-    <string name="setting_auto_space_after_period">Tự thêm khoảng trắng sau dấu chấm</string>
+    <string name="setting_auto_capitalization">Tự động viết hoa khi bắt đầu nhập</string>
     <string name="auto_correct_stats">Thử nghiệm tự sửa: %1$d lần giữ sửa • %2$d lần hoàn tác</string>
     <string name="setting_word_suggestions">Hiện gợi ý từ</string>
     <string name="setting_offline_mode">Chế độ offline (tắt AI, giọng nói và tải model)</string>

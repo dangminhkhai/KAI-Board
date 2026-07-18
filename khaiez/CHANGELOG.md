@@ -10,12 +10,14 @@
 - Trạng thái API key theo từng key, gồm provider, số model, hạn mức và hiệu ứng quét/thành công/lỗi.
 - Card danh sách API key; ô nhập chỉ dùng cho key mới và chỉ lưu sau khi quét thành công.
 - Nhập giọng nói trực tiếp trong vùng bàn phím cho AI và Dịch, có text thời gian thực, tạm dừng/tiếp tục và Backspace.
-- Tự động viết hoa đầu câu; tùy chọn tự thêm một khoảng trắng sau dấu chấm, mặc định tắt.
+- Tự động viết hoa khi bắt đầu nhập hoặc xuống dòng mới; dấu câu không tự thêm Space hoặc bật Shift.
 - Học email và hashtag thường dùng, xếp hạng gợi ý theo tần suất trên thiết bị.
 - Tùy chọn bật/tắt viền phím và chỉnh độ dày.
 
 ### Sửa
 
+- AI tách key/model theo đúng provider; tự thử model khác, key khác rồi provider khác khi key lỗi, hết quota, timeout hoặc lỗi máy chủ. Card API hiển thị lỗi gần nhất theo từng key.
+- NVIDIA NIM ưu tiên model chat tương thích và bỏ qua model dùng endpoint khác thay vì kết luận nhầm key hỏng.
 - Tối giản và ghim ô thử KAI Board khi cuộn cài đặt; không tự bật bàn phím khi mở ứng dụng.
 - Thay dropdown cài đặt bằng nhóm button nhỏ cho theme, một tay, giọng văn AI và provider API.
 - Đồng bộ nền sáng/tối và màu nhấn mint trong cài đặt và bàn phím.

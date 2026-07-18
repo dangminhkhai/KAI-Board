@@ -13,6 +13,7 @@ Không đăng công khai API key, dữ liệu người dùng hoặc chi tiết k
 - Không theo redirect mạng có thể làm lộ header xác thực.
 - Khi key lộ, thu hồi ngay và tạo key mới.
 - Không ghi toàn bộ API key trong ảnh, docs, log hoặc trạng thái UI; chỉ dùng dạng che bớt.
+- Fallback phải giữ key đúng endpoint/provider. Lỗi key được lưu dưới dạng trạng thái không chứa secret; không chuyển provider cho yêu cầu sai `400`.
 
 ## Phạm vi ưu tiên
 

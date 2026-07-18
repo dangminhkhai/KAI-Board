@@ -35,6 +35,15 @@ data class AiDiscovery(
 object AiProviderClient {
     val providerChoices = listOf("Tự động", "OpenRouter", "Gemini", "OpenAI", "Groq", "NVIDIA NIM")
 
+    fun detectProvider(apiKey: String): String? = when {
+        apiKey.trim().startsWith("sk-or-") -> "OpenRouter"
+        apiKey.trim().startsWith("AIza") -> "Gemini"
+        apiKey.trim().startsWith("gsk_") -> "Groq"
+        apiKey.trim().startsWith("nvapi-") -> "NVIDIA NIM"
+        apiKey.trim().startsWith("sk-") -> "OpenAI"
+        else -> null
+    }
+
     fun discover(apiKey: String, providerHint: String = "Tự động"): AiDiscovery {
         val key = apiKey.trim()
         if (providerHint != "Tự động") return discoverForProvider(providerHint, key)
@@ -47,7 +56,7 @@ object AiProviderClient {
                 key,
                 freeTierByQuota = true,
             )
-            key.startsWith("nvapi-") -> discoverOpenAiCompatible("NVIDIA NIM", "https://integrate.api.nvidia.com/v1/models", key)
+            key.startsWith("nvapi-") -> discoverNvidia(key)
             key.startsWith("sk-") -> discoverOpenAi(key)
             else -> throw IllegalArgumentException("Không nhận diện được key; hãy chọn nhà cung cấp thủ công")
         }
@@ -63,7 +72,7 @@ object AiProviderClient {
             key,
             freeTierByQuota = true,
         )
-        "NVIDIA NIM" -> discoverOpenAiCompatible("NVIDIA NIM", "https://integrate.api.nvidia.com/v1/models", key)
+        "NVIDIA NIM" -> discoverNvidia(key)
         else -> throw IllegalArgumentException("Nhà cung cấp chưa được hỗ trợ")
     }
 
@@ -118,6 +127,29 @@ object AiProviderClient {
         return AiDiscovery("Gemini", ids, ids.size)
     }
 
+    private fun discoverNvidia(key: String): AiDiscovery = try {
+        val discovered = discoverOpenAiCompatible("NVIDIA NIM", "https://integrate.api.nvidia.com/v1/models", key)
+        discovered.copy(models = (NVIDIA_TEXT_MODELS + discovered.models).distinct())
+    } catch (error: HttpStatusException) {
+        if (error.status != 404) throw error
+        // NVIDIA documents the shared chat endpoint but does not guarantee an
+        // OpenAI-compatible model-list endpoint. Probe one stable text model so
+        // a bad key is still rejected instead of being saved as recognized.
+        val payload = JSONObject()
+            .put("model", NVIDIA_TEXT_MODELS.first())
+            .put("max_tokens", 1)
+            .put("messages", org.json.JSONArray().put(
+                JSONObject().put("role", "user").put("content", "Hi"),
+            ))
+        post(
+            "https://integrate.api.nvidia.com/v1/chat/completions",
+            key,
+            payload,
+            AiRequestCancellation(),
+        )
+        AiDiscovery("NVIDIA NIM", NVIDIA_TEXT_MODELS, freeTierByQuota = true)
+    }
+
     private fun request(url: String, bearer: String?): JSONObject {
         val connection = URL(url).openConnection() as HttpURLConnection
         connection.connectTimeout = 12_000
@@ -128,7 +160,7 @@ object AiProviderClient {
         val status = connection.responseCode
         val body = (if (status in 200..299) connection.inputStream else connection.errorStream)?.bufferedReader()?.use { it.readText() }.orEmpty()
         connection.disconnect()
-        if (status !in 200..299) throw IllegalStateException("API từ chối key (HTTP $status)")
+        if (status !in 200..299) throw HttpStatusException(status, "API từ chối key (HTTP $status)")
         return JSONObject(body)
     }
 
@@ -163,6 +195,41 @@ object AiProviderClient {
     fun generate(provider: String, apiKey: String, models: List<String>, tone: AiTone, prompt: String) =
         generate(provider, listOf(apiKey), models, tone, prompt)
 
+    fun generateWithFallback(
+        candidates: List<AiProviderCandidate>,
+        tone: AiTone,
+        prompt: String,
+        cancellation: AiRequestCancellation = AiRequestCancellation(),
+        onFailure: (AiProviderFailure) -> Unit = {},
+    ): AiGenerationResult {
+        if (candidates.isEmpty()) throw IllegalStateException("Chưa có API key và model dùng được")
+        var lastError: Throwable? = null
+        candidates.forEach { candidate ->
+            cancellation.check()
+            try {
+                val (model, output) = generate(
+                    candidate.provider,
+                    listOf(candidate.apiKey),
+                    candidate.models,
+                    tone,
+                    prompt,
+                    cancellation,
+                )
+                return AiGenerationResult(candidate.apiKey, candidate.provider, model, output)
+            } catch (error: InvalidApiKeyException) {
+                lastError = error
+                onFailure(AiProviderFailure(candidate.apiKey, candidate.provider, error.message.orEmpty(), true))
+            } catch (error: QuotaAiException) {
+                lastError = error
+                onFailure(AiProviderFailure(candidate.apiKey, candidate.provider, error.message.orEmpty(), false))
+            } catch (error: RetryableAiException) {
+                lastError = error
+                onFailure(AiProviderFailure(candidate.apiKey, candidate.provider, error.message.orEmpty(), false))
+            }
+        }
+        throw lastError ?: IllegalStateException("Không provider nào xử lý được yêu cầu")
+    }
+
     private fun generateChat(url: String, key: String, model: String, tone: AiTone, prompt: String, cancellation: AiRequestCancellation): String {
         val payload = JSONObject().put("model", model).put("messages", org.json.JSONArray()
             .put(JSONObject().put("role", "system").put("content", "Bạn là trợ lý viết tiếng Việt. ${tone.instruction} Chỉ trả về nội dung hoàn chỉnh, không giải thích."))
@@ -195,20 +262,47 @@ object AiProviderClient {
             body = (if (status in 200..299) connection.inputStream else connection.errorStream)
                 ?.bufferedReader()?.use { it.readText().take(MAX_RESPONSE_CHARS) }.orEmpty()
         } catch (_: SocketTimeoutException) {
-            throw IllegalStateException("AI phản hồi quá lâu, hãy thử lại")
+            throw RetryableAiException("AI phản hồi quá lâu, đã thử provider tiếp theo")
         } finally {
             cancellation.detach(connection)
             connection.disconnect()
         }
         if (status in 300..399) throw IllegalStateException("AI từ chối chuyển hướng không an toàn")
-        if (status in listOf(401, 403)) throw IllegalStateException("API key không hợp lệ hoặc không có quyền")
+        if (status in listOf(401, 403)) throw InvalidApiKeyException("API key không hợp lệ hoặc không có quyền")
         if (status in listOf(402, 429)) throw QuotaAiException("Tất cả API key đã hết hạn mức (HTTP $status)")
-        if (status == 503) throw RetryableAiException("Model tạm thời bận (HTTP 503)")
+        if (status in listOf(404, 422)) throw RetryableAiException("Model không hỗ trợ yêu cầu này (HTTP $status)")
+        if (status in 500..599) throw RetryableAiException("Provider tạm thời không sẵn sàng (HTTP $status)")
         if (status !in 200..299) throw IllegalStateException("AI lỗi HTTP $status")
         return JSONObject(body)
     }
 
+    private class InvalidApiKeyException(message: String) : RuntimeException(message)
     private class RetryableAiException(message: String) : RuntimeException(message)
     private class QuotaAiException(message: String) : RuntimeException(message)
+    private class HttpStatusException(val status: Int, message: String) : RuntimeException(message)
     private const val MAX_RESPONSE_CHARS = 1_000_000
+    private val NVIDIA_TEXT_MODELS = listOf(
+        "nvidia/llama-3.1-nemotron-nano-8b-v1",
+        "moonshotai/kimi-k2-instruct",
+    )
 }
+
+data class AiProviderCandidate(
+    val apiKey: String,
+    val provider: String,
+    val models: List<String>,
+)
+
+data class AiGenerationResult(
+    val apiKey: String,
+    val provider: String,
+    val model: String,
+    val output: String,
+)
+
+data class AiProviderFailure(
+    val apiKey: String,
+    val provider: String,
+    val message: String,
+    val invalidKey: Boolean,
+)

@@ -279,7 +279,6 @@ class MainActivity : Activity() {
             addSwitch(section, R.string.setting_word_suggestions, KeyboardPreferences.WORD_SUGGESTIONS, KeyboardPreferences.wordSuggestions(this))
             addSwitch(section, R.string.setting_auto_correct, KeyboardPreferences.AUTO_CORRECT, KeyboardPreferences.autoCorrect(this))
             addSwitch(section, R.string.setting_auto_capitalization, KeyboardPreferences.AUTO_CAPITALIZATION, KeyboardPreferences.autoCapitalization(this))
-            addSwitch(section, R.string.setting_auto_space_after_period, KeyboardPreferences.AUTO_SPACE_AFTER_PERIOD, KeyboardPreferences.autoSpaceAfterPeriod(this))
             addSwitch(section, R.string.setting_offline_mode, KeyboardPreferences.OFFLINE_MODE, KeyboardPreferences.offlineMode(this))
             val correctionStats = AutoCorrectionStatsStore.summary(this)
             section.addView(textView(

@@ -129,10 +129,11 @@ class ApiManagementActivity : Activity() {
                             })
                             addView(TextView(this@ApiManagementActivity).apply {
                                 text = stats?.let {
-                                    "${it.provider} • ${it.modelCount} model • ${it.accessSummary}"
+                                    val base = "${it.provider} • ${it.modelCount} model • ${it.accessSummary}"
+                                    if (it.lastFailure.isBlank()) base else "$base\n⚠ ${it.lastFailure}"
                                 } ?: getString(R.string.api_key_not_scanned)
                                 textSize = 12f
-                                setTextColor(palette.hint)
+                                setTextColor(if (stats?.lastFailure.isNullOrBlank()) palette.hint else Color.rgb(220, 38, 38))
                             })
                         }, LinearLayout.LayoutParams(0, -2, 1f))
                         addView(MaterialButton(this@ApiManagementActivity).apply {

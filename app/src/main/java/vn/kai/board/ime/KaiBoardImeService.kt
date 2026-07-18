@@ -48,6 +48,8 @@ import vn.kai.board.translation.TranslationLanguages
 import vn.kai.board.translation.TranslationPreferences
 import vn.kai.board.ai.AiPreferences
 import vn.kai.board.ai.AiProviderClient
+import vn.kai.board.ai.AiProviderCandidate
+import vn.kai.board.ai.AiKeyStatsStore
 import vn.kai.board.ai.AiRequestCancellation
 import vn.kai.board.ai.SecureApiKeyStore
 import com.google.mlkit.common.model.DownloadConditions
@@ -207,7 +209,6 @@ class KaiBoardImeService : InputMethodService() {
             }
             is KeyAction.Character -> {
                 val value = if (shifted) action.value.uppercaseChar() else action.value
-                val sentenceEnded = value in ".!?" && sentenceAutomationAllowed()
                 if (value.isLetter() && telexEnabled) {
                     if (composing.isEmpty() && !selectionActive && isTelexModifier(value) && transformWordAtCursor(value)) {
                         Unit
@@ -220,16 +221,12 @@ class KaiBoardImeService : InputMethodService() {
                 } else {
                     rememberCurrentHashtag()
                     finishComposing()
-                    val output = if (
-                        value == '.' && sentenceAutomationAllowed() && KeyboardPreferences.autoSpaceAfterPeriod(this)
-                    ) SentenceAutomationPolicy.periodOutput(autoSpace = true) else value.toString()
-                    connection.commitText(output, 1)
+                    connection.commitText(value.toString(), 1)
                 }
                 if (shifted) {
                     shifted = false
                     keyboardView?.setShifted(false)
                 }
-                if (sentenceEnded) updateAutomaticShift(forceCapital = true)
                 updateSuggestions()
             }
             KeyAction.Backspace -> {
@@ -282,11 +279,6 @@ class KaiBoardImeService : InputMethodService() {
                 updateSuggestions()
             }
             KeyAction.Space -> {
-                if (
-                    sentenceAutomationAllowed() &&
-                    KeyboardPreferences.autoSpaceAfterPeriod(this) &&
-                    SentenceAutomationPolicy.alreadyHasAutomaticPeriodSpace(connection.getTextBeforeCursor(2, 0))
-                ) return
                 val hashtag = currentHashtagToken()
                 if (HashtagSuggestionEngine.isComplete(hashtag) && learningAllowed()) {
                     HashtagSuggestionStore.remember(this, hashtag)
@@ -587,7 +579,7 @@ class KaiBoardImeService : InputMethodService() {
         val keys = SecureApiKeyStore.readAll(this)
         val provider = AiPreferences.provider(this)
         val models = AiPreferences.models(this)
-        if (keys.isEmpty() || provider.isBlank() || models.isEmpty()) {
+        if (keys.isEmpty()) {
             updateAiUi("Hãy thiết lập API key trong Cài đặt")
             return
         }
@@ -596,13 +588,40 @@ class KaiBoardImeService : InputMethodService() {
         val cancellation = AiRequestCancellation().also { aiCancellation = it }
         updateAiUi("AI đang xử lý…")
         Thread({
-            val result = runCatching { AiProviderClient.generate(provider, keys, models, AiPreferences.tone(this), prompt, cancellation) }
+            val result = runCatching {
+                val orderedKeys = keys.sortedBy { key ->
+                    if ((AiKeyStatsStore.get(this, key)?.provider ?: AiProviderClient.detectProvider(key)) == provider) 0 else 1
+                }
+                val candidates = orderedKeys.mapNotNull { key ->
+                    cancellation.check()
+                    val saved = AiKeyStatsStore.get(this, key)
+                    val keyProvider = saved?.provider?.ifBlank { null } ?: AiProviderClient.detectProvider(key)
+                        ?: return@mapNotNull null
+                    val keyModels = when {
+                        saved?.models?.isNotEmpty() == true -> saved.models
+                        keyProvider == provider && models.isNotEmpty() -> models
+                        else -> runCatching { AiProviderClient.discover(key) }
+                            .onSuccess { AiKeyStatsStore.save(this, key, it) }
+                            .onFailure { AiKeyStatsStore.markFailure(this, key, it.message ?: "Không thể quét model") }
+                            .getOrNull()?.models.orEmpty()
+                    }
+                    if (keyModels.isEmpty()) null else AiProviderCandidate(key, keyProvider, keyModels)
+                }
+                AiProviderClient.generateWithFallback(
+                    candidates,
+                    AiPreferences.tone(this),
+                    prompt,
+                    cancellation,
+                ) { failure ->
+                    AiKeyStatsStore.markFailure(this, failure.apiKey, failure.message)
+                }.also { AiKeyStatsStore.clearFailure(this, it.apiKey) }
+            }
             aiHandler.post {
                 if (aiCancellation === cancellation) aiCancellation = null
                 if (generation != aiGeneration || !aiMode) return@post
-                result.onSuccess { (model, output) ->
-                    currentInputConnection?.commitText(output, 1)
-                    updateAiUi("Đã xử lý • $model")
+                result.onSuccess { generated ->
+                    currentInputConnection?.commitText(generated.output, 1)
+                    updateAiUi("Đã xử lý • ${generated.provider} • ${generated.model}")
                 }.onFailure { updateAiUi(it.message ?: "AI không thể xử lý") }
             }
         }, "kai-ai-request").start()

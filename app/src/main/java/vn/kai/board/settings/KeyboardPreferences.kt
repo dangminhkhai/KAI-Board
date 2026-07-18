@@ -22,7 +22,6 @@ object KeyboardPreferences {
     const val LEFT_OFFSET_DP = "left_offset_dp"
     const val AUTO_CORRECT = "auto_correct"
     const val AUTO_CAPITALIZATION = "auto_capitalization"
-    const val AUTO_SPACE_AFTER_PERIOD = "auto_space_after_period"
     const val WORD_SUGGESTIONS = "word_suggestions"
     const val OFFLINE_MODE = "offline_mode"
     const val KEY_RADIUS_DP = "key_radius_dp"
@@ -62,7 +61,6 @@ object KeyboardPreferences {
     fun leftOffsetDp(context: Context) = prefs(context).getInt(LEFT_OFFSET_DP, 0).coerceAtLeast(0)
     fun autoCorrect(context: Context) = prefs(context).getBoolean(AUTO_CORRECT, false)
     fun autoCapitalization(context: Context) = prefs(context).getBoolean(AUTO_CAPITALIZATION, true)
-    fun autoSpaceAfterPeriod(context: Context) = prefs(context).getBoolean(AUTO_SPACE_AFTER_PERIOD, false)
     fun wordSuggestions(context: Context) = prefs(context).getBoolean(WORD_SUGGESTIONS, true)
     fun offlineMode(context: Context) = prefs(context).getBoolean(OFFLINE_MODE, false)
     fun keyRadiusDp(context: Context) = prefs(context).getInt(KEY_RADIUS_DP, 7).coerceIn(0, 24)
