@@ -1,5 +1,12 @@
 # Changelog
 
+## Chưa phát hành
+
+- Thêm DS2API OpenAI-compatible qua deployment HTTPS, tự nhận diện key prefix `khaids-`, quét model và tham gia failover nhiều key.
+- Quản lý API cho phép chạm giữ trực tiếp card để kéo thả thứ tự ưu tiên; card đang kéo nổi viền accent và các card khác tự tạo vị trí chèn.
+- Thứ tự API key được dùng trực tiếp khi gửi AI và chỉ được lưu sau khi thả card.
+- Thêm gói N-gram tiếng Việt tùy chọn tải về để gợi ý cụm từ offline, không làm tăng đáng kể dung lượng APK.
+
 Định dạng theo Keep a Changelog; phiên bản theo Semantic Versioning khi phù hợp.
 
 ## 1.2.0 - 2026-07-18

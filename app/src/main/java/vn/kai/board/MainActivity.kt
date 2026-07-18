@@ -32,6 +32,7 @@ import vn.kai.board.input.UserLexiconStore
 import vn.kai.board.input.EmailSuggestionStore
 import vn.kai.board.input.HashtagSuggestionStore
 import vn.kai.board.input.AutoCorrectionStatsStore
+import vn.kai.board.input.VietnameseNGramModel
 import vn.kai.board.translation.TranslationModelsActivity
 import android.widget.Toast
 import vn.kai.board.ai.AiPreferences
@@ -280,6 +281,76 @@ class MainActivity : Activity() {
             addSwitch(section, R.string.setting_auto_correct, KeyboardPreferences.AUTO_CORRECT, KeyboardPreferences.autoCorrect(this))
             addSwitch(section, R.string.setting_auto_capitalization, KeyboardPreferences.AUTO_CAPITALIZATION, KeyboardPreferences.autoCapitalization(this))
             addSwitch(section, R.string.setting_offline_mode, KeyboardPreferences.OFFLINE_MODE, KeyboardPreferences.offlineMode(this))
+            section.addView(MaterialCardView(this).apply {
+                radius = dp(14).toFloat()
+                cardElevation = 0f
+                strokeWidth = dp(1)
+                strokeColor = selectedColor
+                setCardBackgroundColor(cardColor)
+                setContentPadding(dp(14), dp(12), dp(14), dp(12))
+                addView(LinearLayout(this@MainActivity).apply {
+                    orientation = LinearLayout.VERTICAL
+                    addView(textView(getString(R.string.ngram_model_title), 16f, primaryText).apply {
+                        setTypeface(typeface, Typeface.BOLD)
+                    })
+                    val modelStatus = textView("", 13f, secondaryText).apply { setPadding(0, dp(4), 0, dp(4)) }
+                    val modelAction = MaterialButton(this@MainActivity).apply {
+                        setTextColor(Color.WHITE)
+                        backgroundTintList = ColorStateList.valueOf(selectedColor)
+                    }
+                    fun refreshModel() {
+                        val downloaded = VietnameseNGramModel.isDownloaded(this@MainActivity)
+                        modelStatus.text = if (downloaded) getString(
+                            R.string.ngram_model_downloaded,
+                            VietnameseNGramModel.entryCount(this@MainActivity),
+                            (VietnameseNGramModel.sizeBytes(this@MainActivity) / 1024L).coerceAtLeast(1L),
+                        ) else getString(R.string.ngram_model_not_downloaded)
+                        modelAction.text = getString(if (downloaded) R.string.ngram_model_delete else R.string.ngram_model_download)
+                        modelAction.isEnabled = true
+                    }
+                    modelAction.setOnClickListener {
+                        if (VietnameseNGramModel.isDownloaded(this@MainActivity)) {
+                            MaterialAlertDialogBuilder(this@MainActivity)
+                                .setTitle(R.string.ngram_model_delete_title)
+                                .setMessage(R.string.ngram_model_delete_message)
+                                .setNegativeButton(R.string.cancel, null)
+                                .setPositiveButton(R.string.ngram_model_delete) { _, _ ->
+                                    VietnameseNGramModel.delete(this@MainActivity)
+                                    refreshModel()
+                                }.show()
+                        } else {
+                            if (KeyboardPreferences.offlineMode(this@MainActivity)) {
+                                Toast.makeText(this@MainActivity, R.string.ngram_model_offline_error, Toast.LENGTH_SHORT).show()
+                                return@setOnClickListener
+                            }
+                            modelAction.isEnabled = false
+                            modelStatus.text = getString(R.string.ngram_model_downloading)
+                            Thread({
+                                val result = runCatching { VietnameseNGramModel.download(this@MainActivity) }
+                                runOnUiThread {
+                                    if (isDestroyed) return@runOnUiThread
+                                    result.onSuccess {
+                                        refreshModel()
+                                        Toast.makeText(this@MainActivity, R.string.ngram_model_ready, Toast.LENGTH_SHORT).show()
+                                    }.onFailure {
+                                        modelStatus.text = it.message ?: getString(R.string.ngram_model_download_error)
+                                        modelAction.isEnabled = true
+                                    }
+                                }
+                            }, "kai-ngram-download").start()
+                        }
+                    }
+                    addView(modelStatus)
+                    addView(modelAction, LinearLayout.LayoutParams(-1, -2))
+                    addView(textView(getString(R.string.ngram_model_attribution), 11f, secondaryText).apply {
+                        setPadding(0, dp(4), 0, 0)
+                    })
+                    refreshModel()
+                })
+            }, LinearLayout.LayoutParams(-1, -2).apply {
+                topMargin = dp(10)
+                bottomMargin = dp(4)
+            })
             val correctionStats = AutoCorrectionStatsStore.summary(this)
             section.addView(textView(
                 getString(R.string.auto_correct_stats, correctionStats.first, correctionStats.second),

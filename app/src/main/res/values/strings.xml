@@ -33,6 +33,18 @@
     <string name="auto_correct_stats">Thử nghiệm tự sửa: %1$d lần giữ sửa • %2$d lần hoàn tác</string>
     <string name="setting_word_suggestions">Hiện gợi ý từ</string>
     <string name="setting_offline_mode">Chế độ offline (tắt AI, giọng nói và tải model)</string>
+    <string name="ngram_model_title">Gợi ý cụm từ tiếng Việt</string>
+    <string name="ngram_model_not_downloaded">Chưa tải • KAI Board đang dùng mẫu cơ bản và dữ liệu cá nhân.</string>
+    <string name="ngram_model_downloaded">Đã tải %1$d mẫu N-gram • %2$d KB • dùng hoàn toàn offline.</string>
+    <string name="ngram_model_download">Tải gói tiếng Việt</string>
+    <string name="ngram_model_delete">Xóa gói</string>
+    <string name="ngram_model_downloading">Đang tải và tối ưu N-gram tiếng Việt…</string>
+    <string name="ngram_model_ready">Gói gợi ý tiếng Việt đã sẵn sàng</string>
+    <string name="ngram_model_download_error">Không thể tải gói tiếng Việt</string>
+    <string name="ngram_model_offline_error">Tắt chế độ offline trước khi tải gói</string>
+    <string name="ngram_model_delete_title">Xóa gói gợi ý tiếng Việt?</string>
+    <string name="ngram_model_delete_message">Dữ liệu cụm từ cá nhân vẫn được giữ lại.</string>
+    <string name="ngram_model_attribution">Nguồn: Universal Dependencies Vietnamese VTB • CC BY-SA 4.0.</string>
     <string name="clear_learned_words">Xóa từ đã học</string>
     <string name="learned_words_status">Đã học %1$d từ • %2$d lượt sử dụng\nGiữ một gợi ý để xóa riêng từ đó</string>
     <string name="clear_learned_words_title">Xóa toàn bộ từ đã học?</string>
@@ -123,6 +135,8 @@
     <string name="api_scan_failed">Không thể quét API key</string>
     <string name="api_status_ready">API key hoạt động</string>
     <string name="api_status_unknown">API key chưa được kiểm tra</string>
+    <string name="api_priority_note">Chạm giữ API key rồi kéo để đổi ưu tiên. AI thử từ trên xuống dưới.</string>
+    <string name="api_priority_drag">API key %1$d. Chạm giữ rồi kéo để đổi ưu tiên</string>
     <string name="keyboard_preset_title">Kích thước và vị trí nhanh</string>
     <string name="keyboard_preset_description">Chọn preset để áp dụng ngay; dùng Điều chỉnh kích thước &amp; vị trí nếu muốn kéo thủ công.</string>
     <string name="keyboard_preset_default">Mặc định</string>

@@ -17,6 +17,9 @@ import android.widget.TextView
 import android.widget.Toast
 import androidx.core.view.ViewCompat
 import androidx.core.view.WindowInsetsCompat
+import androidx.recyclerview.widget.ItemTouchHelper
+import androidx.recyclerview.widget.LinearLayoutManager
+import androidx.recyclerview.widget.RecyclerView
 import com.google.android.material.button.MaterialButton
 import com.google.android.material.card.MaterialCardView
 import com.google.android.material.dialog.MaterialAlertDialogBuilder
@@ -72,92 +75,53 @@ class ApiManagementActivity : Activity() {
             setPadding(dp(3), dp(10), dp(3), dp(6))
         }
 
-        val apiList = LinearLayout(this).apply { orientation = LinearLayout.VERTICAL }
+        val apiList = RecyclerView(this).apply {
+            layoutManager = LinearLayoutManager(this@ApiManagementActivity)
+            isNestedScrollingEnabled = false
+            itemAnimator = androidx.recyclerview.widget.DefaultItemAnimator().apply {
+                moveDuration = 180L
+                changeDuration = 140L
+            }
+        }
+        val apiEmpty = TextView(this).apply {
+            text = getString(R.string.api_list_empty)
+            textSize = 14f
+            setTextColor(palette.hint)
+            setPadding(dp(2), dp(8), dp(2), dp(8))
+        }
         val apiCount = TextView(this).apply {
             textSize = 13f
             setTextColor(palette.hint)
             setPadding(0, dp(2), 0, dp(10))
         }
         lateinit var refreshApiList: () -> Unit
+        val apiAdapter = ApiKeyAdapter(
+            palette = palette,
+            onDelete = { key ->
+                MaterialAlertDialogBuilder(this)
+                    .setTitle(R.string.api_delete_title)
+                    .setMessage(R.string.api_delete_message)
+                    .setNegativeButton(android.R.string.cancel, null)
+                    .setPositiveButton(R.string.api_delete_action) { _, _ ->
+                        val remaining = SecureApiKeyStore.readAll(this).filter { it != key }
+                        SecureApiKeyStore.saveAll(this, remaining)
+                        AiKeyStatsStore.remove(this, key)
+                        refreshApiList()
+                    }
+                    .show()
+            },
+            onOrderSaved = { orderedKeys -> SecureApiKeyStore.saveAll(this, orderedKeys) },
+        )
+        apiList.adapter = apiAdapter
+        ItemTouchHelper(ApiKeyTouchCallback(apiAdapter, palette)).attachToRecyclerView(apiList)
         refreshApiList = {
             val savedKeys = SecureApiKeyStore.readAll(this@ApiManagementActivity)
             apiCount.text = resources.getQuantityString(R.plurals.api_saved_count, savedKeys.size, savedKeys.size)
-            apiList.removeAllViews()
-            if (savedKeys.isEmpty()) {
-                apiList.addView(TextView(this).apply {
-                    text = getString(R.string.api_list_empty)
-                    textSize = 14f
-                    setTextColor(palette.hint)
-                    setPadding(dp(2), dp(8), dp(2), dp(8))
-                })
-            } else savedKeys.forEachIndexed { index, key ->
-                val stats = AiKeyStatsStore.get(this@ApiManagementActivity, key)
-                    ?: fallbackStats(savedKeys.size)
-                apiList.addView(MaterialCardView(this).apply {
-                    radius = dp(14).toFloat()
-                    cardElevation = 0f
-                    strokeWidth = dp(1)
-                    strokeColor = palette.specialKey
-                    setCardBackgroundColor(palette.background)
-                    setContentPadding(dp(12), dp(10), dp(8), dp(10))
-                    addView(LinearLayout(this@ApiManagementActivity).apply {
-                        gravity = Gravity.CENTER_VERTICAL
-                        addView(TextView(this@ApiManagementActivity).apply {
-                            text = "●"
-                            textSize = 17f
-                            contentDescription = getString(
-                                if (stats != null) R.string.api_status_ready else R.string.api_status_unknown,
-                            )
-                            setTextColor(if (stats != null) palette.accent else Color.rgb(217, 119, 6))
-                            alpha = 0f
-                            scaleX = 0.6f
-                            scaleY = 0.6f
-                            animate().alpha(1f).scaleX(1f).scaleY(1f).setDuration(260L).start()
-                        }, LinearLayout.LayoutParams(dp(26), -2))
-                        addView(LinearLayout(this@ApiManagementActivity).apply {
-                            orientation = LinearLayout.VERTICAL
-                            addView(TextView(this@ApiManagementActivity).apply {
-                                text = getString(R.string.api_item_title, index + 1)
-                                textSize = 15f
-                                setTypeface(typeface, android.graphics.Typeface.BOLD)
-                                setTextColor(palette.text)
-                            })
-                            addView(TextView(this@ApiManagementActivity).apply {
-                                text = maskApiKey(key)
-                                textSize = 13f
-                                setTextColor(palette.hint)
-                            })
-                            addView(TextView(this@ApiManagementActivity).apply {
-                                text = stats?.let {
-                                    val base = "${it.provider} • ${it.modelCount} model • ${it.accessSummary}"
-                                    if (it.lastFailure.isBlank()) base else "$base\n⚠ ${it.lastFailure}"
-                                } ?: getString(R.string.api_key_not_scanned)
-                                textSize = 12f
-                                setTextColor(if (stats?.lastFailure.isNullOrBlank()) palette.hint else Color.rgb(220, 38, 38))
-                            })
-                        }, LinearLayout.LayoutParams(0, -2, 1f))
-                        addView(MaterialButton(this@ApiManagementActivity).apply {
-                            text = getString(R.string.api_delete_action)
-                            setTextColor(palette.accent)
-                            backgroundTintList = ColorStateList.valueOf(Color.TRANSPARENT)
-                            setOnClickListener {
-                                MaterialAlertDialogBuilder(this@ApiManagementActivity)
-                                    .setTitle(R.string.api_delete_title)
-                                    .setMessage(R.string.api_delete_message)
-                                    .setNegativeButton(android.R.string.cancel, null)
-                                    .setPositiveButton(R.string.api_delete_action) { _, _ ->
-                                        val remaining = SecureApiKeyStore.readAll(this@ApiManagementActivity)
-                                            .filter { it != key }
-                                        SecureApiKeyStore.saveAll(this@ApiManagementActivity, remaining)
-                                        AiKeyStatsStore.remove(this@ApiManagementActivity, key)
-                                        refreshApiList()
-                                    }
-                                    .show()
-                            }
-                        })
-                    })
-                }, LinearLayout.LayoutParams(-1, -2).apply { bottomMargin = dp(8) })
-            }
+            apiEmpty.visibility = if (savedKeys.isEmpty()) View.VISIBLE else View.GONE
+            apiList.visibility = if (savedKeys.isEmpty()) View.GONE else View.VISIBLE
+            apiAdapter.submit(savedKeys.map { key ->
+                ApiKeyItem(key, AiKeyStatsStore.get(this@ApiManagementActivity, key) ?: fallbackStats(savedKeys.size))
+            })
         }
         refreshApiList()
 
@@ -287,7 +251,14 @@ class ApiManagementActivity : Activity() {
                         setTextColor(palette.text)
                     })
                     addView(apiCount)
+                    addView(TextView(this@ApiManagementActivity).apply {
+                        text = getString(R.string.api_priority_note)
+                        textSize = 12f
+                        setTextColor(palette.hint)
+                        setPadding(0, 0, 0, dp(8))
+                    })
                     addView(status)
+                    addView(apiEmpty)
                     addView(apiList)
                 })
             }, LinearLayout.LayoutParams(-1, -2).apply { topMargin = dp(14) })
@@ -313,6 +284,148 @@ class ApiManagementActivity : Activity() {
     }
 
     private fun dp(value: Int) = (value * density).toInt()
+
+    private data class ApiKeyItem(val key: String, val stats: AiKeyStats?)
+
+    private inner class ApiKeyAdapter(
+        private val palette: KeyboardThemePalette,
+        private val onDelete: (String) -> Unit,
+        private val onOrderSaved: (List<String>) -> Unit,
+    ) : RecyclerView.Adapter<ApiKeyAdapter.Holder>() {
+        private val items = mutableListOf<ApiKeyItem>()
+
+        fun submit(values: List<ApiKeyItem>) {
+            items.clear()
+            items.addAll(values)
+            notifyDataSetChanged()
+        }
+
+        fun move(from: Int, to: Int): Boolean {
+            if (from !in items.indices || to !in items.indices || from == to) return false
+            val item = items.removeAt(from)
+            items.add(to, item)
+            notifyItemMoved(from, to)
+            notifyItemRangeChanged(minOf(from, to), kotlin.math.abs(from - to) + 1)
+            return true
+        }
+
+        fun persistOrder() = onOrderSaved(items.map { it.key })
+
+        override fun getItemCount() = items.size
+
+        override fun onCreateViewHolder(parent: android.view.ViewGroup, viewType: Int): Holder {
+            val card = MaterialCardView(this@ApiManagementActivity).apply {
+                radius = dp(14).toFloat()
+                cardElevation = 0f
+                strokeWidth = dp(1)
+                strokeColor = palette.specialKey
+                setCardBackgroundColor(palette.background)
+                setContentPadding(dp(12), dp(10), dp(8), dp(10))
+                layoutParams = RecyclerView.LayoutParams(-1, -2).apply { bottomMargin = dp(8) }
+            }
+            val row = LinearLayout(this@ApiManagementActivity).apply { gravity = Gravity.CENTER_VERTICAL }
+            val state = TextView(this@ApiManagementActivity).apply {
+                text = "●"
+                textSize = 17f
+            }
+            row.addView(state, LinearLayout.LayoutParams(dp(26), -2))
+            val details = LinearLayout(this@ApiManagementActivity).apply { orientation = LinearLayout.VERTICAL }
+            val title = TextView(this@ApiManagementActivity).apply {
+                textSize = 15f
+                setTypeface(typeface, android.graphics.Typeface.BOLD)
+                setTextColor(palette.text)
+            }
+            val maskedKey = TextView(this@ApiManagementActivity).apply {
+                textSize = 13f
+                setTextColor(palette.hint)
+            }
+            val summary = TextView(this@ApiManagementActivity).apply { textSize = 12f }
+            details.addView(title)
+            details.addView(maskedKey)
+            details.addView(summary)
+            row.addView(details, LinearLayout.LayoutParams(0, -2, 1f))
+            val delete = MaterialButton(this@ApiManagementActivity).apply {
+                text = getString(R.string.api_delete_action)
+                setTextColor(palette.accent)
+                backgroundTintList = ColorStateList.valueOf(Color.TRANSPARENT)
+            }
+            row.addView(delete)
+            card.addView(row)
+            return Holder(card, state, title, maskedKey, summary, delete)
+        }
+
+        override fun onBindViewHolder(holder: Holder, position: Int) {
+            val item = items[position]
+            val stats = item.stats
+            holder.card.contentDescription = getString(R.string.api_priority_drag, position + 1)
+            holder.state.contentDescription = getString(
+                if (stats != null) R.string.api_status_ready else R.string.api_status_unknown,
+            )
+            holder.state.setTextColor(if (stats != null) palette.accent else Color.rgb(217, 119, 6))
+            holder.title.text = getString(R.string.api_item_title, position + 1)
+            holder.maskedKey.text = maskApiKey(item.key)
+            holder.summary.text = stats?.let {
+                val base = "${it.provider} • ${it.modelCount} model • ${it.accessSummary}"
+                if (it.lastFailure.isBlank()) base else "$base\n⚠ ${it.lastFailure}"
+            } ?: getString(R.string.api_key_not_scanned)
+            holder.summary.setTextColor(if (stats?.lastFailure.isNullOrBlank()) palette.hint else Color.rgb(220, 38, 38))
+            holder.delete.setOnClickListener { onDelete(item.key) }
+        }
+
+        inner class Holder(
+            val card: MaterialCardView,
+            val state: TextView,
+            val title: TextView,
+            val maskedKey: TextView,
+            val summary: TextView,
+            val delete: MaterialButton,
+        ) : RecyclerView.ViewHolder(card)
+    }
+
+    private inner class ApiKeyTouchCallback(
+        private val adapter: ApiKeyAdapter,
+        private val palette: KeyboardThemePalette,
+    ) : ItemTouchHelper.SimpleCallback(ItemTouchHelper.UP or ItemTouchHelper.DOWN, 0) {
+        private var orderChanged = false
+
+        override fun isLongPressDragEnabled() = true
+
+        override fun onMove(
+            recyclerView: RecyclerView,
+            viewHolder: RecyclerView.ViewHolder,
+            target: RecyclerView.ViewHolder,
+        ): Boolean {
+            val moved = adapter.move(viewHolder.bindingAdapterPosition, target.bindingAdapterPosition)
+            orderChanged = orderChanged || moved
+            return moved
+        }
+
+        override fun onSwiped(viewHolder: RecyclerView.ViewHolder, direction: Int) = Unit
+
+        override fun onSelectedChanged(viewHolder: RecyclerView.ViewHolder?, actionState: Int) {
+            super.onSelectedChanged(viewHolder, actionState)
+            if (actionState != ItemTouchHelper.ACTION_STATE_DRAG || viewHolder == null) return
+            viewHolder.itemView.performHapticFeedback(android.view.HapticFeedbackConstants.LONG_PRESS)
+            (viewHolder.itemView as? MaterialCardView)?.apply {
+                cardElevation = dp(10).toFloat()
+                strokeWidth = dp(2)
+                strokeColor = palette.accent
+                animate().scaleX(1.02f).scaleY(1.02f).setDuration(120L).start()
+            }
+        }
+
+        override fun clearView(recyclerView: RecyclerView, viewHolder: RecyclerView.ViewHolder) {
+            super.clearView(recyclerView, viewHolder)
+            (viewHolder.itemView as? MaterialCardView)?.apply {
+                cardElevation = 0f
+                strokeWidth = dp(1)
+                strokeColor = palette.specialKey
+                animate().scaleX(1f).scaleY(1f).setDuration(120L).start()
+            }
+            if (orderChanged) adapter.persistOrder()
+            orderChanged = false
+        }
+    }
 
     private fun choiceButtons(
         labels: List<String>, initial: Int, textColor: Int, surfaceColor: Int, accentColor: Int,

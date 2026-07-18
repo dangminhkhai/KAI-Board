@@ -33,9 +33,10 @@ data class AiDiscovery(
 }
 
 object AiProviderClient {
-    val providerChoices = listOf("Tự động", "OpenRouter", "Gemini", "OpenAI", "Groq", "NVIDIA NIM")
+    val providerChoices = listOf("Tự động", "DS2API", "OpenRouter", "Gemini", "OpenAI", "Groq", "NVIDIA NIM")
 
     fun detectProvider(apiKey: String): String? = when {
+        apiKey.trim().startsWith("khaids-") -> "DS2API"
         apiKey.trim().startsWith("sk-or-") -> "OpenRouter"
         apiKey.trim().startsWith("AIza") -> "Gemini"
         apiKey.trim().startsWith("gsk_") -> "Groq"
@@ -48,6 +49,7 @@ object AiProviderClient {
         val key = apiKey.trim()
         if (providerHint != "Tự động") return discoverForProvider(providerHint, key)
         return when {
+            key.startsWith("khaids-") -> discoverDs2Api(key)
             key.startsWith("sk-or-") -> discoverOpenRouter(key)
             key.startsWith("AIza") -> discoverGemini(key)
             key.startsWith("gsk_") -> discoverOpenAiCompatible(
@@ -63,6 +65,7 @@ object AiProviderClient {
     }
 
     private fun discoverForProvider(provider: String, key: String) = when (provider) {
+        "DS2API" -> discoverDs2Api(key)
         "OpenRouter" -> discoverOpenRouter(key)
         "Gemini" -> discoverGemini(key)
         "OpenAI" -> discoverOpenAi(key)
@@ -75,6 +78,13 @@ object AiProviderClient {
         "NVIDIA NIM" -> discoverNvidia(key)
         else -> throw IllegalArgumentException("Nhà cung cấp chưa được hỗ trợ")
     }
+
+    private fun discoverDs2Api(key: String): AiDiscovery = discoverOpenAiCompatible(
+        provider = "DS2API",
+        url = "$DS2API_BASE_URL/models",
+        key = key,
+        freeTierByQuota = true,
+    )
 
     private fun discoverOpenRouter(key: String): AiDiscovery {
         val json = request("https://openrouter.ai/api/v1/models", key)
@@ -175,6 +185,7 @@ object AiProviderClient {
                 try {
                     return model to when (provider) {
                         "Gemini" -> generateGemini(apiKey, model, tone, prompt, cancellation)
+                        "DS2API" -> generateChat("$DS2API_BASE_URL/chat/completions", apiKey, model, tone, prompt, cancellation)
                         "OpenRouter" -> generateChat("https://openrouter.ai/api/v1/chat/completions", apiKey, model, tone, prompt, cancellation)
                         "OpenAI" -> generateChat("https://api.openai.com/v1/chat/completions", apiKey, model, tone, prompt, cancellation)
                         "Groq" -> generateChat("https://api.groq.com/openai/v1/chat/completions", apiKey, model, tone, prompt, cancellation)
@@ -281,6 +292,7 @@ object AiProviderClient {
     private class QuotaAiException(message: String) : RuntimeException(message)
     private class HttpStatusException(val status: Int, message: String) : RuntimeException(message)
     private const val MAX_RESPONSE_CHARS = 1_000_000
+    private const val DS2API_BASE_URL = "https://ds2api-khai11.vercel.app/v1"
     private val NVIDIA_TEXT_MODELS = listOf(
         "nvidia/llama-3.1-nemotron-nano-8b-v1",
         "moonshotai/kimi-k2-instruct",

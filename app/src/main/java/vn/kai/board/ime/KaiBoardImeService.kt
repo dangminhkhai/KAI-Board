@@ -173,34 +173,40 @@ class KaiBoardImeService : InputMethodService() {
                 updateSuggestions()
             }
             is KeyAction.SelectSuggestion -> {
+                val history = previousWords()
+                val previous = history.lastOrNull()
                 val hashtagToken = currentHashtagToken()
                 if (action.value.startsWith('#') && hashtagToken.isNotEmpty()) {
                     finishComposing()
                     connection.deleteSurroundingText(hashtagToken.length, 0)
-                    connection.commitText(action.value, 1)
+                    connection.commitText("${action.value} ", 1)
                     if (learningAllowed()) HashtagSuggestionStore.remember(this, action.value)
-                    updateSuggestions()
+                    showNextWordSuggestions(history + action.value)
                 } else if (isEmailInput(currentInputEditorInfo)) {
                     val before = connection.getTextBeforeCursor(120, 0) ?: ""
                     val token = EmailSuggestionEngine.currentToken(before)
                     if (token.isNotEmpty()) connection.deleteSurroundingText(token.length, 0)
-                    connection.commitText(action.value, 1)
+                    connection.commitText("${action.value} ", 1)
                     if (learningAllowed()) EmailSuggestionStore.remember(this, action.value)
-                    updateSuggestions()
+                    showNextWordSuggestions(history + action.value)
                 } else if (composing.isNotEmpty()) {
                     composing = action.value
                     literalTelexLockLength = 0
                     connection.setComposingText(composing, 1)
-                    if (learningAllowed()) UserLexiconStore.record(this, composing, LearnSource.SUGGESTION, 3)
-                    updateSuggestions()
+                    if (learningAllowed()) {
+                        UserLexiconStore.record(this, composing, LearnSource.SUGGESTION, 3)
+                        PhraseLearningStore.record(this, history, composing)
+                    }
+                    finishComposing()
+                    connection.commitText(" ", 1)
+                    showNextWordSuggestions(history + action.value)
                 } else {
-                    val previous = previousWord()
                     connection.commitText("${action.value} ", 1)
                     if (learningAllowed()) {
                         UserLexiconStore.record(this, action.value, LearnSource.SUGGESTION, 3)
-                        PhraseLearningStore.record(this, previous, action.value)
+                        PhraseLearningStore.record(this, history, action.value)
                     }
-                    updateSuggestions()
+                    showNextWordSuggestions(history + action.value)
                 }
             }
             is KeyAction.ForgetSuggestion -> {
@@ -291,7 +297,8 @@ class KaiBoardImeService : InputMethodService() {
                     rememberCurrentEmail(); finishComposing(); connection.commitText(" ", 1)
                 } else {
                     val original = composing
-                    val previous = previousWord()
+                    val history = previousWords()
+                    val previous = history.lastOrNull()
                     val learned = UserLexiconStore.read(this)
                     val corrected = if (KeyboardPreferences.autoCorrect(this) && original.isNotEmpty()) {
                         VietnameseSuggestionEngine.bestAutoCorrection(original, learned, previous)
@@ -305,10 +312,10 @@ class KaiBoardImeService : InputMethodService() {
                     if (original.isNotEmpty() && learningAllowed()) {
                         if (corrected != null) UserLexiconStore.record(this, corrected, LearnSource.AUTO_CORRECT, 2)
                         else UserLexiconStore.learn(this, original)
-                        PhraseLearningStore.record(this, previous, corrected ?: original)
+                        PhraseLearningStore.record(this, history, corrected ?: original)
                     }
                     lastAutoCorrection = corrected?.let { AutoCorrection(original, it) }
-                    updateSuggestions()
+                    showNextWordSuggestions(history + (corrected ?: original))
                 }
             }
             KeyAction.Enter -> {
@@ -400,11 +407,21 @@ class KaiBoardImeService : InputMethodService() {
                 )
             }
             info?.let { TelexInputPolicy.isEnabled(it.inputType) } == true ->
-                if (composing.isEmpty()) PhraseLearningStore.suggest(this, previousWord())
+                if (composing.isEmpty()) PhraseLearningStore.suggest(this, previousWords())
                 else VietnameseSuggestionEngine.suggest(composing, learned = UserLexiconStore.read(this), previousWord = previousWord())
             else -> emptyList()
         }
         keyboardView?.setSuggestions(values)
+    }
+
+    private fun showNextWordSuggestions(history: List<String>) {
+        val info = currentInputEditorInfo
+        if (!suggestionsAllowed(info) || info?.let { TelexInputPolicy.isEnabled(it.inputType) } != true) {
+            updateSuggestions()
+            return
+        }
+        val next = PhraseLearningStore.suggest(this, history)
+        if (next.isEmpty()) updateSuggestions() else keyboardView?.setSuggestions(next)
     }
 
     private fun suggestionsAllowed(info: EditorInfo?): Boolean =
@@ -445,15 +462,14 @@ class KaiBoardImeService : InputMethodService() {
         if (HashtagSuggestionEngine.isComplete(hashtag)) HashtagSuggestionStore.remember(this, hashtag)
     }
 
-    private fun previousWord(): String? {
+    private fun previousWords(limit: Int = 2): List<String> {
         val text = currentInputConnection?.getTextBeforeCursor(160, 0)?.toString().orEmpty()
         val words = text.trimEnd().split(Regex("\\s+")).filter(String::isNotBlank)
-        return when {
-            words.isEmpty() -> null
-            composing.isNotEmpty() && words.last() == composing -> words.dropLast(1).lastOrNull()
-            else -> words.lastOrNull()
-        }
+        val committed = if (composing.isNotEmpty() && words.lastOrNull() == composing) words.dropLast(1) else words
+        return committed.takeLast(limit.coerceAtLeast(1))
     }
+
+    private fun previousWord(): String? = previousWords(1).lastOrNull()
 
     private data class AutoCorrection(val original: String, val corrected: String)
 
@@ -589,10 +605,7 @@ class KaiBoardImeService : InputMethodService() {
         updateAiUi("AI đang xử lý…")
         Thread({
             val result = runCatching {
-                val orderedKeys = keys.sortedBy { key ->
-                    if ((AiKeyStatsStore.get(this, key)?.provider ?: AiProviderClient.detectProvider(key)) == provider) 0 else 1
-                }
-                val candidates = orderedKeys.mapNotNull { key ->
+                val candidates = keys.mapNotNull { key ->
                     cancellation.check()
                     val saved = AiKeyStatsStore.get(this, key)
                     val keyProvider = saved?.provider?.ifBlank { null } ?: AiProviderClient.detectProvider(key)

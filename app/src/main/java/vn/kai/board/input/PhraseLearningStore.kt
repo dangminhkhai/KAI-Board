@@ -8,37 +8,82 @@ object PhraseLearningStore {
     private const val KEY = "pairs"
     private const val ROW = "\u001F"
     private const val FIELD = "\u001E"
-    private const val LIMIT = 256
+    private const val LIMIT = 512
     @Volatile private var cachedPairs: Map<String, Int>? = null
-    private val defaults = mapOf(
-        "cảm" to listOf("ơn"),
-        "xin" to listOf("chào"),
-        "việt" to listOf("nam"),
+    private val defaultPhrases = listOf(
+        listOf("xin", "chào", "bạn", "nhé"),
+        listOf("cảm", "ơn", "bạn", "rất", "nhiều"),
+        listOf("hôm", "nay", "thời", "tiết", "rất", "đẹp"),
+        listOf("tôi", "đang", "sử", "dụng", "bàn", "phím"),
+        listOf("chúng", "ta", "cùng", "kiểm", "tra"),
+        listOf("việt", "nam", "rất", "tuyệt", "vời"),
+        listOf("bạn", "có", "khỏe", "không"),
+        listOf("tôi", "muốn", "làm", "thêm"),
+        listOf("ứng", "dụng", "này", "rất", "tốt"),
+        listOf("chúc", "bạn", "một", "ngày", "vui"),
     )
+    private val defaultEntries: List<Pair<List<String>, Int>> = buildList {
+        defaultPhrases.forEach { phrase ->
+            phrase.windowed(2).forEach { add(it to 1) }
+            phrase.windowed(3).forEach { add(it to 1) }
+        }
+    }
 
     fun record(context: Context, first: String?, second: String) {
-        val left = clean(first) ?: return
-        val right = clean(second) ?: return
+        record(context, listOfNotNull(first), second)
+    }
+
+    fun record(context: Context, history: List<String>, next: String) {
+        val contextWords = history.mapNotNull(::clean).takeLast(2)
+        val right = clean(next) ?: return
+        val left = contextWords.lastOrNull() ?: return
         if (left == right) return
         val pairs = read(context).toMutableMap()
-        val key = "$left$FIELD$right"
-        pairs[key] = (pairs[key] ?: 0) + 1
+        increment(pairs, listOf(left, right))
+        if (contextWords.size == 2) increment(pairs, contextWords + right)
         write(context, pairs.entries.sortedByDescending { it.value }.take(LIMIT).associate { it.toPair() })
     }
 
     fun suggest(context: Context, previous: String?, limit: Int = 3): List<String> {
-        val left = clean(previous) ?: return emptyList()
-        val learned = read(context).entries.asSequence().mapNotNull { (key, count) ->
-            val parts = key.split(FIELD, limit = 2)
-            if (parts.size == 2 && parts[0] == left) parts[1] to count else null
-        }.sortedByDescending { it.second }.map { it.first }.toList()
-        return (learned + defaults[left].orEmpty()).distinct().take(limit)
+        return suggest(context, listOfNotNull(previous), limit)
+    }
+
+    fun suggest(context: Context, history: List<String>, limit: Int = 3): List<String> = rankCandidates(
+        read(context).map { (key, count) -> key.split(FIELD) to count } + VietnameseNGramModel.entries(context),
+        history,
+        limit,
+    )
+
+    internal fun rankCandidates(
+        entries: List<Pair<List<String>, Int>>,
+        history: List<String>,
+        limit: Int = 3,
+    ): List<String> {
+        if (limit <= 0) return emptyList()
+        val contextWords = history.mapNotNull(::clean).takeLast(2)
+        val last = contextWords.lastOrNull() ?: return emptyList()
+        val scores = LinkedHashMap<String, Int>()
+        (entries + defaultEntries).forEach { (words, count) ->
+            val score = when {
+                words.size == 3 && contextWords.size == 2 && words.take(2) == contextWords -> 10_000 + count * 10
+                words.size == 2 && words[0] == last -> 1_000 + count * 10
+                else -> return@forEach
+            }
+            val candidate = words.last()
+            scores[candidate] = maxOf(scores[candidate] ?: Int.MIN_VALUE, score)
+        }
+        return scores.entries.sortedByDescending { it.value }.map { it.key }.take(limit)
     }
 
     fun invalidateCache() { cachedPairs = null }
 
     private fun clean(value: String?): String? = value?.trim()?.lowercase(Locale.ROOT)
         ?.takeIf { it.matches(Regex("[\\p{L}Đđ]{2,32}")) }
+
+    private fun increment(values: MutableMap<String, Int>, words: List<String>) {
+        val key = words.joinToString(FIELD)
+        values[key] = (values[key] ?: 0) + 1
+    }
 
     private fun read(context: Context): Map<String, Int> {
         cachedPairs?.let { return it }
