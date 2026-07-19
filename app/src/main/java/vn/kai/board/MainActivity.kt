@@ -44,6 +44,9 @@ import vn.kai.board.ai.AiTone
 import androidx.core.view.ViewCompat
 import androidx.core.view.WindowCompat
 import androidx.core.view.WindowInsetsCompat
+import androidx.recyclerview.widget.ItemTouchHelper
+import androidx.recyclerview.widget.LinearLayoutManager
+import androidx.recyclerview.widget.RecyclerView
 
 class MainActivity : Activity() {
     override fun onCreate(savedInstanceState: Bundle?) {
@@ -285,45 +288,6 @@ class MainActivity : Activity() {
             addSwitch(section, R.string.setting_auto_correct, KeyboardPreferences.AUTO_CORRECT, KeyboardPreferences.autoCorrect(this))
             addSwitch(section, R.string.setting_auto_capitalization, KeyboardPreferences.AUTO_CAPITALIZATION, KeyboardPreferences.autoCapitalization(this))
             addSwitch(section, R.string.setting_offline_mode, KeyboardPreferences.OFFLINE_MODE, KeyboardPreferences.offlineMode(this))
-            section.addView(textView(getString(R.string.smartbar_order_title), 16f, primaryText).apply {
-                setTypeface(typeface, Typeface.BOLD)
-                setPadding(0, dp(14), 0, 0)
-            })
-            section.addView(textView(getString(R.string.smartbar_order_note), 13f, secondaryText))
-            val smartbarList = LinearLayout(this).apply { orientation = LinearLayout.VERTICAL }
-            val smartbarLabels = mapOf(
-                "back" to "Ẩn bàn phím", "mic" to "Mic", "translate" to "Dịch",
-                "ai" to "AI", "clipboard" to "Clipboard", "settings" to "Cài đặt", "emoji" to "Emoji",
-            )
-            fun renderSmartbarOrder() {
-                smartbarList.removeAllViews()
-                val order = KeyboardPreferences.smartbarOrder(this@MainActivity)
-                order.forEachIndexed { index, id ->
-                    smartbarList.addView(LinearLayout(this@MainActivity).apply {
-                        orientation = LinearLayout.HORIZONTAL
-                        gravity = Gravity.CENTER_VERTICAL
-                        addView(textView(smartbarLabels[id].orEmpty(), 15f, primaryText), LinearLayout.LayoutParams(0, dp(44), 1f).apply {
-                            gravity = Gravity.CENTER_VERTICAL
-                        })
-                        fun moveButton(label: String, delta: Int) = MaterialButton(this@MainActivity).apply {
-                            text = label; minWidth = 0; minimumWidth = 0; insetTop = 0; insetBottom = 0
-                            setTextColor(selectedColor); backgroundTintList = ColorStateList.valueOf(Color.TRANSPARENT)
-                            isEnabled = (index + delta) in order.indices
-                            setOnClickListener {
-                                val updated = order.toMutableList()
-                                val target = index + delta
-                                updated[index] = updated[target].also { updated[target] = updated[index] }
-                                KeyboardPreferences.setSmartbarOrder(this@MainActivity, updated)
-                                renderSmartbarOrder()
-                            }
-                        }
-                        addView(moveButton("↑", -1), LinearLayout.LayoutParams(dp(44), dp(40)))
-                        addView(moveButton("↓", 1), LinearLayout.LayoutParams(dp(44), dp(40)))
-                    })
-                }
-            }
-            section.addView(smartbarList)
-            renderSmartbarOrder()
             section.addView(MaterialCardView(this).apply {
                 radius = dp(14).toFloat()
                 cardElevation = 0f
@@ -564,6 +528,25 @@ class MainActivity : Activity() {
             section.addView(createOneHandButtons(primaryText, cardColor, selectedColor, ::dp), LinearLayout.LayoutParams(-1, dp(42)).apply {
                 topMargin = dp(8)
             })
+            section.addView(textView(getString(R.string.smartbar_order_title), 16f, primaryText).apply {
+                setTypeface(typeface, Typeface.BOLD)
+                setPadding(0, dp(18), 0, 0)
+            })
+            section.addView(textView(getString(R.string.smartbar_order_note), 13f, secondaryText))
+            val smartbarLabels = mapOf(
+                "back" to "Ẩn bàn phím", "mic" to "Mic", "translate" to "Dịch",
+                "ai" to "AI", "clipboard" to "Clipboard", "settings" to "Cài đặt", "emoji" to "Emoji",
+            )
+            val smartbarAdapter = SmartbarOrderAdapter(
+                KeyboardPreferences.smartbarOrder(this).toMutableList(), smartbarLabels,
+                primaryText, secondaryText, background, outlineColor,
+            )
+            section.addView(RecyclerView(this).apply {
+                layoutManager = LinearLayoutManager(this@MainActivity)
+                adapter = smartbarAdapter
+                isNestedScrollingEnabled = false
+                ItemTouchHelper(SmartbarTouchCallback(smartbarAdapter, selectedColor, outlineColor)).attachToRecyclerView(this)
+            }, LinearLayout.LayoutParams(-1, dp(7 * 48)))
         }
         addSection(R.string.tab_appearance, "appearance") { section ->
             val extensionList = LinearLayout(this).apply { orientation = LinearLayout.VERTICAL }
@@ -942,6 +925,118 @@ class MainActivity : Activity() {
             isHorizontalScrollBarEnabled = false
             isFillViewport = false
             addView(row)
+        }
+    }
+
+    private inner class SmartbarOrderAdapter(
+        private val items: MutableList<String>,
+        private val labels: Map<String, String>,
+        private val textColor: Int,
+        private val hintColor: Int,
+        private val surfaceColor: Int,
+        private val outlineColor: Int,
+    ) : RecyclerView.Adapter<SmartbarOrderAdapter.Holder>() {
+        private val density = resources.displayMetrics.density
+        private fun px(value: Int) = (value * density).toInt()
+
+        private val icons = mapOf(
+            "back" to "⌄", "mic" to "🎤", "translate" to "文", "ai" to "AI",
+            "clipboard" to "▣", "settings" to "⚙", "emoji" to "☺",
+        )
+
+        inner class Holder(val card: MaterialCardView, val icon: TextView, val title: TextView, val handle: TextView) :
+            RecyclerView.ViewHolder(card)
+
+        override fun onCreateViewHolder(parent: ViewGroup, viewType: Int): Holder {
+            val title = TextView(this@MainActivity).apply {
+                textSize = 15f; setTextColor(textColor); gravity = Gravity.CENTER_VERTICAL
+            }
+            val icon = TextView(this@MainActivity).apply {
+                textSize = 18f; setTextColor(textColor); gravity = Gravity.CENTER
+                setTypeface(typeface, Typeface.BOLD)
+            }
+            val handle = TextView(this@MainActivity).apply {
+                text = "≡"; textSize = 24f; setTextColor(hintColor); gravity = Gravity.CENTER
+                contentDescription = "Kéo để đổi vị trí"
+            }
+            val row = LinearLayout(this@MainActivity).apply {
+                orientation = LinearLayout.HORIZONTAL; gravity = Gravity.CENTER_VERTICAL
+                addView(icon, LinearLayout.LayoutParams(px(36), -1))
+                addView(title, LinearLayout.LayoutParams(0, -1, 1f))
+                addView(handle, LinearLayout.LayoutParams(px(36), -1))
+            }
+            val card = MaterialCardView(this@MainActivity).apply {
+                radius = px(14).toFloat(); cardElevation = 0f
+                setCardBackgroundColor(surfaceColor); strokeColor = outlineColor; strokeWidth = px(1)
+                setContentPadding(px(8), 0, px(6), 0)
+                layoutParams = RecyclerView.LayoutParams(-1, px(44)).apply { bottomMargin = px(4) }
+                addView(row)
+            }
+            return Holder(card, icon, title, handle)
+        }
+
+        override fun onBindViewHolder(holder: Holder, position: Int) {
+            val id = items[position]
+            holder.icon.text = icons[id].orEmpty()
+            holder.icon.contentDescription = labels[id]
+            holder.title.text = labels[id].orEmpty()
+            holder.card.contentDescription = "${holder.title.text}, vị trí ${position + 1}. Chạm giữ để kéo."
+        }
+
+        override fun getItemCount() = items.size
+
+        fun move(from: Int, to: Int): Boolean {
+            if (from !in items.indices || to !in items.indices || from == to) return false
+            val item = items.removeAt(from)
+            items.add(to, item)
+            // Keep the reorder visual-only while the finger is down. Writing preferences here
+            // would rebuild the keyboard after every crossed row and interrupt long drags.
+            notifyItemMoved(from, to)
+            return true
+        }
+
+        fun persistOrder() = KeyboardPreferences.setSmartbarOrder(this@MainActivity, items)
+    }
+
+    private inner class SmartbarTouchCallback(
+        private val adapter: SmartbarOrderAdapter,
+        private val accentColor: Int,
+        private val outlineColor: Int,
+    ) : ItemTouchHelper.SimpleCallback(ItemTouchHelper.UP or ItemTouchHelper.DOWN, 0) {
+        private var orderChanged = false
+        private val density = resources.displayMetrics.density
+
+        override fun isLongPressDragEnabled() = true
+
+        override fun onMove(recyclerView: RecyclerView, viewHolder: RecyclerView.ViewHolder, target: RecyclerView.ViewHolder): Boolean {
+            return adapter.move(viewHolder.bindingAdapterPosition, target.bindingAdapterPosition).also {
+                orderChanged = orderChanged || it
+            }
+        }
+
+        override fun onSwiped(viewHolder: RecyclerView.ViewHolder, direction: Int) = Unit
+
+        override fun onSelectedChanged(viewHolder: RecyclerView.ViewHolder?, actionState: Int) {
+            super.onSelectedChanged(viewHolder, actionState)
+            if (actionState != ItemTouchHelper.ACTION_STATE_DRAG || viewHolder == null) return
+            (viewHolder.itemView.parent as? RecyclerView)?.parent?.requestDisallowInterceptTouchEvent(true)
+            viewHolder.itemView.performHapticFeedback(android.view.HapticFeedbackConstants.LONG_PRESS)
+            (viewHolder.itemView as? MaterialCardView)?.apply {
+                cardElevation = 10f * density; strokeWidth = (2f * density).toInt(); strokeColor = accentColor
+                animate().scaleX(1.02f).scaleY(1.02f).setDuration(120L).start()
+            }
+        }
+
+        override fun clearView(recyclerView: RecyclerView, viewHolder: RecyclerView.ViewHolder) {
+            super.clearView(recyclerView, viewHolder)
+            recyclerView.parent?.requestDisallowInterceptTouchEvent(false)
+            (viewHolder.itemView as? MaterialCardView)?.apply {
+                cardElevation = 0f; strokeWidth = density.toInt().coerceAtLeast(1); strokeColor = outlineColor
+                animate().scaleX(1f).scaleY(1f).setDuration(120L).start()
+            }
+            // Commit once, only after ItemTouchHelper reports that the finger was released.
+            if (orderChanged) adapter.persistOrder()
+            orderChanged = false
         }
     }
 

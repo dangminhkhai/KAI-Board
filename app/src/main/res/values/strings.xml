@@ -34,7 +34,7 @@
     <string name="setting_word_suggestions">Hiện gợi ý từ</string>
     <string name="setting_offline_mode">Chế độ offline (tắt AI, giọng nói và tải model)</string>
     <string name="smartbar_order_title">Thứ tự nút thanh công cụ</string>
-    <string name="smartbar_order_note">Dùng mũi tên để đổi vị trí. Bàn phím cập nhật ngay.</string>
+    <string name="smartbar_order_note">Chạm giữ một mục rồi kéo để đổi vị trí. Thứ tự được lưu khi thả.</string>
     <string name="ngram_model_title">Gợi ý cụm từ tiếng Việt</string>
     <string name="ngram_model_not_downloaded">Chưa tải • KAI Board đang dùng mẫu cơ bản và dữ liệu cá nhân.</string>
     <string name="ngram_model_downloaded">Đã tải %1$d mẫu N-gram • %2$d KB • dùng hoàn toàn offline.</string>
