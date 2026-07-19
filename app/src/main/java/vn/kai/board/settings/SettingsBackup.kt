@@ -29,7 +29,9 @@ object SettingsBackup {
             }
             settings.put(file, values)
         }
-        return root.put("settings", settings).toString(2)
+        root.put("settings", settings)
+        root.put("themeExtensions", ThemeExtensionStore.exportPackages(context))
+        return root.toString(2)
     }
 
     fun import(context: Context, raw: String) {
@@ -50,6 +52,7 @@ object SettingsBackup {
             }
             editor.commit()
         }
+        root.optJSONArray("themeExtensions")?.let { ThemeExtensionStore.importPackages(context, it) }
         UserLexiconStore.invalidateCache()
         PhraseLearningStore.invalidateCache()
     }
@@ -57,4 +60,5 @@ object SettingsBackup {
     fun containsSecrets(raw: String): Boolean = raw.contains("ai_secret") || raw.contains("api_key", ignoreCase = true)
 
     internal fun includedDataFiles(): List<String> = allowedFiles.toList()
+    internal fun includesThemeExtensions() = true
 }

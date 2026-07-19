@@ -3,6 +3,7 @@ package vn.kai.board.input
 sealed interface KeyAction {
     data class Character(val value: Char) : KeyAction
     data class CommitText(val value: String) : KeyAction
+    data class CommitClipboard(val value: String, val sourceText: String, val kindLabel: String) : KeyAction
     data class SelectSuggestion(val value: String) : KeyAction
     data class SelectAiSuggestion(val value: String) : KeyAction
     data class ForgetSuggestion(val value: String) : KeyAction

@@ -9,7 +9,8 @@
 - `ai/`: nhận diện provider/model, gồm DS2API tại deployment HTTPS cấu hình sẵn với prefix `khaids-`; request AI và fallback theo thứ tự API key người dùng sắp xếp, lưu key bằng Android Keystore và lưu metadata/lỗi gần nhất không chứa secret theo fingerprint SHA-256.
 - `translation/`: ngôn ngữ, model ML Kit và tùy chọn dịch.
 - `voice/`: nhận dạng giọng nói hệ thống cho mic thường và panel inline AI/Dịch.
-- `settings/`: tùy chọn bàn phím và xuất/nhập cấu hình.
+- `settings/`: tùy chọn bàn phím, Theme Extension JSON và xuất/nhập cấu hình.
+- `CustomThemesActivity`: trang cài, xem trước, áp dụng, xuất/chia sẻ và xóa giao diện tải riêng.
 
 ## Luồng nhập
 
@@ -19,13 +20,17 @@ Core typing phải hoạt động khi AI, mạng, micro hoặc model dịch lỗ
 
 ## Dữ liệu
 
-Tùy chọn dùng SharedPreferences. API key được mã hóa AES-GCM với khóa trong Android Keystore; card quản lý chỉ hiện đầu/cuối key đã che bớt. Metadata provider/số model/hạn mức được lưu riêng theo fingerprint, không lưu lại key dạng rõ. Từ, cụm từ, email và hashtag đã học cùng clipboard đều ở cục bộ. File sao lưu có thể chứa dữ liệu học nhưng không chứa API key, clipboard hoặc ghi chú.
+Tùy chọn dùng SharedPreferences. API key được mã hóa AES-GCM với khóa trong Android Keystore; card quản lý chỉ hiện đầu/cuối key đã che bớt. Metadata provider/số model/hạn mức được lưu riêng theo fingerprint, không lưu lại key dạng rõ. Từ, cụm từ, email và hashtag đã học cùng clipboard đều ở cục bộ. File sao lưu có thể chứa dữ liệu học, Theme Extensions và thứ tự Smartbar nhưng không chứa API key, clipboard hoặc ghi chú.
 
 `TelexWordComposer` giữ trạng thái hoàn tác phím theo từng từ; `SentenceAutomationPolicy` chỉ bật viết hoa khi bắt đầu nhập hoặc xuống dòng mới, không tự thêm Space/bật Shift sau dấu câu. Email và hashtag được xếp hạng bằng bộ đếm tần suất có giới hạn.
 
 `PhraseLearningStore` chỉ học bigram/trigram cá nhân và ưu tiên trigram đúng hai từ ngữ cảnh. `WordDictionaryPack` tải riêng gói Việt/Anh vào `filesDir`; `SuggestionLanguageDetector` dùng luật ký tự/prefix nhẹ để ưu tiên nguồn phù hợp mà không dùng model hoặc I/O trên đường gõ.
 
 `AiCommandSuggestionStore` chỉ học chuyển tiếp từ câu lệnh AI người dùng thực sự gửi. Thanh AI gộp gợi ý theo thứ tự AI → cá nhân → offline. `SpaceCursorGesturePolicy`, `ShiftGesturePolicy` và `RepeatKeyState` giữ logic cử chỉ thuần, có unit test và không đọc đĩa/mạng.
+
+`SmartClipboardClassifier` chỉ dùng regex cục bộ khi mở bảng Clipboard; OTP chỉ được tách khi văn bản có ngữ cảnh xác thực. `ClipboardHistoryStore` dọn mục hết hạn khi đọc/thêm thay vì chạy timer nền và không xóa mục ghim. `UnicodeDeletionPolicy` tính số UTF-16 code unit cần xóa cho emoji ghép trước khi gọi `InputConnection`.
+
+`ThemeExtensionStore` giới hạn mỗi gói JSON 64 KB, xác thực ID/palette/font và lưu trong `filesDir/theme_extensions`. Preset màu dựng sẵn chỉ còn Mặc định; các theme khác được phân phối ngoài APK. Backup đóng gói nội dung theme đã xác thực, còn chia sẻ file dùng `FileProvider` với quyền đọc tạm thời.
 
 Mỗi API key có profile provider/model riêng trong `AiKeyStatsStore`. Thứ tự trong `SecureApiKeyStore` là thứ tự fallback thực tế và được chỉnh bằng RecyclerView/ItemTouchHelper trong Quản lý API; thứ tự chỉ lưu khi thả card. DS2API dùng `GET /v1/models` và `POST /v1/chat/completions`. Lỗi xác thực được ghi trạng thái; quota/rate-limit, timeout, model không tương thích hoặc lỗi máy chủ cho phép chuyển sang key tiếp theo. Lỗi yêu cầu `400` không tự chuyển để tránh lặp một yêu cầu sai và tốn quota.
 

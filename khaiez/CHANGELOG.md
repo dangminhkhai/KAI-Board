@@ -2,7 +2,12 @@
 
 ## Chưa phát hành
 
-- Thêm Theme Extensions dạng JSON tải qua HTTPS hoặc nhập trực tiếp từ file; hỗ trợ sáng/tối, gradient, font hệ thống, áp dụng và xóa độc lập với APK.
+- Tách **Giao diện tùy chỉnh** thành trang quản lý riêng; Theme Extension JSON hỗ trợ file/HTTPS, bảng màu, xem trước trước khi dùng, trạng thái đang áp dụng, xuất/chia sẻ và xóa có xác nhận.
+- Chỉ giữ bộ màu Mặc định trong APK; Gradient AI và Ocean bị loại bỏ, Rừng Pastel chuyển thành gói `theme-packs/pastel-forest.json` tải riêng.
+- Clipboard nhận diện offline OTP, email, URL và số điện thoại để chèn nhanh phần hữu ích; thêm tự xóa sau 1 giờ/1 ngày hoặc không xóa, mục ghim luôn được giữ.
+- Quản lý từ cá nhân hiển thị điểm decay/lần dùng gần nhất và cho phép đặt lại ưu tiên.
+- Bản sao lưu gồm Theme Extensions và thứ tự Smartbar, vẫn loại trừ API key, clipboard và ghi chú.
+- Xóa emoji theo grapheme gần đúng để không còn ký tự ô vuông khi Backspace emoji ghép, variation selector hoặc cờ.
 - Thêm chế độ riêng tư theo ô mật khẩu và `IME_FLAG_NO_PERSONALIZED_LEARNING`: tắt học từ, clipboard và KAI AI.
 - Thêm Inline Autofill cho OTP/trình quản lý mật khẩu trên Android 11 trở lên và cho phép đổi thứ tự nút Smartbar.
 - Thêm numpad cho số/OTP/điện thoại, dấu `@` cho email, dấu `/` cho URL và giới hạn chiều cao bàn phím ngang.

@@ -17,5 +17,6 @@ class SettingsBackupTest {
         assertTrue("phrase_learning" in files)
         assertFalse("ai_secret" in files)
         assertFalse("clipboard_history" in files)
+        assertTrue(SettingsBackup.includesThemeExtensions())
     }
 }

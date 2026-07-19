@@ -132,6 +132,15 @@ object UserLexiconStore {
     }
     fun count(context: Context): Int = entries(context).size
     fun totalUsage(context: Context): Int = entries(context).sumOf(UserWord::total)
+    fun priorityScore(word: UserWord): Int = decayedScoreMilli(word.recentScoreMilli, word.lastUsedEpochDay, epochDay())
+    fun daysSinceLastUse(word: UserWord): Long = (epochDay() - word.lastUsedEpochDay).coerceAtLeast(0L)
+    fun resetPriority(context: Context, value: String) {
+        val values = entries(context).toMutableList()
+        val index = values.indexOfFirst { it.word.equals(value, true) }
+        if (index < 0) return
+        values[index] = values[index].copy(recentScoreMilli = 1_000, lastUsedEpochDay = epochDay())
+        write(context, values)
+    }
     fun invalidateCache() { cachedEntries = null; cachedScores = null; cachedScoreDay = Long.MIN_VALUE }
 
     private fun decode(encoded: String): List<UserWord> = encoded.split(ENTRY_SEPARATOR).mapNotNull { row ->

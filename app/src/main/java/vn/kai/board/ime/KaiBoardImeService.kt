@@ -42,6 +42,7 @@ import vn.kai.board.input.SelectionDeletionPolicy
 import vn.kai.board.input.InputPrivacyPolicy
 import vn.kai.board.input.InputPunctuationPolicy
 import vn.kai.board.input.NumericInputPolicy
+import vn.kai.board.input.UnicodeDeletionPolicy
 import vn.kai.board.settings.KeyboardPreferences
 import vn.kai.board.telex.TelexEngine
 import vn.kai.board.input.TelexWordComposer
@@ -267,6 +268,11 @@ class KaiBoardImeService : InputMethodService() {
                 connection.commitText(action.value, 1)
                 updateSuggestions()
             }
+            is KeyAction.CommitClipboard -> {
+                finishComposing()
+                connection.commitText(action.value, 1)
+                updateSuggestions()
+            }
             is KeyAction.SelectSuggestion -> {
                 val history = previousWords()
                 val previous = history.lastOrNull()
@@ -378,7 +384,9 @@ class KaiBoardImeService : InputMethodService() {
                         literalTelexLockLength = 0
                         connection.setComposingText(composing, 1)
                     } else {
-                        connection.deleteSurroundingText(1, 0)
+                        val deleteCount = UnicodeDeletionPolicy.charactersToDeleteBeforeCursor(beforeCursor)
+                        if (deleteCount > 0) connection.deleteSurroundingText(deleteCount, 0)
+                        else connection.deleteSurroundingTextInCodePoints(1, 0)
                     }
                 }
                 updateSuggestions()
@@ -697,8 +705,10 @@ class KaiBoardImeService : InputMethodService() {
             }
             KeyAction.Backspace -> {
                 if (aiCursor > 0) {
-                    aiPrompt = aiPrompt.removeRange(aiCursor - 1, aiCursor)
-                    aiCursor--
+                    val before = aiPrompt.substring(0, aiCursor)
+                    val deleteCount = UnicodeDeletionPolicy.charactersToDeleteBeforeCursor(before)
+                    aiPrompt = aiPrompt.removeRange(aiCursor - deleteCount, aiCursor)
+                    aiCursor -= deleteCount
                 }
                 updateAiUi(); scheduleAi()
             }
@@ -853,7 +863,7 @@ class KaiBoardImeService : InputMethodService() {
                 updateTranslationUi(); scheduleTranslation()
             }
             KeyAction.Backspace -> {
-                translationSource = translationSource.dropLast(1)
+                translationSource = UnicodeDeletionPolicy.removeLastCluster(translationSource)
                 if (translationSource.isEmpty()) {
                     translationResult = ""
                     currentInputConnection?.setComposingText("", 1)

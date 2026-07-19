@@ -127,7 +127,23 @@ class LearnedWordsActivity : Activity() {
                     text = getString(R.string.learned_word_counts, item.typed, item.suggestion, item.autoCorrect)
                     textSize = 12f; setTextColor(secondaryText)
                 })
+                addView(TextView(this@LearnedWordsActivity).apply {
+                    val days = UserLexiconStore.daysSinceLastUse(item)
+                    text = getString(
+                        R.string.learned_word_priority,
+                        UserLexiconStore.priorityScore(item) / 1000f,
+                        if (days == 0L) getString(R.string.today) else getString(R.string.days_ago, days),
+                    )
+                    textSize = 12f; setTextColor(secondaryText)
+                })
             }, LinearLayout.LayoutParams(0, -2, 1f))
+            addView(MaterialButton(this@LearnedWordsActivity).apply {
+                text = getString(R.string.reset_priority); textSize = 11f
+                minWidth = 0; minimumWidth = 0
+                setTextColor(accent)
+                backgroundTintList = ColorStateList.valueOf(Color.TRANSPARENT)
+                setOnClickListener { UserLexiconStore.resetPriority(this@LearnedWordsActivity, item.word); render() }
+            })
             addView(MaterialButton(this@LearnedWordsActivity).apply {
                 text = getString(R.string.edit)
                 setTextColor(Color.WHITE)

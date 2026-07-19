@@ -27,6 +27,7 @@ import vn.kai.board.input.SpaceCursorGesturePolicy
 import vn.kai.board.input.LongPressSymbolMap
 import vn.kai.board.input.EmojiCatalog
 import vn.kai.board.input.ClipboardHistoryStore
+import vn.kai.board.input.SmartClipboardClassifier
 import vn.kai.board.input.NoteStore
 import vn.kai.board.input.EmojiRecentStore
 import vn.kai.board.settings.KeyboardPreferences
@@ -561,7 +562,8 @@ class KeyboardView(context: Context) : View(context) {
 
     private fun drawClipboardItem(canvas: Canvas, key: KeyGeometry) {
         drawClipboardCard(canvas, key)
-        val content = (key.action as? KeyAction.CommitText)?.value.orEmpty().replace(Regex("\\s+"), " ").trim()
+        val action = key.action as? KeyAction.CommitClipboard
+        val content = (action?.value ?: (key.action as? KeyAction.CommitText)?.value).orEmpty().replace(Regex("\\s+"), " ").trim()
         val pinned = key.id.contains("-pinned-")
         val lineLimit = ((key.right - key.left) / (7.5f * density)).toInt().coerceAtLeast(10)
         val first = content.take(lineLimit)
@@ -574,7 +576,15 @@ class KeyboardView(context: Context) : View(context) {
         textPaint.textSize = 14f * density
         textPaint.color = if (dark) Color.rgb(248, 250, 252) else Color.rgb(17, 24, 39)
         val left = key.left + 13f * density
-        val firstY = if (second.isEmpty()) key.centerY - (textPaint.ascent() + textPaint.descent()) / 2f else key.centerY - 3f * density
+        val hasKind = !action?.kindLabel.isNullOrEmpty()
+        if (hasKind) {
+            textPaint.textSize = 10f * density
+            textPaint.color = clipboardAccentColor()
+            canvas.drawText(action!!.kindLabel, left, key.top + 14f * density, textPaint)
+            textPaint.textSize = 14f * density
+            textPaint.color = if (dark) Color.rgb(248, 250, 252) else Color.rgb(17, 24, 39)
+        }
+        val firstY = if (hasKind) key.centerY + 4f * density else if (second.isEmpty()) key.centerY - (textPaint.ascent() + textPaint.descent()) / 2f else key.centerY - 3f * density
         canvas.drawText(first, left, firstY, textPaint)
         if (second.isNotEmpty()) canvas.drawText(second, left, firstY + 18f * density, textPaint)
         if (pinned) {
@@ -1157,7 +1167,7 @@ class KeyboardView(context: Context) : View(context) {
             return
         }
         val clipboardText = if (panel == Panel.CLIPBOARD && clipboardTab == 0) {
-            (key.action as? KeyAction.CommitText)?.value
+            (key.action as? KeyAction.CommitClipboard)?.sourceText ?: (key.action as? KeyAction.CommitText)?.value
         } else null
         if (clipboardText != null) {
             val runnable = Runnable {
@@ -1655,7 +1665,7 @@ class KeyboardView(context: Context) : View(context) {
         val emojiRows = rowCount - 1
         val emojis = if (emojiGroup == 0) EmojiRecentStore.read(context) else EmojiCatalog.groups[emojiGroup - 1].values
         emojis.take(emojiRows * 10).chunked(10).forEachIndexed { row, values ->
-            addTextRow(values, row, rowHeight, margin, gap)
+            addEmojiRow(values, row, rowHeight, margin, gap)
         }
     }
 
@@ -1665,7 +1675,7 @@ class KeyboardView(context: Context) : View(context) {
             EmojiRecentStore.read(context).ifEmpty { EmojiCatalog.groups.first().values }
         } else EmojiCatalog.search(emojiSearchQuery, resultRows * 10)
         results.take(resultRows * 10).chunked(10).forEachIndexed { row, values ->
-            addTextRow(values, row, rowHeight, margin, gap)
+            addEmojiRow(values, row, rowHeight, margin, gap)
         }
         listOf("qwertyuiop", "asdfghjkl", "zxcvbnm").forEachIndexed { row, letters ->
             addActionRow(
@@ -1726,7 +1736,9 @@ class KeyboardView(context: Context) : View(context) {
                     val pinned = clipboardTab == 0 && clipboardEntries.firstOrNull { it.text == value }?.pinned == true
                     val left = margin + column * (keyWidth + gap)
                     val state = if (pinned) "pinned" else "normal"
-                    addKey("clipboard-item-$state-$row-$column", "", KeyAction.CommitText(value), left, top, left + keyWidth, top + rowHeight)
+                    val smart = if (clipboardTab == 0) SmartClipboardClassifier.classify(value) else null
+                    val action = smart?.let { KeyAction.CommitClipboard(it.pasteText, it.sourceText, it.kind.label) } ?: KeyAction.CommitText(value)
+                    addKey("clipboard-item-$state-$row-$column", "", action, left, top, left + keyWidth, top + rowHeight)
                 }
             }
         }
@@ -1752,12 +1764,13 @@ class KeyboardView(context: Context) : View(context) {
         }
     }
 
-    private fun addTextRow(values: List<String>, row: Int, rowHeight: Float, margin: Float, gap: Float) {
-        val keyWidth = (width - margin * 2 - gap * (values.size - 1)) / values.size
+    private fun addEmojiRow(values: List<String>, row: Int, rowHeight: Float, margin: Float, gap: Float) {
+        val columns = 10
+        val keyWidth = (width - margin * 2 - gap * (columns - 1)) / columns
         val top = keyboardTop + margin + row * (rowHeight + gap)
-        values.forEachIndexed { index, value ->
+        values.take(columns).forEachIndexed { index, value ->
             val left = margin + index * (keyWidth + gap)
-            addKey("text-$row-$index", value, KeyAction.CommitText(value), left, top, left + keyWidth, top + rowHeight)
+            addKey("emoji-$row-$index", value, KeyAction.CommitText(value), left, top, left + keyWidth, top + rowHeight)
         }
     }
 

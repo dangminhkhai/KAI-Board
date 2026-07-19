@@ -29,6 +29,7 @@ object KeyboardPreferences {
     const val KEY_BORDER_WIDTH_DP = "key_border_width_dp"
     const val SMARTBAR_ORDER = "smartbar_order"
     const val THEME_EXTENSION_ID = "theme_extension_id"
+    const val CLIPBOARD_EXPIRY = "clipboard_expiry"
     private val defaultSmartbarOrder = listOf("back", "mic", "translate", "ai", "clipboard", "settings", "emoji")
 
     fun haptic(context: Context) = prefs(context).getBoolean(HAPTIC, true)
@@ -75,6 +76,7 @@ object KeyboardPreferences {
         return stored + defaultSmartbarOrder.filterNot(stored::contains)
     }
     fun themeExtensionId(context: Context): String? = prefs(context).getString(THEME_EXTENSION_ID, null)
+    fun clipboardExpiry(context: Context) = ClipboardExpiry.fromStorage(prefs(context).getString(CLIPBOARD_EXPIRY, null))
 
     fun setSmartbarOrder(context: Context, order: List<String>) =
         prefs(context).edit().putString(SMARTBAR_ORDER, order.joinToString(",")).apply()
@@ -115,6 +117,9 @@ object KeyboardPreferences {
         if (id == null) remove(THEME_EXTENSION_ID) else putString(THEME_EXTENSION_ID, id)
     }.apply()
 
+    fun setClipboardExpiry(context: Context, value: ClipboardExpiry) =
+        prefs(context).edit().putString(CLIPBOARD_EXPIRY, value.storageValue).apply()
+
     fun register(context: Context, listener: SharedPreferences.OnSharedPreferenceChangeListener) =
         prefs(context).registerOnSharedPreferenceChangeListener(listener)
 
@@ -122,6 +127,14 @@ object KeyboardPreferences {
         prefs(context).unregisterOnSharedPreferenceChangeListener(listener)
 
     private fun prefs(context: Context) = context.getSharedPreferences(FILE, Context.MODE_PRIVATE)
+}
+
+enum class ClipboardExpiry(val storageValue: String, val durationMillis: Long?) {
+    NEVER("never", null), ONE_HOUR("one_hour", 60 * 60 * 1000L), ONE_DAY("one_day", 24 * 60 * 60 * 1000L);
+
+    companion object {
+        fun fromStorage(value: String?) = entries.firstOrNull { it.storageValue == value } ?: ONE_DAY
+    }
 }
 
 enum class ThemeMode(val storageValue: String) {
@@ -133,15 +146,10 @@ enum class ThemeMode(val storageValue: String) {
 }
 
 enum class KeyboardColorStyle(val storageValue: String) {
-    CLASSIC("classic"),
-    AI_GRADIENT_2026("ai_gradient_2026"),
-    OCEAN("ocean"),
-    PASTEL_FOREST("pastel_forest");
+    CLASSIC("classic");
 
     companion object {
-        fun fromStorage(value: String?): KeyboardColorStyle = when (value) {
-            "gemini_ai_gradient" -> AI_GRADIENT_2026
-            else -> entries.firstOrNull { it.storageValue == value } ?: CLASSIC
-        }
+        fun fromStorage(value: String?): KeyboardColorStyle =
+            entries.firstOrNull { it.storageValue == value } ?: CLASSIC
     }
 }

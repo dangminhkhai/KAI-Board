@@ -1,7 +1,6 @@
 package vn.kai.board.settings
 
 import org.junit.Assert.assertEquals
-import org.junit.Assert.assertNotNull
 import org.junit.Assert.assertNull
 import org.junit.Test
 
@@ -14,9 +13,10 @@ class KeyboardColorStyleTest {
         }
     }
 
-    @Test fun legacyGradientIdsMapToAiGradient() {
-        assertEquals(KeyboardColorStyle.AI_GRADIENT_2026, KeyboardColorStyle.fromStorage("ai_gradient_2026"))
-        assertEquals(KeyboardColorStyle.AI_GRADIENT_2026, KeyboardColorStyle.fromStorage("gemini_ai_gradient"))
+    @Test fun removedBuiltInStylesFallBackToClassic() {
+        assertEquals(KeyboardColorStyle.CLASSIC, KeyboardColorStyle.fromStorage("ai_gradient_2026"))
+        assertEquals(KeyboardColorStyle.CLASSIC, KeyboardColorStyle.fromStorage("ocean"))
+        assertEquals(KeyboardColorStyle.CLASSIC, KeyboardColorStyle.fromStorage("pastel_forest"))
     }
 
     @Test fun unknownValuesFallBackToClassic() {
@@ -24,24 +24,15 @@ class KeyboardColorStyleTest {
         assertEquals(KeyboardColorStyle.CLASSIC, KeyboardColorStyle.fromStorage("unknown_style"))
     }
 
-    @Test fun palettesProvideAccentAndOptionalGradient() {
+    @Test fun classicPaletteHasNoGradient() {
         val classic = KeyboardThemePalette.resolve(KeyboardColorStyle.CLASSIC, false)
-        val gradient = KeyboardThemePalette.resolve(KeyboardColorStyle.AI_GRADIENT_2026, false)
-        val ocean = KeyboardThemePalette.resolve(KeyboardColorStyle.OCEAN, true)
-        val forest = KeyboardThemePalette.resolve(KeyboardColorStyle.PASTEL_FOREST, false)
         assertNull(classic.gradientColors)
-        assertNotNull(gradient.gradientColors)
-        assertEquals(3, gradient.gradientColors!!.size)
-        assertNull(ocean.gradientColors)
-        assertEquals("sans-serif-rounded", forest.fontFamily)
-        assertNotNull(forest.gradientColors)
         assertEquals(0xFF4CAF50.toInt(), classic.accent)
         assertEquals(0xFF4CAF50.toInt(), classic.actionKey)
-        assertEquals(0xFF4F46E5.toInt(), gradient.accent)
     }
 
     @Test fun nonIllustratedRegularKeysAreWhiteInLightMode() {
-        KeyboardColorStyle.entries.filterNot { it == KeyboardColorStyle.PASTEL_FOREST }.forEach { style ->
+        KeyboardColorStyle.entries.forEach { style ->
             assertEquals(0xFFFFFFFF.toInt(), KeyboardThemePalette.resolve(style, false).key)
         }
         assertEquals(0xFF3C4043.toInt(), KeyboardThemePalette.resolve(KeyboardColorStyle.CLASSIC, true).key)

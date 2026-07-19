@@ -19,6 +19,7 @@ import vn.kai.board.settings.KeyboardColorStyle
 import vn.kai.board.settings.KeyboardPreferences
 import vn.kai.board.settings.ThemeMode
 import vn.kai.board.settings.KeyboardThemePalette
+import vn.kai.board.settings.ClipboardExpiry
 
 class ClipboardManagerActivity : Activity() {
     private val density get() = resources.displayMetrics.density
@@ -70,6 +71,29 @@ class ClipboardManagerActivity : Activity() {
             text = getString(R.string.notes_manager_status, notes.size); textSize = 14f; setTextColor(secondaryText)
             setPadding(0, dp(6), 0, dp(14))
         })
+        root.addView(card(LinearLayout(this).apply {
+            orientation = LinearLayout.VERTICAL
+            setPadding(dp(14), dp(10), dp(14), dp(10))
+            addView(TextView(this@ClipboardManagerActivity).apply {
+                text = getString(R.string.clipboard_expiry_title); textSize = 16f; setTextColor(primaryText)
+            })
+            addView(LinearLayout(this@ClipboardManagerActivity).apply {
+                orientation = LinearLayout.HORIZONTAL
+                val current = KeyboardPreferences.clipboardExpiry(this@ClipboardManagerActivity)
+                listOf(
+                    ClipboardExpiry.ONE_HOUR to R.string.clipboard_expiry_hour,
+                    ClipboardExpiry.ONE_DAY to R.string.clipboard_expiry_day,
+                    ClipboardExpiry.NEVER to R.string.clipboard_expiry_never,
+                ).forEach { (value, label) ->
+                    addView(MaterialButton(this@ClipboardManagerActivity).apply {
+                        text = getString(label); textSize = 12f
+                        setTextColor(if (value == current) Color.WHITE else selectedColor)
+                        backgroundTintList = ColorStateList.valueOf(if (value == current) selectedColor else cardColor)
+                        setOnClickListener { KeyboardPreferences.setClipboardExpiry(this@ClipboardManagerActivity, value); showContent() }
+                    }, LinearLayout.LayoutParams(0, dp(40), 1f))
+                }
+            })
+        }), LinearLayout.LayoutParams(-1, -2).apply { bottomMargin = dp(12) })
         root.addView(MaterialButton(this).apply {
             text = getString(R.string.add_note)
             setTextColor(Color.WHITE); backgroundTintList = ColorStateList.valueOf(selectedColor)

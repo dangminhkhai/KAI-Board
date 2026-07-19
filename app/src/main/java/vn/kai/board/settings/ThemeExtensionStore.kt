@@ -2,6 +2,7 @@ package vn.kai.board.settings
 
 import android.content.Context
 import org.json.JSONObject
+import org.json.JSONArray
 import java.io.File
 import java.io.InputStream
 import java.net.HttpURLConnection
@@ -61,6 +62,31 @@ object ThemeExtensionStore {
         if (!safeId.matches(id)) return
         File(directory(context), "$id.json").delete()
         if (KeyboardPreferences.themeExtensionId(context) == id) KeyboardPreferences.setThemeExtension(context, null)
+    }
+
+    fun exportPackages(context: Context): JSONArray = JSONArray().apply {
+        directory(context).listFiles().orEmpty().filter { it.extension == "json" }.forEach { file ->
+            runCatching { JSONObject(file.readText()).also(::validate) }.getOrNull()?.let(::put)
+        }
+    }
+
+    fun importPackages(context: Context, packages: JSONArray) {
+        require(packages.length() <= 32) { "Bản sao lưu chứa quá nhiều theme" }
+        for (index in 0 until packages.length()) {
+            packages.getJSONObject(index).toString().byteInputStream().use { install(context, it) }
+        }
+    }
+
+    fun exportBytes(context: Context, id: String): ByteArray {
+        require(safeId.matches(id)) { "ID theme không hợp lệ" }
+        val file = File(directory(context), "$id.json")
+        require(file.isFile && file.length() <= MAX_BYTES) { "Không tìm thấy theme" }
+        return file.readBytes()
+    }
+
+    fun fileForSharing(context: Context, id: String): File {
+        exportBytes(context, id)
+        return File(directory(context), "$id.json")
     }
 
     private fun validate(json: JSONObject): ThemeExtension {

@@ -4,7 +4,11 @@
 
 KAI Board có thể lưu tùy chọn, từ/cặp từ, email, hashtag đã học, emoji gần đây, clipboard và ghi chú trên thiết bị. Email/hashtag được xếp hạng bằng số lần sử dụng. Người dùng có thể xóa dữ liệu học trong ứng dụng.
 
-File sao lưu cài đặt có thể chứa từ/cụm từ, email và hashtag đã học; không chứa API key, clipboard hoặc ghi chú.
+File sao lưu cài đặt có thể chứa từ/cụm từ, email, hashtag đã học, Theme Extensions và thứ tự Smartbar; không chứa API key, clipboard hoặc ghi chú.
+
+Nhận diện OTP, email, URL và số điện thoại trong Clipboard dùng luật cục bộ, không gửi nội dung ra mạng. Lịch sử có thể tự xóa sau 1 giờ hoặc 1 ngày; mục người dùng ghim được giữ cho tới khi xóa thủ công.
+
+Theme tải bằng URL chỉ kết nối HTTPS sau thao tác của người dùng. Gói JSON bị giới hạn 64 KB, không chứa mã thực thi; chia sẻ theme chỉ cấp quyền đọc tạm thời cho file được chọn.
 
 ## AI và dịch
 

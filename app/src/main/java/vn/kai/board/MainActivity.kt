@@ -30,11 +30,9 @@ import vn.kai.board.settings.KeyboardColorStyle
 import vn.kai.board.settings.ThemeMode
 import vn.kai.board.settings.SettingsBackup
 import vn.kai.board.settings.KeyboardThemePalette
-import vn.kai.board.settings.ThemeExtensionStore
 import vn.kai.board.input.UserLexiconStore
 import vn.kai.board.input.EmailSuggestionStore
 import vn.kai.board.input.HashtagSuggestionStore
-import vn.kai.board.input.AutoCorrectionStatsStore
 import vn.kai.board.input.WordDictionaryPack
 import vn.kai.board.input.DictionaryLanguagePack
 import vn.kai.board.translation.TranslationModelsActivity
@@ -49,6 +47,7 @@ import androidx.recyclerview.widget.LinearLayoutManager
 import androidx.recyclerview.widget.RecyclerView
 
 class MainActivity : Activity() {
+    private var observedExtensionId: String? = null
     override fun onCreate(savedInstanceState: Bundle?) {
         when (KeyboardPreferences.theme(this)) {
             ThemeMode.LIGHT -> setTheme(R.style.Theme_KAIBoard_Light)
@@ -56,6 +55,7 @@ class MainActivity : Activity() {
             ThemeMode.SYSTEM -> setTheme(R.style.Theme_KAIBoard)
         }
         super.onCreate(savedInstanceState)
+        observedExtensionId = KeyboardPreferences.themeExtensionId(this)
         val restoreAppearance = intent.getBooleanExtra(EXTRA_RESTORE_APPEARANCE, false)
         intent.removeExtra(EXTRA_RESTORE_APPEARANCE)
         WindowCompat.setDecorFitsSystemWindows(window, false)
@@ -67,7 +67,6 @@ class MainActivity : Activity() {
             resources.configuration.uiMode and Configuration.UI_MODE_NIGHT_MASK == Configuration.UI_MODE_NIGHT_YES
         val colorStyle = KeyboardPreferences.colorStyle(this)
         val palette = KeyboardThemePalette.resolve(this, isDark)
-        val isAiGradient = palette.gradientColors != null
         val background = palette.background
         val primaryText = palette.text
         val secondaryText = palette.hint
@@ -94,7 +93,7 @@ class MainActivity : Activity() {
 
         val content = LinearLayout(this).apply {
             orientation = LinearLayout.VERTICAL
-            setPadding(dp(24), dp(24), dp(24), dp(24))
+            setPadding(dp(16), dp(12), dp(16), dp(16))
             if (screenGradient != null) this.background = screenGradient else setBackgroundColor(background)
         }
         lateinit var settingsScroll: ScrollView
@@ -102,24 +101,61 @@ class MainActivity : Activity() {
         fun textView(value: String, size: Float, color: Int) = TextView(this).apply {
             text = value; textSize = size; setTextColor(color)
         }
+        fun blendColor(first: Int, second: Int, secondWeight: Float): Int {
+            val weight = secondWeight.coerceIn(0f, 1f)
+            return Color.rgb(
+                (Color.red(first) * (1f - weight) + Color.red(second) * weight).toInt(),
+                (Color.green(first) * (1f - weight) + Color.green(second) * weight).toInt(),
+                (Color.blue(first) * (1f - weight) + Color.blue(second) * weight).toInt(),
+            )
+        }
         val hero = LinearLayout(this).apply {
-            orientation = LinearLayout.VERTICAL
-            setPadding(dp(20), dp(20), dp(20), dp(20))
-            addView(textView(getString(R.string.setup_title), 30f, Color.WHITE))
-            addView(textView(getString(R.string.setup_description), 16f, Color.argb(225, 255, 255, 255)).apply {
-                setPadding(0, dp(8), 0, 0)
+            orientation = LinearLayout.HORIZONTAL
+            gravity = Gravity.CENTER_VERTICAL
+            setPadding(dp(14), dp(12), dp(14), dp(12))
+            this.background = GradientDrawable(
+                GradientDrawable.Orientation.TL_BR,
+                intArrayOf(selectedColor, blendColor(selectedColor, outlineColor, 0.28f)),
+            )
+            addView(textView("K", 24f, Color.WHITE).apply {
+                gravity = Gravity.CENTER
+                setTypeface(typeface, Typeface.BOLD)
+                this.background = GradientDrawable().apply {
+                    cornerRadius = dp(14).toFloat()
+                    setColor(Color.argb(48, 255, 255, 255))
+                    setStroke(dp(1), Color.argb(90, 255, 255, 255))
+                }
+            }, LinearLayout.LayoutParams(dp(48), dp(48)))
+            addView(LinearLayout(this@MainActivity).apply {
+                orientation = LinearLayout.VERTICAL
+                setPadding(dp(12), 0, 0, 0)
+                addView(textView(getString(R.string.setup_title), 23f, Color.WHITE).apply {
+                    setTypeface(typeface, Typeface.BOLD)
+                })
+                addView(textView("Bàn phím Việt • Riêng tư", 13f, Color.argb(220, 255, 255, 255)))
+            }, LinearLayout.LayoutParams(0, -2, 1f))
+            val versionName = runCatching {
+                packageManager.getPackageInfo(packageName, 0).versionName
+            }.getOrNull().orEmpty()
+            addView(textView("v$versionName", 12f, Color.WHITE).apply {
+                gravity = Gravity.CENTER
+                setPadding(dp(10), dp(5), dp(10), dp(5))
+                this.background = GradientDrawable().apply {
+                    cornerRadius = dp(20).toFloat()
+                    setColor(Color.argb(42, 255, 255, 255))
+                }
             })
         }
         content.addView(MaterialCardView(this).apply {
-            radius = dp(28).toFloat()
-            cardElevation = 0f
+            radius = dp(22).toFloat()
+            cardElevation = dp(3).toFloat()
             setCardBackgroundColor(selectedColor)
-            strokeColor = if (isAiGradient) outlineColor else selectedColor
-            strokeWidth = dp(2)
+            strokeColor = Color.argb(70, 255, 255, 255)
+            strokeWidth = dp(1)
             addView(hero)
-        }, LinearLayout.LayoutParams(-1, -2).apply { bottomMargin = dp(16) })
+        }, LinearLayout.LayoutParams(-1, -2).apply { bottomMargin = dp(10) })
         val navigationItems = listOf(
-            "Thiết lập" to "setup", "Nhập liệu" to "input", "KAI AI" to "ai",
+            "Thiết lập" to "setup", "Gõ phím" to "input", "KAI AI" to "ai",
             "Bố cục" to "layout", "Giao diện" to "appearance", "Sao lưu" to "backup",
         )
         content.addView(HorizontalScrollView(this).apply {
@@ -134,7 +170,7 @@ class MainActivity : Activity() {
                         minWidth = 0; minimumWidth = 0
                         minHeight = 0; minimumHeight = 0
                         insetTop = 0; insetBottom = 0
-                        setPadding(dp(14), dp(5), dp(14), dp(5))
+                        setPadding(dp(12), dp(3), dp(12), dp(3))
                         setTextColor(selectedColor)
                         backgroundTintList = ColorStateList.valueOf(cardColor)
                         strokeColor = ColorStateList.valueOf(selectedColor)
@@ -144,10 +180,10 @@ class MainActivity : Activity() {
                                 settingsScroll.smoothScrollTo(0, (target.top - dp(12)).coerceAtLeast(0))
                             }
                         }
-                    }, LinearLayout.LayoutParams(-2, dp(40)).apply { if (index > 0) leftMargin = dp(7) })
+                    }, LinearLayout.LayoutParams(-2, dp(36)).apply { if (index > 0) leftMargin = dp(6) })
                 }
             })
-        }, LinearLayout.LayoutParams(-1, dp(40)).apply { bottomMargin = dp(12) })
+        }, LinearLayout.LayoutParams(-1, dp(36)).apply { bottomMargin = dp(8) })
         val typingTest = TextInputEditText(this).apply {
             textSize = 16f
             hint = getString(R.string.typing_test_hint)
@@ -177,17 +213,12 @@ class MainActivity : Activity() {
             strokeWidth = dp(2)
             addView(typingCardContent)
         }
-        content.addView(textView(getString(R.string.settings_title), 22f, primaryText).apply {
-            setTypeface(typeface, Typeface.BOLD)
-            setPadding(0, dp(8), 0, dp(8))
-        })
-
         fun addSwitch(target: LinearLayout, label: Int, key: String, checked: Boolean): MaterialSwitch {
             return MaterialSwitch(this).apply {
                 text = getString(label); textSize = 16f; isChecked = checked; setTextColor(primaryText)
                 thumbTintList = checkedColors
                 trackTintList = switchTrackColors
-                setPadding(0, dp(8), 0, dp(8))
+                setPadding(0, dp(4), 0, dp(4))
                 setOnCheckedChangeListener { _, value -> KeyboardPreferences.setBoolean(this@MainActivity, key, value) }
             }.also { target.addView(it) }
         }
@@ -219,23 +250,23 @@ class MainActivity : Activity() {
         fun addSection(title: Int, key: String, build: (LinearLayout) -> Unit) {
             val section = LinearLayout(this).apply {
                 orientation = LinearLayout.VERTICAL
-                addView(textView(getString(title), 20f, primaryText).apply {
+                addView(textView(getString(title), 18f, primaryText).apply {
                     setTypeface(typeface, Typeface.BOLD)
-                    setPadding(0, 0, 0, dp(10))
+                    setPadding(0, 0, 0, dp(6))
                 })
                 build(this)
             }
             val sectionCard = MaterialCardView(this).apply {
-                radius = dp(20).toFloat()
+                radius = dp(18).toFloat()
                 cardElevation = 0f
                 setCardBackgroundColor(cardColor)
                 strokeColor = outlineColor
-                strokeWidth = dp(2)
-                setContentPadding(dp(16), dp(16), dp(16), dp(16))
+                strokeWidth = dp(1)
+                setContentPadding(dp(12), dp(12), dp(12), dp(12))
                 addView(section)
             }
             sectionTargets[key] = sectionCard
-            content.addView(sectionCard, LinearLayout.LayoutParams(-1, -2).apply { bottomMargin = dp(12) })
+            content.addView(sectionCard, LinearLayout.LayoutParams(-1, -2).apply { bottomMargin = dp(8) })
         }
         addSection(R.string.tab_setup, "setup") { section ->
             section.addView(MaterialButton(this).apply {
@@ -248,7 +279,6 @@ class MainActivity : Activity() {
                 backgroundTintList = ColorStateList.valueOf(selectedColor)
                 setOnClickListener { (getSystemService(INPUT_METHOD_SERVICE) as InputMethodManager).showInputMethodPicker() }
             })
-            section.addView(textView(getString(R.string.setup_note), 14f, secondaryText).apply { setPadding(0, dp(8), 0, 0) })
             section.addView(MaterialCardView(this).apply {
                 radius = dp(16).toFloat()
                 cardElevation = 0f
@@ -284,10 +314,12 @@ class MainActivity : Activity() {
             }
             addSwitch(section, R.string.setting_popup, KeyboardPreferences.POPUP, KeyboardPreferences.popup(this))
             addSwitch(section, R.string.setting_long_press_symbols, KeyboardPreferences.LONG_PRESS_SYMBOLS, KeyboardPreferences.longPressSymbols(this))
-            addSwitch(section, R.string.setting_word_suggestions, KeyboardPreferences.WORD_SUGGESTIONS, KeyboardPreferences.wordSuggestions(this))
             addSwitch(section, R.string.setting_auto_correct, KeyboardPreferences.AUTO_CORRECT, KeyboardPreferences.autoCorrect(this))
             addSwitch(section, R.string.setting_auto_capitalization, KeyboardPreferences.AUTO_CAPITALIZATION, KeyboardPreferences.autoCapitalization(this))
             addSwitch(section, R.string.setting_offline_mode, KeyboardPreferences.OFFLINE_MODE, KeyboardPreferences.offlineMode(this))
+        }
+        addSection(R.string.suggestions_language_title, "suggestions") { section ->
+            addSwitch(section, R.string.setting_word_suggestions, KeyboardPreferences.WORD_SUGGESTIONS, KeyboardPreferences.wordSuggestions(this))
             section.addView(MaterialCardView(this).apply {
                 radius = dp(14).toFloat()
                 cardElevation = 0f
@@ -380,14 +412,8 @@ class MainActivity : Activity() {
                 topMargin = dp(10)
                 bottomMargin = dp(4)
             })
-            val correctionStats = AutoCorrectionStatsStore.summary(this)
-            section.addView(textView(
-                getString(R.string.auto_correct_stats, correctionStats.first, correctionStats.second),
-                13f,
-                secondaryText,
-            ).apply { setPadding(dp(4), dp(6), dp(4), dp(2)) })
             val learnedStatus = textView("", 13f, secondaryText).apply {
-                setPadding(dp(4), dp(10), dp(4), dp(2))
+                setPadding(dp(4), dp(6), dp(4), dp(2))
             }
             var clearLearnedButton: MaterialButton? = null
             fun updateLearnedStatus() {
@@ -450,9 +476,6 @@ class MainActivity : Activity() {
             updateLearnedStatus()
         }
         addSection(R.string.ai_settings_title, "ai") { section ->
-            section.addView(textView(getString(R.string.ai_settings_description), 14f, secondaryText).apply {
-                setPadding(dp(2), 0, dp(2), dp(10))
-            })
             section.addView(MaterialButton(this).apply {
                 text = getString(R.string.manage_api)
                 setTextColor(Color.WHITE)
@@ -504,11 +527,6 @@ class MainActivity : Activity() {
                     AiPreferences.setAutoSend(this@MainActivity, checked)
                 }
             })
-            section.addView(textView(
-                "Chỉ gửi nội dung cuối cùng sau debounce; không chạy nền.",
-                13f,
-                secondaryText,
-            ).apply { setPadding(dp(2), dp(6), dp(2), 0) })
         }
         addSection(R.string.tab_layout, "layout") { section ->
             addSwitch(section, R.string.setting_number_row, KeyboardPreferences.NUMBER_ROW, KeyboardPreferences.numberRow(this))
@@ -549,47 +567,6 @@ class MainActivity : Activity() {
             }, LinearLayout.LayoutParams(-1, dp(7 * 48)))
         }
         addSection(R.string.tab_appearance, "appearance") { section ->
-            val extensionList = LinearLayout(this).apply { orientation = LinearLayout.VERTICAL }
-            fun renderExtensions() {
-                extensionList.removeAllViews()
-                val installed = ThemeExtensionStore.installed(this@MainActivity)
-                if (installed.isEmpty()) extensionList.addView(
-                    textView(getString(R.string.theme_extension_empty), 13f, secondaryText).apply { setPadding(0, dp(8), 0, 0) },
-                )
-                val activeId = KeyboardPreferences.themeExtensionId(this@MainActivity)
-                installed.forEach { extension ->
-                    extensionList.addView(LinearLayout(this@MainActivity).apply {
-                        orientation = LinearLayout.VERTICAL
-                        setPadding(0, dp(8), 0, dp(4))
-                        addView(textView(if (extension.id == activeId) "✓ ${extension.name}" else extension.name, 15f, primaryText).apply {
-                            setTypeface(typeface, Typeface.BOLD)
-                        })
-                        addView(textView(extension.author, 12f, secondaryText))
-                        addView(LinearLayout(this@MainActivity).apply {
-                            orientation = LinearLayout.HORIZONTAL
-                            addView(MaterialButton(this@MainActivity).apply {
-                                text = getString(R.string.theme_extension_apply)
-                                isEnabled = extension.id != activeId
-                                backgroundTintList = ColorStateList.valueOf(selectedColor)
-                                setOnClickListener {
-                                    KeyboardPreferences.setThemeExtension(this@MainActivity, extension.id)
-                                    recreateAtAppearance()
-                                }
-                            }, LinearLayout.LayoutParams(0, dp(40), 1f).apply { marginEnd = dp(4) })
-                            addView(MaterialButton(this@MainActivity).apply {
-                                text = getString(R.string.theme_extension_delete)
-                                setTextColor(selectedColor)
-                                backgroundTintList = ColorStateList.valueOf(Color.TRANSPARENT)
-                                strokeColor = ColorStateList.valueOf(selectedColor); strokeWidth = dp(1)
-                                setOnClickListener {
-                                    ThemeExtensionStore.delete(this@MainActivity, extension.id)
-                                    if (extension.id == activeId) recreateAtAppearance() else renderExtensions()
-                                }
-                            }, LinearLayout.LayoutParams(0, dp(40), 1f).apply { marginStart = dp(4) })
-                        })
-                    })
-                }
-            }
             section.addView(textView(getString(R.string.setting_theme), 15f, primaryText).apply {
                 setPadding(dp(2), 0, 0, dp(4))
             })
@@ -601,71 +578,6 @@ class MainActivity : Activity() {
                 createColorStyleButtons(colorStyle, primaryText, cardColor, selectedColor, ::dp),
                 LinearLayout.LayoutParams(-1, dp(42)),
             )
-            section.addView(MaterialCardView(this).apply {
-                radius = dp(16).toFloat()
-                cardElevation = 0f
-                setCardBackgroundColor(cardColor)
-                strokeColor = outlineColor
-                strokeWidth = dp(1)
-                addView(LinearLayout(this@MainActivity).apply {
-                    orientation = LinearLayout.VERTICAL
-                    setPadding(dp(14), dp(12), dp(14), dp(12))
-                    addView(textView(getString(R.string.theme_extensions_title), 17f, primaryText).apply {
-                        setTypeface(typeface, Typeface.BOLD)
-                    })
-                    addView(textView(getString(R.string.theme_extensions_hint), 13f, secondaryText).apply {
-                        setPadding(0, dp(4), 0, 0)
-                    })
-                    addView(MaterialButton(this@MainActivity).apply {
-                        text = getString(R.string.theme_extension_download)
-                        backgroundTintList = ColorStateList.valueOf(selectedColor)
-                        setOnClickListener {
-                            val urlInput = TextInputEditText(this@MainActivity).apply {
-                                hint = getString(R.string.theme_extension_url_hint)
-                                inputType = android.text.InputType.TYPE_CLASS_TEXT or android.text.InputType.TYPE_TEXT_VARIATION_URI
-                                setSingleLine(true)
-                            }
-                            val field = TextInputLayout(this@MainActivity).apply {
-                                boxBackgroundMode = TextInputLayout.BOX_BACKGROUND_OUTLINE
-                                setPadding(dp(20), dp(8), dp(20), 0)
-                                addView(urlInput)
-                            }
-                            MaterialAlertDialogBuilder(this@MainActivity)
-                                .setTitle(R.string.theme_extension_download)
-                                .setView(field)
-                                .setNegativeButton(R.string.cancel, null)
-                                .setPositiveButton(R.string.theme_extension_download) { _, _ ->
-                                    Thread({
-                                        val result = runCatching { ThemeExtensionStore.installFromUrl(this@MainActivity, urlInput.text.toString()) }
-                                        runOnUiThread {
-                                            result.onSuccess {
-                                                renderExtensions()
-                                                Toast.makeText(this@MainActivity, getString(R.string.theme_extension_installed, it.name), Toast.LENGTH_SHORT).show()
-                                            }.onFailure {
-                                                Toast.makeText(this@MainActivity, it.message ?: "Không thể tải theme", Toast.LENGTH_LONG).show()
-                                            }
-                                        }
-                                    }, "kai-theme-download").start()
-                                }.show()
-                        }
-                    }, LinearLayout.LayoutParams(-1, dp(44)).apply { topMargin = dp(8) })
-                    addView(MaterialButton(this@MainActivity).apply {
-                        text = getString(R.string.theme_extension_import)
-                        setTextColor(selectedColor)
-                        backgroundTintList = ColorStateList.valueOf(Color.TRANSPARENT)
-                        strokeColor = ColorStateList.valueOf(selectedColor)
-                        strokeWidth = dp(1)
-                        setOnClickListener {
-                            startActivityForResult(Intent(Intent.ACTION_OPEN_DOCUMENT).apply {
-                                addCategory(Intent.CATEGORY_OPENABLE)
-                                type = "application/json"
-                            }, REQUEST_IMPORT_THEME)
-                        }
-                    }, LinearLayout.LayoutParams(-1, dp(44)).apply { topMargin = dp(4) })
-                    addView(extensionList)
-                    renderExtensions()
-                })
-            }, LinearLayout.LayoutParams(-1, -2).apply { topMargin = dp(12) })
             val radiusLabel = textView("", 16f, primaryText).apply { setPadding(0, dp(14), 0, 0) }
             fun updateRadiusLabel(value: Int) { radiusLabel.text = getString(R.string.setting_key_radius_value, value) }
             val initialRadius = KeyboardPreferences.keyRadiusDp(this)
@@ -764,7 +676,7 @@ class MainActivity : Activity() {
             if (screenGradient != null) this.background = screenGradient else setBackgroundColor(background)
             addView(settingsScroll, FrameLayout.LayoutParams(-1, -1))
             addView(stickyTypingCard, FrameLayout.LayoutParams(-1, -2, Gravity.BOTTOM).apply {
-                leftMargin = dp(24); rightMargin = dp(24); bottomMargin = dp(8)
+                leftMargin = dp(16); rightMargin = dp(16); bottomMargin = dp(6)
             })
             ViewCompat.setOnApplyWindowInsetsListener(this) { view, insets ->
                 val systemBars = insets.getInsets(WindowInsetsCompat.Type.systemBars())
@@ -791,6 +703,15 @@ class MainActivity : Activity() {
 
     }
 
+    override fun onResume() {
+        super.onResume()
+        val current = KeyboardPreferences.themeExtensionId(this)
+        if (current != observedExtensionId) {
+            observedExtensionId = current
+            recreateAtAppearance()
+        }
+    }
+
     @Deprecated("Activity result callback for document picker")
     override fun onActivityResult(requestCode: Int, resultCode: Int, data: Intent?) {
         super.onActivityResult(requestCode, resultCode, data)
@@ -808,13 +729,6 @@ class MainActivity : Activity() {
                     SettingsBackup.import(this, raw)
                     recreate()
                 }
-                REQUEST_IMPORT_THEME -> {
-                    val extension = contentResolver.openInputStream(uri)?.let { ThemeExtensionStore.install(this, it) }
-                        ?: error("Không thể đọc file theme")
-                    Toast.makeText(this, getString(R.string.theme_extension_imported, extension.name), Toast.LENGTH_SHORT).show()
-                    recreateAtAppearance()
-                    return
-                }
                 else -> return
             }
             Toast.makeText(this, if (requestCode == REQUEST_EXPORT_SETTINGS) "Đã xuất cài đặt" else "Đã nhập cài đặt", Toast.LENGTH_SHORT).show()
@@ -824,7 +738,6 @@ class MainActivity : Activity() {
     companion object {
         private const val REQUEST_EXPORT_SETTINGS = 501
         private const val REQUEST_IMPORT_SETTINGS = 502
-        private const val REQUEST_IMPORT_THEME = 503
         private const val EXTRA_RESTORE_APPEARANCE = "restore_appearance"
     }
 
@@ -851,17 +764,16 @@ class MainActivity : Activity() {
         accentColor: Int,
         dp: (Int) -> Int,
     ): HorizontalScrollView {
-        val styles = KeyboardColorStyle.entries
-        val labels = listOf(
-            getString(R.string.color_classic),
-            getString(R.string.color_ai_gradient_2026),
-            getString(R.string.color_ocean),
-            getString(R.string.color_pastel_forest),
-        )
-        return createChoiceButtons(labels, styles.indexOf(colorStyle), primaryText, fieldColor, accentColor, dp) { position ->
-            if (styles[position] != KeyboardPreferences.colorStyle(this@MainActivity)) {
-                KeyboardPreferences.setColorStyle(this@MainActivity, styles[position])
+        val customActive = KeyboardPreferences.themeExtensionId(this) != null
+        return createChoiceButtons(
+            listOf(getString(R.string.color_classic), getString(R.string.color_custom)),
+            if (customActive) 1 else 0, primaryText, fieldColor, accentColor, dp,
+        ) { position ->
+            if (position == 0) {
+                KeyboardPreferences.setColorStyle(this@MainActivity, KeyboardColorStyle.CLASSIC)
                 recreateAtAppearance()
+            } else {
+                startActivity(Intent(this@MainActivity, CustomThemesActivity::class.java))
             }
         }
     }
