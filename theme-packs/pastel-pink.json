@@ -1,0 +1,30 @@
+{
+  "schemaVersion": 1,
+  "id": "pastel-pink",
+  "name": "Hồng Pastel",
+  "author": "KAI Board",
+  "light": {
+    "background": "#F7DDE7",
+    "key": "#FFF7FA",
+    "specialKey": "#E8AFC4",
+    "pressed": "#D989AA",
+    "text": "#4A2635",
+    "hint": "#87596B",
+    "accent": "#C65383",
+    "actionKey": "#B84072",
+    "gradient": ["#FFF1F6", "#F7D7E4", "#EFB8CF"],
+    "fontFamily": "sans-serif-rounded"
+  },
+  "dark": {
+    "background": "#3A202C",
+    "key": "#563142",
+    "specialKey": "#743D55",
+    "pressed": "#A85B7D",
+    "text": "#FFF0F5",
+    "hint": "#D7A8BA",
+    "accent": "#F08AB3",
+    "actionKey": "#D96C99",
+    "gradient": ["#472534", "#5A2E43", "#321C27"],
+    "fontFamily": "sans-serif-rounded"
+  }
+}

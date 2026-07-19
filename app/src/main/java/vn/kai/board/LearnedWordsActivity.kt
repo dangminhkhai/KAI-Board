@@ -10,6 +10,7 @@ import android.os.Bundle
 import android.text.Editable
 import android.text.TextWatcher
 import android.view.View
+import android.view.Gravity
 import android.widget.EditText
 import android.widget.LinearLayout
 import android.widget.ScrollView
@@ -27,6 +28,7 @@ import vn.kai.board.settings.ThemeMode
 class LearnedWordsActivity : Activity() {
     private lateinit var list: LinearLayout
     private lateinit var empty: TextView
+    private lateinit var status: TextView
     private var query = ""
     private var density = 1f
     private var primaryText = Color.BLACK
@@ -62,11 +64,27 @@ class LearnedWordsActivity : Activity() {
                 background = GradientDrawable(GradientDrawable.Orientation.TL_BR, it)
             } ?: setBackgroundColor(palette.background)
         }
-        root.addView(TextView(this).apply {
-            text = getString(R.string.manage_learned_words)
-            textSize = 28f
-            setTextColor(primaryText)
-            setTypeface(typeface, Typeface.BOLD)
+        root.addView(LinearLayout(this).apply {
+            gravity = Gravity.CENTER_VERTICAL
+            addView(MaterialButton(this@LearnedWordsActivity).apply {
+                text = "‹"; textSize = 28f
+                minWidth = 0; minimumWidth = 0
+                setTextColor(primaryText)
+                backgroundTintList = ColorStateList.valueOf(Color.TRANSPARENT)
+                contentDescription = getString(R.string.back)
+                setOnClickListener { finish() }
+            }, LinearLayout.LayoutParams(dp(46), dp(46)))
+            addView(LinearLayout(this@LearnedWordsActivity).apply {
+                orientation = LinearLayout.VERTICAL
+                addView(TextView(this@LearnedWordsActivity).apply {
+                    text = getString(R.string.manage_learned_words)
+                    textSize = 25f; setTextColor(primaryText); setTypeface(typeface, Typeface.BOLD)
+                })
+                status = TextView(this@LearnedWordsActivity).apply {
+                    textSize = 13f; setTextColor(secondaryText)
+                }
+                addView(status)
+            }, LinearLayout.LayoutParams(0, -2, 1f).apply { marginStart = dp(4) })
         })
         val search = EditText(this).apply {
             hint = getString(R.string.search_learned_words)
@@ -104,6 +122,9 @@ class LearnedWordsActivity : Activity() {
         if (!::list.isInitialized) return
         list.removeAllViews()
         val values = UserLexiconStore.entries(this).filter { it.word.contains(query.trim(), true) }
+        val total = UserLexiconStore.count(this)
+        status.text = if (query.isBlank()) getString(R.string.learned_words_count, total)
+            else getString(R.string.learned_words_search_count, values.size, total)
         empty.visibility = if (values.isEmpty()) View.VISIBLE else View.GONE
         if (values.isEmpty()) list.addView(empty)
         values.forEach { list.addView(wordRow(it)) }
@@ -116,48 +137,45 @@ class LearnedWordsActivity : Activity() {
         strokeColor = outlineColor
         setCardBackgroundColor(cardColor)
         addView(LinearLayout(this@LearnedWordsActivity).apply {
-            orientation = LinearLayout.HORIZONTAL
-            setPadding(dp(14), dp(10), dp(10), dp(10))
+            orientation = LinearLayout.VERTICAL
+            setPadding(dp(15), dp(13), dp(15), dp(10))
             addView(LinearLayout(this@LearnedWordsActivity).apply {
-                orientation = LinearLayout.VERTICAL
+                gravity = Gravity.CENTER_VERTICAL
                 addView(TextView(this@LearnedWordsActivity).apply {
-                    text = item.word; textSize = 18f; setTextColor(primaryText); setTypeface(typeface, Typeface.BOLD)
-                })
+                    text = item.word; textSize = 20f; setTextColor(primaryText); setTypeface(typeface, Typeface.BOLD)
+                    maxLines = 1
+                }, LinearLayout.LayoutParams(0, -2, 1f))
                 addView(TextView(this@LearnedWordsActivity).apply {
-                    text = getString(R.string.learned_word_counts, item.typed, item.suggestion, item.autoCorrect)
-                    textSize = 12f; setTextColor(secondaryText)
+                    text = getString(R.string.learned_word_score, UserLexiconStore.priorityScore(item) / 1000f)
+                    textSize = 12f; setTextColor(accent); setTypeface(typeface, Typeface.BOLD)
+                    background = GradientDrawable().apply {
+                        setColor(Color.argb(24, Color.red(accent), Color.green(accent), Color.blue(accent)))
+                        cornerRadius = dp(12).toFloat()
+                    }
+                    setPadding(dp(10), dp(5), dp(10), dp(5))
                 })
-                addView(TextView(this@LearnedWordsActivity).apply {
-                    val days = UserLexiconStore.daysSinceLastUse(item)
-                    text = getString(
-                        R.string.learned_word_priority,
-                        UserLexiconStore.priorityScore(item) / 1000f,
-                        if (days == 0L) getString(R.string.today) else getString(R.string.days_ago, days),
-                    )
-                    textSize = 12f; setTextColor(secondaryText)
+            })
+            addView(TextView(this@LearnedWordsActivity).apply {
+                text = getString(R.string.learned_word_counts, item.typed, item.suggestion, item.autoCorrect)
+                textSize = 13f; setTextColor(secondaryText); setPadding(0, dp(8), 0, 0)
+            })
+            addView(TextView(this@LearnedWordsActivity).apply {
+                val days = UserLexiconStore.daysSinceLastUse(item)
+                text = getString(R.string.learned_word_last_used, if (days == 0L) getString(R.string.today) else getString(R.string.days_ago, days))
+                textSize = 12f; setTextColor(secondaryText); setPadding(0, dp(2), 0, 0)
+            })
+            addView(LinearLayout(this@LearnedWordsActivity).apply {
+                orientation = LinearLayout.HORIZONTAL
+                addView(cardButton(getString(R.string.reset_priority), false) {
+                    UserLexiconStore.resetPriority(this@LearnedWordsActivity, item.word); render()
+                }, LinearLayout.LayoutParams(0, dp(40), 1f).apply { marginEnd = dp(3) })
+                addView(cardButton(getString(R.string.edit), true) { edit(item) }, LinearLayout.LayoutParams(0, dp(40), 1f).apply {
+                    marginStart = dp(3); marginEnd = dp(3)
                 })
-            }, LinearLayout.LayoutParams(0, -2, 1f))
-            addView(MaterialButton(this@LearnedWordsActivity).apply {
-                text = getString(R.string.reset_priority); textSize = 11f
-                minWidth = 0; minimumWidth = 0
-                setTextColor(accent)
-                backgroundTintList = ColorStateList.valueOf(Color.TRANSPARENT)
-                setOnClickListener { UserLexiconStore.resetPriority(this@LearnedWordsActivity, item.word); render() }
-            })
-            addView(MaterialButton(this@LearnedWordsActivity).apply {
-                text = getString(R.string.edit)
-                setTextColor(Color.WHITE)
-                backgroundTintList = ColorStateList.valueOf(accent)
-                setOnClickListener { edit(item) }
-            })
-            addView(MaterialButton(this@LearnedWordsActivity).apply {
-                text = getString(R.string.clear)
-                setTextColor(accent)
-                backgroundTintList = ColorStateList.valueOf(Color.TRANSPARENT)
-                strokeColor = ColorStateList.valueOf(accent)
-                strokeWidth = dp(1)
-                setOnClickListener { UserLexiconStore.forget(this@LearnedWordsActivity, item.word); render() }
-            })
+                addView(cardButton(getString(R.string.clear), false) { confirmDelete(item) }, LinearLayout.LayoutParams(0, dp(40), 1f).apply {
+                    marginStart = dp(3)
+                })
+            }, LinearLayout.LayoutParams(-1, dp(40)).apply { topMargin = dp(9) })
         })
     }.also { it.layoutParams = LinearLayout.LayoutParams(-1, -2).apply { bottomMargin = dp(8) } }
 
@@ -172,6 +190,24 @@ class LearnedWordsActivity : Activity() {
                     render()
                 }
             }.show()
+    }
+
+    private fun confirmDelete(item: UserWord) {
+        MaterialAlertDialogBuilder(this).setTitle(R.string.delete_learned_word)
+            .setMessage(getString(R.string.delete_learned_word_message, item.word))
+            .setNegativeButton(R.string.cancel, null)
+            .setPositiveButton(R.string.clear) { _, _ -> UserLexiconStore.forget(this, item.word); render() }
+            .show()
+    }
+
+    private fun cardButton(title: String, filled: Boolean, action: () -> Unit) = MaterialButton(this).apply {
+        text = title; textSize = 11f
+        minWidth = 0; minimumWidth = 0; minHeight = 0; minimumHeight = 0
+        insetTop = 0; insetBottom = 0; setPadding(dp(4), 0, dp(4), 0)
+        setTextColor(if (filled) Color.WHITE else accent)
+        backgroundTintList = ColorStateList.valueOf(if (filled) accent else Color.TRANSPARENT)
+        if (!filled) { strokeColor = ColorStateList.valueOf(accent); strokeWidth = dp(1) }
+        setOnClickListener { action() }
     }
 
     private fun dp(value: Int) = (value * density).toInt()

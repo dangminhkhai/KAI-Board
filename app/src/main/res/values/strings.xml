@@ -89,6 +89,9 @@
     <string name="custom_themes_empty_hint">Nhập file JSON trong máy hoặc tải từ địa chỉ HTTPS.</string>
     <string name="custom_theme_by">Thiết kế bởi %1$s</string>
     <string name="theme_active">ĐANG DÙNG</string>
+    <string name="theme_active_button">Đang dùng</string>
+    <string name="theme_extension_use">Dùng</string>
+    <string name="theme_more_actions">Tùy chọn giao diện</string>
     <string name="preview_and_apply">Xem &amp; dùng</string>
     <string name="delete_custom_theme">Xóa giao diện?</string>
     <string name="delete_custom_theme_message">“%1$s” sẽ bị xóa khỏi thiết bị.</string>
@@ -119,6 +122,12 @@
     <string name="today">hôm nay</string>
     <string name="days_ago">%1$d ngày trước</string>
     <string name="reset_priority">Đặt lại</string>
+    <string name="learned_words_count">%1$d từ đã học</string>
+    <string name="learned_words_search_count">Tìm thấy %1$d/%2$d từ</string>
+    <string name="learned_word_score">Ưu tiên %1$.1f</string>
+    <string name="learned_word_last_used">Dùng %1$s</string>
+    <string name="delete_learned_word">Xóa từ cá nhân?</string>
+    <string name="delete_learned_word_message">“%1$s” sẽ không còn được ưu tiên gợi ý.</string>
     <string name="translation_title">Dịch văn bản</string>
     <string name="translation_input_hint">Nhập hoặc chọn văn bản cần dịch</string>
     <string name="translation_auto_download">Tự tải gói ngôn ngữ còn thiếu khi có mạng</string>

@@ -14,8 +14,8 @@ KAI Board là bàn phím Android viết bằng Kotlin, tập trung vào cảm gi
 - Dịch offline theo từng model ngôn ngữ bằng ML Kit.
 - Mic AI/Dịch hiển thị lời nói theo thời gian thực, hỗ trợ tạm dừng, sửa và dịch tự động.
 - KAI AI hỗ trợ DS2API (`khaids-`), OpenRouter, Gemini, OpenAI, Groq và NVIDIA NIM; nhiều API key, quét model, thống kê trạng thái từng key và fallback theo thứ tự key do người dùng kéo thả khi lỗi/quota.
-- Theme sáng, tối, theo hệ thống; trang **Giao diện tùy chỉnh** hỗ trợ xem trước, cài JSON từ file/HTTPS, áp dụng, xuất/chia sẻ và xóa độc lập với APK.
-- Quản lý từ cá nhân hiển thị nguồn sử dụng, điểm decay, lần dùng gần nhất và cho phép đặt lại ưu tiên.
+- Theme sáng, tối, theo hệ thống; trang **Giao diện tùy chỉnh** dùng gallery hai cột, hiển thị preview đúng tỷ lệ và hỗ trợ cài JSON từ file/HTTPS, áp dụng, xuất/chia sẻ, xóa độc lập với APK.
+- Quản lý từ cá nhân dùng card thích ứng màn hình nhỏ, hiển thị nguồn sử dụng, điểm decay, lần dùng gần nhất và cho phép đặt lại ưu tiên.
 - Sao lưu gồm cài đặt, dữ liệu học, Theme Extensions và thứ tự Smartbar; không chứa API key hoặc clipboard.
 - Cài đặt dùng nhóm button nhỏ thay dropdown; ô thử gõ sticky không tự mở bàn phím.
 

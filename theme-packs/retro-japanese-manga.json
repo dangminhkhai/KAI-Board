@@ -1,0 +1,30 @@
+{
+  "schemaVersion": 1,
+  "id": "retro-japanese-manga",
+  "name": "Retro Japanese Manga",
+  "author": "KAI Board",
+  "light": {
+    "background": "#D8D2C3",
+    "key": "#F2F0E6",
+    "specialKey": "#C84B42",
+    "pressed": "#B99745",
+    "text": "#1D1C19",
+    "hint": "#665F54",
+    "accent": "#B73532",
+    "actionKey": "#315C9B",
+    "gradient": ["#EEEADF", "#D8D0BE", "#C9BEA8"],
+    "fontFamily": "serif"
+  },
+  "dark": {
+    "background": "#171716",
+    "key": "#302E2A",
+    "specialKey": "#8F332F",
+    "pressed": "#A98235",
+    "text": "#F1EEE2",
+    "hint": "#BDB5A6",
+    "accent": "#E05A4F",
+    "actionKey": "#3E66A5",
+    "gradient": ["#121212", "#28231F", "#172137"],
+    "fontFamily": "serif"
+  }
+}

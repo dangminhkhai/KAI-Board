@@ -6,10 +6,12 @@ import android.content.res.ColorStateList
 import android.content.res.Configuration
 import android.graphics.Color
 import android.graphics.Typeface
+import android.text.TextUtils
 import android.graphics.drawable.GradientDrawable
 import android.os.Bundle
 import android.view.Gravity
 import android.widget.LinearLayout
+import android.widget.GridLayout
 import android.widget.ScrollView
 import android.widget.TextView
 import android.widget.Toast
@@ -74,7 +76,7 @@ class CustomThemesActivity : Activity() {
             addView(label(getString(R.string.custom_themes_add_title), 17f, palette.text, bold = true))
             addView(label(getString(R.string.theme_extensions_hint), 13f, palette.hint).apply { setPadding(0, dp(3), 0, dp(8)) })
             addView(LinearLayout(this@CustomThemesActivity).apply {
-                orientation = LinearLayout.HORIZONTAL
+                orientation = LinearLayout.HORIZONTAL; gravity = Gravity.CENTER_VERTICAL
                 addView(actionButton(getString(R.string.theme_extension_download), primary = true) { showUrlDialog() }, LinearLayout.LayoutParams(0, dp(44), 1f).apply { marginEnd = dp(4) })
                 addView(actionButton(getString(R.string.theme_extension_import)) {
                     startActivityForResult(Intent(Intent.ACTION_OPEN_DOCUMENT).apply {
@@ -96,8 +98,19 @@ class CustomThemesActivity : Activity() {
                 addView(label(getString(R.string.theme_extension_empty), 15f, palette.text, bold = true).apply { gravity = Gravity.CENTER })
                 addView(label(getString(R.string.custom_themes_empty_hint), 13f, palette.hint).apply { gravity = Gravity.CENTER; setPadding(0, dp(4), 0, 0) })
             }))
-        } else installed.forEach { extension ->
-            root.addView(themeCard(extension), LinearLayout.LayoutParams(-1, -2).apply { bottomMargin = dp(10) })
+        } else {
+            root.addView(GridLayout(this).apply {
+                columnCount = 2
+                alignmentMode = GridLayout.ALIGN_BOUNDS
+                useDefaultMargins = false
+                installed.forEachIndexed { index, extension ->
+                    addView(themeCard(extension), GridLayout.LayoutParams().apply {
+                        width = 0; height = GridLayout.LayoutParams.WRAP_CONTENT
+                        columnSpec = GridLayout.spec(GridLayout.UNDEFINED, 1f)
+                        setMargins(if (index % 2 == 0) 0 else dp(5), 0, if (index % 2 == 0) dp(5) else 0, dp(10))
+                    })
+                }
+            }, LinearLayout.LayoutParams(-1, -2))
         }
         setContentView(ScrollView(this).apply { isFillViewport = true; addView(root) })
     }
@@ -106,42 +119,34 @@ class CustomThemesActivity : Activity() {
         val active = KeyboardPreferences.themeExtensionId(this) == extension.id
         val preview = ThemeExtensionStore.palette(this, extension.id, dark)
         return card(LinearLayout(this).apply {
-            orientation = LinearLayout.VERTICAL; setPadding(dp(15), dp(13), dp(15), dp(10))
+            orientation = LinearLayout.VERTICAL; setPadding(dp(10), dp(11), dp(10), dp(12))
+            if (preview != null) addView(ThemePreviewView(this@CustomThemesActivity, preview, 90), LinearLayout.LayoutParams(-1, dp(90)))
             addView(LinearLayout(this@CustomThemesActivity).apply {
                 gravity = Gravity.CENTER_VERTICAL
                 addView(LinearLayout(this@CustomThemesActivity).apply {
                     orientation = LinearLayout.VERTICAL
-                    addView(label(extension.name, 17f, palette.text, bold = true))
-                    addView(label(getString(R.string.custom_theme_by, extension.author), 12f, palette.hint))
+                    addView(label(extension.name, 16f, palette.text, bold = true).apply {
+                        maxLines = 1; ellipsize = TextUtils.TruncateAt.END
+                    })
+                    addView(label(extension.author, 11f, palette.hint).apply {
+                        maxLines = 1; ellipsize = TextUtils.TruncateAt.END
+                    })
                 }, LinearLayout.LayoutParams(0, -2, 1f))
-                if (active) addView(label(getString(R.string.theme_active), 12f, palette.accent, bold = true))
-            })
-            if (preview != null) addView(LinearLayout(this@CustomThemesActivity).apply {
-                orientation = LinearLayout.HORIZONTAL
-                listOf(preview.background, preview.key, preview.specialKey, preview.accent).forEach { color ->
-                    addView(android.view.View(this@CustomThemesActivity).apply {
-                        background = GradientDrawable().apply { setColor(color); cornerRadius = dp(8).toFloat() }
-                    }, LinearLayout.LayoutParams(0, dp(42), 1f).apply { marginEnd = dp(4) })
-                }
-            }, LinearLayout.LayoutParams(-1, dp(42)).apply { topMargin = dp(10) })
+                if (active) addView(label("●", 15f, palette.accent).apply { contentDescription = getString(R.string.theme_active) })
+            }, LinearLayout.LayoutParams(-1, dp(56)).apply { topMargin = dp(7) })
             addView(LinearLayout(this@CustomThemesActivity).apply {
                 orientation = LinearLayout.HORIZONTAL
-                addView(actionButton(if (active) getString(R.string.theme_extension_preview) else getString(R.string.preview_and_apply), primary = !active) {
-                    showPreview(extension)
-                }, LinearLayout.LayoutParams(0, dp(42), 1.25f).apply { marginEnd = dp(3) })
-                addView(actionButton(getString(R.string.theme_extension_export_share)) { exportMenu(extension) }, LinearLayout.LayoutParams(0, dp(42), 1f).apply { marginStart = dp(3); marginEnd = dp(3) })
-                addView(actionButton(getString(R.string.theme_extension_delete)) { confirmDelete(extension) }, LinearLayout.LayoutParams(0, dp(42), 1f).apply { marginStart = dp(3) })
-            }, LinearLayout.LayoutParams(-1, dp(42)).apply { topMargin = dp(8) })
+                addView(actionButton(if (active) getString(R.string.theme_active_button) else getString(R.string.theme_extension_use), primary = !active) {
+                    if (!active && preview != null) {
+                        KeyboardPreferences.setThemeExtension(this@CustomThemesActivity, extension.id)
+                        palette = preview; render()
+                    }
+                }.apply { isEnabled = !active }, LinearLayout.LayoutParams(0, dp(40), 1f).apply { marginEnd = dp(4) })
+                addView(actionButton("•••") { exportMenu(extension) }.apply {
+                    contentDescription = getString(R.string.theme_more_actions); textSize = 15f
+                }, LinearLayout.LayoutParams(dp(44), dp(40)))
+            }, LinearLayout.LayoutParams(-1, dp(44)))
         }).apply { strokeColor = if (active) palette.accent else palette.specialKey; strokeWidth = dp(if (active) 2 else 1) }
-    }
-
-    private fun showPreview(extension: ThemeExtension) {
-        val value = ThemeExtensionStore.palette(this, extension.id, dark) ?: return
-        MaterialAlertDialogBuilder(this).setTitle(extension.name).setView(ThemePreviewView(this, value))
-            .setNegativeButton(R.string.cancel, null)
-            .setPositiveButton(R.string.theme_extension_apply) { _, _ ->
-                KeyboardPreferences.setThemeExtension(this, extension.id); palette = value; render()
-            }.show()
     }
 
     private fun showUrlDialog() {
@@ -163,18 +168,19 @@ class CustomThemesActivity : Activity() {
 
     private fun exportMenu(extension: ThemeExtension) {
         MaterialAlertDialogBuilder(this).setTitle(extension.name)
-            .setItems(arrayOf(getString(R.string.save_file), getString(R.string.share))) { _, choice ->
+            .setItems(arrayOf(getString(R.string.save_file), getString(R.string.share), getString(R.string.theme_extension_delete))) { _, choice ->
                 if (choice == 0) {
                     pendingExportId = extension.id
                     startActivityForResult(Intent(Intent.ACTION_CREATE_DOCUMENT).apply {
                         addCategory(Intent.CATEGORY_OPENABLE); type = "application/json"; putExtra(Intent.EXTRA_TITLE, "${extension.id}.json")
                     }, REQUEST_EXPORT)
-                } else runCatching {
+                } else if (choice == 1) runCatching {
                     val uri = FileProvider.getUriForFile(this, "$packageName.files", ThemeExtensionStore.fileForSharing(this, extension.id))
                     startActivity(Intent.createChooser(Intent(Intent.ACTION_SEND).apply {
                         type = "application/json"; putExtra(Intent.EXTRA_STREAM, uri); addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION)
                     }, getString(R.string.share_theme)))
                 }.onFailure { Toast.makeText(this, it.message, Toast.LENGTH_LONG).show() }
+                else confirmDelete(extension)
             }.show()
     }
 
@@ -201,7 +207,11 @@ class CustomThemesActivity : Activity() {
     }
 
     private fun actionButton(title: String, primary: Boolean = false, action: () -> Unit) = MaterialButton(this).apply {
-        text = title; textSize = 12f; minWidth = 0; minimumWidth = 0
+        text = title; textSize = 12f
+        minWidth = 0; minimumWidth = 0; minHeight = 0; minimumHeight = 0
+        insetTop = 0; insetBottom = 0
+        setPadding(dp(8), 0, dp(8), 0)
+        gravity = Gravity.CENTER
         setTextColor(if (primary) Color.WHITE else palette.accent)
         backgroundTintList = ColorStateList.valueOf(if (primary) palette.accent else Color.TRANSPARENT)
         if (!primary) { strokeColor = ColorStateList.valueOf(palette.accent); strokeWidth = dp(1) }

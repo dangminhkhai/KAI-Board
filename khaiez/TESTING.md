@@ -19,7 +19,7 @@ Test cần bao phủ Telex/hoàn tác kiểu UniKey, viết hoa đầu ô/đầu
 - Quản lý API: ô key không tự điền, chỉ lưu key quét thành công, thống kê đúng từng key, xóa kèm xác nhận; chạm giữ card để kéo, card nổi/viền accent, card khác dịch chuyển, số thứ tự cập nhật và thứ tự chỉ lưu khi thả.
 - Micro: bình thường, text trực tiếp, tạm dừng/tiếp tục, Backspace, hủy, im lặng, thiếu dịch vụ và ngôn ngữ Việt/Anh.
 - Dịch: model có/không có, swap ngôn ngữ và offline.
-- Giao diện: sáng/tối/theo hệ thống, Mặc định/Tùy chỉnh, trang Giao diện tùy chỉnh, nhập/HTTPS/xem trước/áp dụng/xuất/chia sẻ/xóa theme, preset geometry, sticky input, one-hand, xoay, font lớn và insets.
+- Giao diện: sáng/tối/theo hệ thống, Mặc định/Tùy chỉnh, gallery theme hai cột cùng chiều cao, preview đúng tỷ lệ, nhập/HTTPS/áp dụng/xuất/chia sẻ/xóa theme, card từ cá nhân trên màn hình hẹp, preset geometry, sticky input, one-hand, xoay, font lớn và insets.
 - Sao lưu: khôi phục Theme Extensions và thứ tự Smartbar; xác nhận không chứa API key, clipboard hoặc ghi chú.
 - Release: `assembleRelease`, `lintRelease`, R8/resource shrinking, chữ ký v2/v3, package/version/ABI và SHA-256.
 

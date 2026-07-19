@@ -2,6 +2,9 @@
 
 ## Chưa phát hành
 
+- Tối ưu trang Giao diện tùy chỉnh thành gallery hai cột đồng đều; preview bàn phím giữ tỷ lệ 400:225, nút Dùng/trạng thái active rõ ràng và Xuất/Chia sẻ/Xóa nằm trong menu gọn.
+- Làm lại UI Quản lý từ cá nhân: card dọc không ép chữ, điểm ưu tiên dạng badge, thống kê đầy đủ chiều rộng, thao tác cùng hàng và xác nhận trước khi xóa.
+- Thêm hai gói theme tải riêng `pastel-pink.json` và `retro-japanese-manga.json`, đều có palette sáng/tối và không tăng dung lượng APK.
 - Tách **Giao diện tùy chỉnh** thành trang quản lý riêng; Theme Extension JSON hỗ trợ file/HTTPS, bảng màu, xem trước trước khi dùng, trạng thái đang áp dụng, xuất/chia sẻ và xóa có xác nhận.
 - Chỉ giữ bộ màu Mặc định trong APK; Gradient AI và Ocean bị loại bỏ, Rừng Pastel chuyển thành gói `theme-packs/pastel-forest.json` tải riêng.
 - Clipboard nhận diện offline OTP, email, URL và số điện thoại để chèn nhanh phần hữu ích; thêm tự xóa sau 1 giờ/1 ngày hoặc không xóa, mục ghim luôn được giữ.

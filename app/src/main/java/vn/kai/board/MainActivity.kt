@@ -30,6 +30,7 @@ import vn.kai.board.settings.KeyboardColorStyle
 import vn.kai.board.settings.ThemeMode
 import vn.kai.board.settings.SettingsBackup
 import vn.kai.board.settings.KeyboardThemePalette
+import vn.kai.board.settings.ThemeExtensionStore
 import vn.kai.board.input.UserLexiconStore
 import vn.kai.board.input.EmailSuggestionStore
 import vn.kai.board.input.HashtagSuggestionStore
@@ -764,10 +765,11 @@ class MainActivity : Activity() {
         accentColor: Int,
         dp: (Int) -> Int,
     ): HorizontalScrollView {
-        val customActive = KeyboardPreferences.themeExtensionId(this) != null
+        val activeId = KeyboardPreferences.themeExtensionId(this)
+        val customActive = activeId != null && ThemeExtensionStore.installed(this).any { it.id == activeId }
         return createChoiceButtons(
             listOf(getString(R.string.color_classic), getString(R.string.color_custom)),
-            if (customActive) 1 else 0, primaryText, fieldColor, accentColor, dp,
+            if (customActive) 1 else 0, primaryText, fieldColor, accentColor, dp, selectOnClick = false,
         ) { position ->
             if (position == 0) {
                 KeyboardPreferences.setColorStyle(this@MainActivity, KeyboardColorStyle.CLASSIC)
@@ -807,7 +809,7 @@ class MainActivity : Activity() {
 
     private fun createChoiceButtons(
         labels: List<String>, initial: Int, primaryText: Int, fieldColor: Int, accentColor: Int,
-        toPx: (Int) -> Int, onSelected: (Int) -> Unit,
+        toPx: (Int) -> Int, selectOnClick: Boolean = true, onSelected: (Int) -> Unit,
     ): HorizontalScrollView {
         var selected = initial.coerceIn(labels.indices)
         val buttons = mutableListOf<MaterialButton>()
@@ -826,7 +828,10 @@ class MainActivity : Activity() {
                     minWidth = 0; minimumWidth = 0; minHeight = 0; minimumHeight = 0
                     insetTop = 0; insetBottom = 0
                     setPadding(toPx(12), 0, toPx(12), 0)
-                    setOnClickListener { selected = index; refresh(); onSelected(index) }
+                    setOnClickListener {
+                        if (selectOnClick) { selected = index; refresh() }
+                        onSelected(index)
+                    }
                 }.also(buttons::add), LinearLayout.LayoutParams(-2, toPx(38)).apply {
                     if (index > 0) leftMargin = toPx(6)
                 })
