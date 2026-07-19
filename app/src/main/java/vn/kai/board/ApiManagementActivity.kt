@@ -53,7 +53,7 @@ class ApiManagementActivity : Activity() {
             ThemeMode.LIGHT -> false
             ThemeMode.SYSTEM -> resources.configuration.uiMode and Configuration.UI_MODE_NIGHT_MASK == Configuration.UI_MODE_NIGHT_YES
         }
-        val palette = KeyboardThemePalette.resolve(KeyboardPreferences.colorStyle(this), dark)
+        val palette = KeyboardThemePalette.resolve(this, dark)
         window.statusBarColor = palette.gradientColors?.first() ?: palette.background
         window.navigationBarColor = palette.gradientColors?.last() ?: palette.background
 

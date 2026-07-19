@@ -47,7 +47,7 @@ class TranslationModelsActivity : Activity() {
         val themeMode = KeyboardPreferences.theme(this)
         val dark = themeMode == ThemeMode.DARK || themeMode == ThemeMode.SYSTEM &&
             resources.configuration.uiMode and Configuration.UI_MODE_NIGHT_MASK == Configuration.UI_MODE_NIGHT_YES
-        val palette = KeyboardThemePalette.resolve(KeyboardPreferences.colorStyle(this), dark)
+        val palette = KeyboardThemePalette.resolve(this, dark)
         primaryText = palette.text
         secondaryText = palette.hint
         selectedColor = palette.accent

@@ -10,9 +10,16 @@ import android.os.Looper
 import android.os.ResultReceiver
 import android.text.InputType
 import android.view.View
+import android.view.ViewGroup
 import android.view.KeyEvent
 import android.view.inputmethod.EditorInfo
+import android.view.inputmethod.InlineSuggestionsRequest
+import android.view.inputmethod.InlineSuggestionsResponse
 import android.view.inputmethod.InputMethodManager
+import android.widget.HorizontalScrollView
+import android.widget.LinearLayout
+import android.widget.inline.InlinePresentationSpec
+import android.util.Size
 import android.widget.Toast
 import android.os.Build
 import java.util.Locale
@@ -33,6 +40,8 @@ import vn.kai.board.input.SuggestionPriority
 import vn.kai.board.input.AutoCorrectionStatsStore
 import vn.kai.board.input.SelectionDeletionPolicy
 import vn.kai.board.input.InputPrivacyPolicy
+import vn.kai.board.input.InputPunctuationPolicy
+import vn.kai.board.input.NumericInputPolicy
 import vn.kai.board.settings.KeyboardPreferences
 import vn.kai.board.telex.TelexEngine
 import vn.kai.board.input.TelexWordComposer
@@ -66,10 +75,13 @@ class KaiBoardImeService : InputMethodService() {
     private var shifted = false
     private var capsLocked = false
     private var keyboardView: KeyboardView? = null
+    private var inlineAutofillStrip: LinearLayout? = null
+    private var inlineAutofillGeneration = 0
     private var composing = ""
     private var literalTelexLockLength = 0
     private var telexEnabled = true
     private var selectionActive = false
+    private var privateSession = false
     private var lastAutoCorrection: AutoCorrection? = null
     private var translationMode = false
     private var translationSource = ""
@@ -101,13 +113,68 @@ class KaiBoardImeService : InputMethodService() {
         }, "kai-dictionary-loader").start()
     }
 
-    override fun onCreateInputView(): View = KeyboardView(this).also { view ->
+    override fun onCreateInputView(): View {
+        val density = resources.displayMetrics.density
+        val strip = LinearLayout(this).apply {
+            orientation = LinearLayout.HORIZONTAL
+            visibility = View.GONE
+            setPadding((4 * density).toInt(), (3 * density).toInt(), (4 * density).toInt(), (3 * density).toInt())
+        }
+        inlineAutofillStrip = strip
+        val view = KeyboardView(this)
         keyboardView = view
         view.onKeyAction = ::handleAction
         view.setShifted(shifted)
         view.setCapsLocked(capsLocked)
         view.setSpaceLabel(resolveSpaceLabel(currentInputEditorInfo))
+        view.setLeadingPunctuation(InputPunctuationPolicy.leadingKey(currentInputEditorInfo?.inputType ?: 0))
         view.setSuggestionsEnabled(suggestionsAllowed(currentInputEditorInfo))
+        view.setPrivateSession(privateSession)
+        syncNumericMode(view, currentInputEditorInfo)
+        return LinearLayout(this).apply {
+            orientation = LinearLayout.VERTICAL
+            addView(HorizontalScrollView(this@KaiBoardImeService).apply {
+                isHorizontalScrollBarEnabled = false
+                visibility = View.GONE
+                addView(strip, ViewGroup.LayoutParams(ViewGroup.LayoutParams.WRAP_CONTENT, ViewGroup.LayoutParams.MATCH_PARENT))
+                strip.tag = this
+            }, LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, (50 * density).toInt()))
+            addView(view, LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT))
+        }
+    }
+
+    override fun onCreateInlineSuggestionsRequest(uiExtras: Bundle): InlineSuggestionsRequest? {
+        if (Build.VERSION.SDK_INT < Build.VERSION_CODES.R) return null
+        val density = resources.displayMetrics.density
+        val spec = InlinePresentationSpec.Builder(
+            Size((72 * density).toInt(), (40 * density).toInt()),
+            Size((240 * density).toInt(), (44 * density).toInt()),
+        ).build()
+        return InlineSuggestionsRequest.Builder(listOf(spec))
+            .setMaxSuggestionCount(4)
+            .build()
+    }
+
+    override fun onInlineSuggestionsResponse(response: InlineSuggestionsResponse): Boolean {
+        if (Build.VERSION.SDK_INT < Build.VERSION_CODES.R) return false
+        val strip = inlineAutofillStrip ?: return false
+        val host = strip.tag as? View ?: return false
+        val suggestions = response.inlineSuggestions.take(4)
+        val generation = ++inlineAutofillGeneration
+        strip.removeAllViews()
+        strip.visibility = if (suggestions.isEmpty()) View.GONE else View.VISIBLE
+        host.visibility = strip.visibility
+        if (suggestions.isEmpty()) return true
+        val density = resources.displayMetrics.density
+        suggestions.forEach { suggestion ->
+            suggestion.inflate(this, Size((220 * density).toInt(), (44 * density).toInt()), mainExecutor) { content ->
+                if (generation != inlineAutofillGeneration || content == null) return@inflate
+                strip.addView(content, LinearLayout.LayoutParams((220 * density).toInt(), (44 * density).toInt()).apply {
+                    marginEnd = (4 * density).toInt()
+                })
+            }
+        }
+        return true
     }
 
     override fun onStartInputView(info: EditorInfo?, restarting: Boolean) {
@@ -115,15 +182,36 @@ class KaiBoardImeService : InputMethodService() {
         composing = ""
         literalTelexLockLength = 0
         telexEnabled = info?.let { TelexInputPolicy.isEnabled(it.inputType) } ?: true
+        privateSession = InputPrivacyPolicy.isPrivateSession(info)
         selectionActive = false
         lastAutoCorrection = null
         updateAutomaticShift()
         keyboardView?.setSpaceLabel(resolveSpaceLabel(info))
+        keyboardView?.setLeadingPunctuation(InputPunctuationPolicy.leadingKey(info?.inputType ?: 0))
         keyboardView?.setSuggestionsEnabled(suggestionsAllowed(info))
+        keyboardView?.setPrivateSession(privateSession)
+        keyboardView?.let { syncNumericMode(it, info) }
         updateSuggestions()
     }
 
+    /** Keep the host app visible in landscape instead of Android's full-screen extract UI. */
+    override fun onEvaluateFullscreenMode(): Boolean = false
+
+    private fun syncNumericMode(view: KeyboardView, info: EditorInfo?) {
+        val mode = NumericInputPolicy.resolve(info?.inputType ?: 0)
+        view.setNumericMode(
+            enabled = mode.enabled,
+            decimal = mode.decimal,
+            signed = mode.signed,
+            phone = mode.phone,
+        )
+    }
+
     override fun onFinishInputView(finishingInput: Boolean) {
+        inlineAutofillGeneration++
+        inlineAutofillStrip?.removeAllViews()
+        inlineAutofillStrip?.visibility = View.GONE
+        (inlineAutofillStrip?.tag as? View)?.visibility = View.GONE
         confirmPendingCorrection()
         rememberCurrentEmail()
         rememberCurrentHashtag()
@@ -163,6 +251,7 @@ class KaiBoardImeService : InputMethodService() {
 
     private fun handleAction(action: KeyAction) {
         val connection = currentInputConnection ?: return
+        if (privateSession && (action == KeyAction.OpenAi || action == KeyAction.ToggleClipboard)) return
         if (voicePaused && action == KeyAction.Backspace && activeVoiceTarget != null) {
             activeVoicePartial = activeVoicePartial.dropLast(1)
             syncVoiceTextToFeatureInput(activeVoicePartial)
@@ -470,13 +559,13 @@ class KaiBoardImeService : InputMethodService() {
 
     private fun suggestionsAllowed(info: EditorInfo?): Boolean =
         KeyboardPreferences.wordSuggestions(this) &&
-            !isSensitiveInput(info) &&
+            !InputPrivacyPolicy.isPrivateSession(info) &&
             (isEmailInput(info) || (info?.let { TelexInputPolicy.isEnabled(it.inputType) } ?: false))
 
     private fun isSensitiveInput(info: EditorInfo?): Boolean =
         info?.let { InputPrivacyPolicy.isSensitive(it.inputType) } == true
 
-    private fun learningAllowed(): Boolean = !isSensitiveInput(currentInputEditorInfo)
+    private fun learningAllowed(): Boolean = !InputPrivacyPolicy.isPrivateSession(currentInputEditorInfo)
 
     private fun isEmailInput(info: EditorInfo?): Boolean {
         val inputType = info?.inputType ?: return false

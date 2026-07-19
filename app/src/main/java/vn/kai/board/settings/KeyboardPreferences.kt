@@ -27,6 +27,9 @@ object KeyboardPreferences {
     const val KEY_RADIUS_DP = "key_radius_dp"
     const val KEY_BORDER = "key_border"
     const val KEY_BORDER_WIDTH_DP = "key_border_width_dp"
+    const val SMARTBAR_ORDER = "smartbar_order"
+    const val THEME_EXTENSION_ID = "theme_extension_id"
+    private val defaultSmartbarOrder = listOf("back", "mic", "translate", "ai", "clipboard", "settings", "emoji")
 
     fun haptic(context: Context) = prefs(context).getBoolean(HAPTIC, true)
     fun sound(context: Context) = prefs(context).getBoolean(SOUND, true)
@@ -66,6 +69,15 @@ object KeyboardPreferences {
     fun keyRadiusDp(context: Context) = prefs(context).getInt(KEY_RADIUS_DP, 7).coerceIn(0, 24)
     fun keyBorder(context: Context) = prefs(context).getBoolean(KEY_BORDER, false)
     fun keyBorderWidthDp(context: Context) = prefs(context).getInt(KEY_BORDER_WIDTH_DP, 1).coerceIn(1, 5)
+    fun smartbarOrder(context: Context): List<String> {
+        val stored = prefs(context).getString(SMARTBAR_ORDER, null)
+            ?.split(',')?.filter { it in defaultSmartbarOrder }?.distinct().orEmpty()
+        return stored + defaultSmartbarOrder.filterNot(stored::contains)
+    }
+    fun themeExtensionId(context: Context): String? = prefs(context).getString(THEME_EXTENSION_ID, null)
+
+    fun setSmartbarOrder(context: Context, order: List<String>) =
+        prefs(context).edit().putString(SMARTBAR_ORDER, order.joinToString(",")).apply()
 
     fun setBoolean(context: Context, key: String, value: Boolean) =
         prefs(context).edit().putBoolean(key, value).apply()
@@ -97,7 +109,11 @@ object KeyboardPreferences {
         prefs(context).edit().putString(THEME, value.storageValue).apply()
 
     fun setColorStyle(context: Context, value: KeyboardColorStyle) =
-        prefs(context).edit().putString(COLOR_STYLE, value.storageValue).apply()
+        prefs(context).edit().putString(COLOR_STYLE, value.storageValue).remove(THEME_EXTENSION_ID).apply()
+
+    fun setThemeExtension(context: Context, id: String?) = prefs(context).edit().apply {
+        if (id == null) remove(THEME_EXTENSION_ID) else putString(THEME_EXTENSION_ID, id)
+    }.apply()
 
     fun register(context: Context, listener: SharedPreferences.OnSharedPreferenceChangeListener) =
         prefs(context).registerOnSharedPreferenceChangeListener(listener)
@@ -119,7 +135,8 @@ enum class ThemeMode(val storageValue: String) {
 enum class KeyboardColorStyle(val storageValue: String) {
     CLASSIC("classic"),
     AI_GRADIENT_2026("ai_gradient_2026"),
-    OCEAN("ocean");
+    OCEAN("ocean"),
+    PASTEL_FOREST("pastel_forest");
 
     companion object {
         fun fromStorage(value: String?): KeyboardColorStyle = when (value) {

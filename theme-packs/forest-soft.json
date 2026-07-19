@@ -1,0 +1,28 @@
+{
+  "schemaVersion": 1,
+  "id": "forest-soft",
+  "name": "Forest Soft",
+  "author": "KAI Board",
+  "light": {
+    "background": "#D8E5D1",
+    "key": "#F7F4DC",
+    "specialKey": "#689D8E",
+    "pressed": "#79B59E",
+    "text": "#1F3733",
+    "hint": "#48675B",
+    "accent": "#2B695B",
+    "actionKey": "#4D8B7B",
+    "gradient": ["#E8EFD5", "#C1DCC4", "#70A99A"],
+    "fontFamily": "sans-serif-rounded"
+  },
+  "dark": {
+    "background": "#19302B",
+    "key": "#2B4841",
+    "specialKey": "#235E51",
+    "pressed": "#5B9D86",
+    "text": "#EFF2DA",
+    "hint": "#B2CDBB",
+    "accent": "#7BBEA3",
+    "fontFamily": "sans-serif-rounded"
+  }
+}

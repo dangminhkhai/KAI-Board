@@ -28,18 +28,22 @@ class KeyboardColorStyleTest {
         val classic = KeyboardThemePalette.resolve(KeyboardColorStyle.CLASSIC, false)
         val gradient = KeyboardThemePalette.resolve(KeyboardColorStyle.AI_GRADIENT_2026, false)
         val ocean = KeyboardThemePalette.resolve(KeyboardColorStyle.OCEAN, true)
+        val forest = KeyboardThemePalette.resolve(KeyboardColorStyle.PASTEL_FOREST, false)
         assertNull(classic.gradientColors)
         assertNotNull(gradient.gradientColors)
         assertEquals(3, gradient.gradientColors!!.size)
         assertNull(ocean.gradientColors)
-        assertEquals(0xFF1F7F70.toInt(), classic.accent)
+        assertEquals("sans-serif-rounded", forest.fontFamily)
+        assertNotNull(forest.gradientColors)
+        assertEquals(0xFF4CAF50.toInt(), classic.accent)
+        assertEquals(0xFF4CAF50.toInt(), classic.actionKey)
         assertEquals(0xFF4F46E5.toInt(), gradient.accent)
     }
 
-    @Test fun regularKeysAreWhiteInLightModeAndBlackInDarkMode() {
-        KeyboardColorStyle.entries.forEach { style ->
+    @Test fun nonIllustratedRegularKeysAreWhiteInLightMode() {
+        KeyboardColorStyle.entries.filterNot { it == KeyboardColorStyle.PASTEL_FOREST }.forEach { style ->
             assertEquals(0xFFFFFFFF.toInt(), KeyboardThemePalette.resolve(style, false).key)
-            assertEquals(0xFF000000.toInt(), KeyboardThemePalette.resolve(style, true).key)
         }
+        assertEquals(0xFF3C4043.toInt(), KeyboardThemePalette.resolve(KeyboardColorStyle.CLASSIC, true).key)
     }
 }

@@ -2,6 +2,10 @@
 
 ## Chưa phát hành
 
+- Thêm Theme Extensions dạng JSON tải qua HTTPS hoặc nhập trực tiếp từ file; hỗ trợ sáng/tối, gradient, font hệ thống, áp dụng và xóa độc lập với APK.
+- Thêm chế độ riêng tư theo ô mật khẩu và `IME_FLAG_NO_PERSONALIZED_LEARNING`: tắt học từ, clipboard và KAI AI.
+- Thêm Inline Autofill cho OTP/trình quản lý mật khẩu trên Android 11 trở lên và cho phép đổi thứ tự nút Smartbar.
+- Thêm numpad cho số/OTP/điện thoại, dấu `@` cho email, dấu `/` cho URL và giới hạn chiều cao bàn phím ngang.
 - Thêm gói từ điển mở rộng tùy chọn gồm 40.000 từ Việt và 15.000 từ Anh; tải một lần và dùng offline, không tăng dung lượng APK.
 - Từ điển cá nhân dùng decay 14 ngày để từ lâu không dùng tự giảm ưu tiên.
 - Gợi ý trong ô AI tự học từ câu lệnh người dùng và dùng chung thanh gợi ý theo thứ tự AI → cá nhân → từ điển offline.

@@ -10,9 +10,11 @@ import android.graphics.drawable.GradientDrawable
 import android.os.Bundle
 import android.provider.Settings
 import android.view.ViewGroup
+import android.view.Gravity
 import android.view.WindowManager
 import android.view.inputmethod.InputMethodManager
 import android.widget.LinearLayout
+import android.widget.FrameLayout
 import android.widget.ScrollView
 import android.widget.HorizontalScrollView
 import android.widget.TextView
@@ -28,6 +30,7 @@ import vn.kai.board.settings.KeyboardColorStyle
 import vn.kai.board.settings.ThemeMode
 import vn.kai.board.settings.SettingsBackup
 import vn.kai.board.settings.KeyboardThemePalette
+import vn.kai.board.settings.ThemeExtensionStore
 import vn.kai.board.input.UserLexiconStore
 import vn.kai.board.input.EmailSuggestionStore
 import vn.kai.board.input.HashtagSuggestionStore
@@ -60,7 +63,7 @@ class MainActivity : Activity() {
         val isDark = themeMode == ThemeMode.DARK || themeMode == ThemeMode.SYSTEM &&
             resources.configuration.uiMode and Configuration.UI_MODE_NIGHT_MASK == Configuration.UI_MODE_NIGHT_YES
         val colorStyle = KeyboardPreferences.colorStyle(this)
-        val palette = KeyboardThemePalette.resolve(colorStyle, isDark)
+        val palette = KeyboardThemePalette.resolve(this, isDark)
         val isAiGradient = palette.gradientColors != null
         val background = palette.background
         val primaryText = palette.text
@@ -282,6 +285,45 @@ class MainActivity : Activity() {
             addSwitch(section, R.string.setting_auto_correct, KeyboardPreferences.AUTO_CORRECT, KeyboardPreferences.autoCorrect(this))
             addSwitch(section, R.string.setting_auto_capitalization, KeyboardPreferences.AUTO_CAPITALIZATION, KeyboardPreferences.autoCapitalization(this))
             addSwitch(section, R.string.setting_offline_mode, KeyboardPreferences.OFFLINE_MODE, KeyboardPreferences.offlineMode(this))
+            section.addView(textView(getString(R.string.smartbar_order_title), 16f, primaryText).apply {
+                setTypeface(typeface, Typeface.BOLD)
+                setPadding(0, dp(14), 0, 0)
+            })
+            section.addView(textView(getString(R.string.smartbar_order_note), 13f, secondaryText))
+            val smartbarList = LinearLayout(this).apply { orientation = LinearLayout.VERTICAL }
+            val smartbarLabels = mapOf(
+                "back" to "Ẩn bàn phím", "mic" to "Mic", "translate" to "Dịch",
+                "ai" to "AI", "clipboard" to "Clipboard", "settings" to "Cài đặt", "emoji" to "Emoji",
+            )
+            fun renderSmartbarOrder() {
+                smartbarList.removeAllViews()
+                val order = KeyboardPreferences.smartbarOrder(this@MainActivity)
+                order.forEachIndexed { index, id ->
+                    smartbarList.addView(LinearLayout(this@MainActivity).apply {
+                        orientation = LinearLayout.HORIZONTAL
+                        gravity = Gravity.CENTER_VERTICAL
+                        addView(textView(smartbarLabels[id].orEmpty(), 15f, primaryText), LinearLayout.LayoutParams(0, dp(44), 1f).apply {
+                            gravity = Gravity.CENTER_VERTICAL
+                        })
+                        fun moveButton(label: String, delta: Int) = MaterialButton(this@MainActivity).apply {
+                            text = label; minWidth = 0; minimumWidth = 0; insetTop = 0; insetBottom = 0
+                            setTextColor(selectedColor); backgroundTintList = ColorStateList.valueOf(Color.TRANSPARENT)
+                            isEnabled = (index + delta) in order.indices
+                            setOnClickListener {
+                                val updated = order.toMutableList()
+                                val target = index + delta
+                                updated[index] = updated[target].also { updated[target] = updated[index] }
+                                KeyboardPreferences.setSmartbarOrder(this@MainActivity, updated)
+                                renderSmartbarOrder()
+                            }
+                        }
+                        addView(moveButton("↑", -1), LinearLayout.LayoutParams(dp(44), dp(40)))
+                        addView(moveButton("↓", 1), LinearLayout.LayoutParams(dp(44), dp(40)))
+                    })
+                }
+            }
+            section.addView(smartbarList)
+            renderSmartbarOrder()
             section.addView(MaterialCardView(this).apply {
                 radius = dp(14).toFloat()
                 cardElevation = 0f
@@ -524,6 +566,47 @@ class MainActivity : Activity() {
             })
         }
         addSection(R.string.tab_appearance, "appearance") { section ->
+            val extensionList = LinearLayout(this).apply { orientation = LinearLayout.VERTICAL }
+            fun renderExtensions() {
+                extensionList.removeAllViews()
+                val installed = ThemeExtensionStore.installed(this@MainActivity)
+                if (installed.isEmpty()) extensionList.addView(
+                    textView(getString(R.string.theme_extension_empty), 13f, secondaryText).apply { setPadding(0, dp(8), 0, 0) },
+                )
+                val activeId = KeyboardPreferences.themeExtensionId(this@MainActivity)
+                installed.forEach { extension ->
+                    extensionList.addView(LinearLayout(this@MainActivity).apply {
+                        orientation = LinearLayout.VERTICAL
+                        setPadding(0, dp(8), 0, dp(4))
+                        addView(textView(if (extension.id == activeId) "✓ ${extension.name}" else extension.name, 15f, primaryText).apply {
+                            setTypeface(typeface, Typeface.BOLD)
+                        })
+                        addView(textView(extension.author, 12f, secondaryText))
+                        addView(LinearLayout(this@MainActivity).apply {
+                            orientation = LinearLayout.HORIZONTAL
+                            addView(MaterialButton(this@MainActivity).apply {
+                                text = getString(R.string.theme_extension_apply)
+                                isEnabled = extension.id != activeId
+                                backgroundTintList = ColorStateList.valueOf(selectedColor)
+                                setOnClickListener {
+                                    KeyboardPreferences.setThemeExtension(this@MainActivity, extension.id)
+                                    recreateAtAppearance()
+                                }
+                            }, LinearLayout.LayoutParams(0, dp(40), 1f).apply { marginEnd = dp(4) })
+                            addView(MaterialButton(this@MainActivity).apply {
+                                text = getString(R.string.theme_extension_delete)
+                                setTextColor(selectedColor)
+                                backgroundTintList = ColorStateList.valueOf(Color.TRANSPARENT)
+                                strokeColor = ColorStateList.valueOf(selectedColor); strokeWidth = dp(1)
+                                setOnClickListener {
+                                    ThemeExtensionStore.delete(this@MainActivity, extension.id)
+                                    if (extension.id == activeId) recreateAtAppearance() else renderExtensions()
+                                }
+                            }, LinearLayout.LayoutParams(0, dp(40), 1f).apply { marginStart = dp(4) })
+                        })
+                    })
+                }
+            }
             section.addView(textView(getString(R.string.setting_theme), 15f, primaryText).apply {
                 setPadding(dp(2), 0, 0, dp(4))
             })
@@ -544,12 +627,60 @@ class MainActivity : Activity() {
                 addView(LinearLayout(this@MainActivity).apply {
                     orientation = LinearLayout.VERTICAL
                     setPadding(dp(14), dp(12), dp(14), dp(12))
-                    addView(textView(getString(R.string.keyboard_templates_title), 17f, primaryText).apply {
+                    addView(textView(getString(R.string.theme_extensions_title), 17f, primaryText).apply {
                         setTypeface(typeface, Typeface.BOLD)
                     })
-                    addView(textView(getString(R.string.keyboard_templates_hint), 13f, secondaryText).apply {
+                    addView(textView(getString(R.string.theme_extensions_hint), 13f, secondaryText).apply {
                         setPadding(0, dp(4), 0, 0)
                     })
+                    addView(MaterialButton(this@MainActivity).apply {
+                        text = getString(R.string.theme_extension_download)
+                        backgroundTintList = ColorStateList.valueOf(selectedColor)
+                        setOnClickListener {
+                            val urlInput = TextInputEditText(this@MainActivity).apply {
+                                hint = getString(R.string.theme_extension_url_hint)
+                                inputType = android.text.InputType.TYPE_CLASS_TEXT or android.text.InputType.TYPE_TEXT_VARIATION_URI
+                                setSingleLine(true)
+                            }
+                            val field = TextInputLayout(this@MainActivity).apply {
+                                boxBackgroundMode = TextInputLayout.BOX_BACKGROUND_OUTLINE
+                                setPadding(dp(20), dp(8), dp(20), 0)
+                                addView(urlInput)
+                            }
+                            MaterialAlertDialogBuilder(this@MainActivity)
+                                .setTitle(R.string.theme_extension_download)
+                                .setView(field)
+                                .setNegativeButton(R.string.cancel, null)
+                                .setPositiveButton(R.string.theme_extension_download) { _, _ ->
+                                    Thread({
+                                        val result = runCatching { ThemeExtensionStore.installFromUrl(this@MainActivity, urlInput.text.toString()) }
+                                        runOnUiThread {
+                                            result.onSuccess {
+                                                renderExtensions()
+                                                Toast.makeText(this@MainActivity, getString(R.string.theme_extension_installed, it.name), Toast.LENGTH_SHORT).show()
+                                            }.onFailure {
+                                                Toast.makeText(this@MainActivity, it.message ?: "Không thể tải theme", Toast.LENGTH_LONG).show()
+                                            }
+                                        }
+                                    }, "kai-theme-download").start()
+                                }.show()
+                        }
+                    }, LinearLayout.LayoutParams(-1, dp(44)).apply { topMargin = dp(8) })
+                    addView(MaterialButton(this@MainActivity).apply {
+                        text = getString(R.string.theme_extension_import)
+                        setTextColor(selectedColor)
+                        backgroundTintList = ColorStateList.valueOf(Color.TRANSPARENT)
+                        strokeColor = ColorStateList.valueOf(selectedColor)
+                        strokeWidth = dp(1)
+                        setOnClickListener {
+                            startActivityForResult(Intent(Intent.ACTION_OPEN_DOCUMENT).apply {
+                                addCategory(Intent.CATEGORY_OPENABLE)
+                                type = "application/json"
+                            }, REQUEST_IMPORT_THEME)
+                        }
+                    }, LinearLayout.LayoutParams(-1, dp(44)).apply { topMargin = dp(4) })
+                    addView(extensionList)
+                    renderExtensions()
                 })
             }, LinearLayout.LayoutParams(-1, -2).apply { topMargin = dp(12) })
             val radiusLabel = textView("", 16f, primaryText).apply { setPadding(0, dp(14), 0, 0) }
@@ -646,18 +777,22 @@ class MainActivity : Activity() {
             clipToPadding = false
             addView(content)
         }
-        val root = LinearLayout(this).apply {
-            orientation = LinearLayout.VERTICAL
+        val root = FrameLayout(this).apply {
             if (screenGradient != null) this.background = screenGradient else setBackgroundColor(background)
-            addView(stickyTypingCard, LinearLayout.LayoutParams(-1, -2).apply {
-                leftMargin = dp(24); rightMargin = dp(24); topMargin = dp(8); bottomMargin = dp(2)
+            addView(settingsScroll, FrameLayout.LayoutParams(-1, -1))
+            addView(stickyTypingCard, FrameLayout.LayoutParams(-1, -2, Gravity.BOTTOM).apply {
+                leftMargin = dp(24); rightMargin = dp(24); bottomMargin = dp(8)
             })
-            addView(settingsScroll, LinearLayout.LayoutParams(-1, 0, 1f))
             ViewCompat.setOnApplyWindowInsetsListener(this) { view, insets ->
                 val systemBars = insets.getInsets(WindowInsetsCompat.Type.systemBars())
                 val ime = insets.getInsets(WindowInsetsCompat.Type.ime())
                 view.setPadding(systemBars.left, systemBars.top, systemBars.right, 0)
-                settingsScroll.setPadding(0, 0, 0, maxOf(systemBars.bottom, ime.bottom))
+                stickyTypingCard.translationY = if (insets.isVisible(WindowInsetsCompat.Type.ime())) {
+                    -ime.bottom.toFloat()
+                } else {
+                    0f
+                }
+                settingsScroll.setPadding(0, 0, 0, maxOf(systemBars.bottom, ime.bottom) + dp(76))
                 insets
             }
         }
@@ -690,6 +825,13 @@ class MainActivity : Activity() {
                     SettingsBackup.import(this, raw)
                     recreate()
                 }
+                REQUEST_IMPORT_THEME -> {
+                    val extension = contentResolver.openInputStream(uri)?.let { ThemeExtensionStore.install(this, it) }
+                        ?: error("Không thể đọc file theme")
+                    Toast.makeText(this, getString(R.string.theme_extension_imported, extension.name), Toast.LENGTH_SHORT).show()
+                    recreateAtAppearance()
+                    return
+                }
                 else -> return
             }
             Toast.makeText(this, if (requestCode == REQUEST_EXPORT_SETTINGS) "Đã xuất cài đặt" else "Đã nhập cài đặt", Toast.LENGTH_SHORT).show()
@@ -699,6 +841,7 @@ class MainActivity : Activity() {
     companion object {
         private const val REQUEST_EXPORT_SETTINGS = 501
         private const val REQUEST_IMPORT_SETTINGS = 502
+        private const val REQUEST_IMPORT_THEME = 503
         private const val EXTRA_RESTORE_APPEARANCE = "restore_appearance"
     }
 
@@ -730,6 +873,7 @@ class MainActivity : Activity() {
             getString(R.string.color_classic),
             getString(R.string.color_ai_gradient_2026),
             getString(R.string.color_ocean),
+            getString(R.string.color_pastel_forest),
         )
         return createChoiceButtons(labels, styles.indexOf(colorStyle), primaryText, fieldColor, accentColor, dp) { position ->
             if (styles[position] != KeyboardPreferences.colorStyle(this@MainActivity)) {

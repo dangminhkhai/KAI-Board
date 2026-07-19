@@ -87,6 +87,7 @@ class KeyboardView(context: Context) : View(context) {
     private var themePalette = KeyboardThemePalette.resolve(colorStyle, false)
     private var backgroundGradient: LinearGradient? = null
     private var suggestionsEnabled = false
+    private var privateSession = false
     private var suggestions: List<String> = emptyList()
     private var suggestionMenuActive = false
     private var translationMode = false
@@ -107,11 +108,16 @@ class KeyboardView(context: Context) : View(context) {
     private var voiceLevel = 0f
     private var voicePaused = false
     private var spaceLabel = "Tiếng Việt"
+    private var leadingPunctuation = ','
     private var keyboardHeightDp = 220
     private var keyRadiusDp = 7
     private var keyBorderEnabled = false
     private var keyBorderWidthDp = 1
     private var numberRowEnabled = false
+    private var numericMode = false
+    private var numericDecimal = false
+    private var numericSigned = false
+    private var numericPhone = false
     private var extendedSymbolsEnabled = true
     private var longPressSymbolsEnabled = false
     private var adjustmentMode = false
@@ -193,7 +199,11 @@ class KeyboardView(context: Context) : View(context) {
             ThemeMode.SYSTEM -> resources.configuration.uiMode and Configuration.UI_MODE_NIGHT_MASK == Configuration.UI_MODE_NIGHT_YES
         }
         colorStyle = KeyboardPreferences.colorStyle(context)
-        themePalette = KeyboardThemePalette.resolve(colorStyle, dark)
+        themePalette = KeyboardThemePalette.resolve(context, dark)
+        val themeTypeface = Typeface.create(themePalette.fontFamily, Typeface.NORMAL)
+        textPaint.typeface = themeTypeface
+        popupTextPaint.typeface = themeTypeface
+        hintPaint.typeface = themeTypeface
         keyboardHeightDp = KeyboardPreferences.heightDp(context)
         keyRadiusDp = KeyboardPreferences.keyRadiusDp(context)
         keyBorderEnabled = KeyboardPreferences.keyBorder(context)
@@ -214,7 +224,7 @@ class KeyboardView(context: Context) : View(context) {
 
     override fun onMeasure(widthMeasureSpec: Int, heightMeasureSpec: Int) {
         val baseHeight = keyboardHeightDp * density
-        val extraNumberRow = if (numberRowEnabled) {
+        val extraNumberRow = if (numberRowEnabled && !numericMode) {
             val gap = 5f * density
             val margin = 5f * density
             (baseHeight - margin * 2 - gap * 3) / 4f + gap
@@ -227,9 +237,16 @@ class KeyboardView(context: Context) : View(context) {
             translationMode -> translationInputHeight
             else -> 0f
         }
+        val requestedHeight = (baseHeight + extraNumberRow + toolbarHeight + featurePanelExtra + bottomOffset).toInt()
+        val landscape = resources.configuration.orientation == Configuration.ORIENTATION_LANDSCAPE
+        val cappedHeight = KeyboardHeightPolicy.cap(
+            requestedPixels = requestedHeight,
+            screenHeightPixels = resources.displayMetrics.heightPixels,
+            landscape = landscape,
+        )
         setMeasuredDimension(
             MeasureSpec.getSize(widthMeasureSpec),
-            resolveSize((baseHeight + extraNumberRow + toolbarHeight + featurePanelExtra + bottomOffset).toInt(), heightMeasureSpec),
+            resolveSize(cappedHeight, heightMeasureSpec),
         )
     }
 
@@ -240,6 +257,17 @@ class KeyboardView(context: Context) : View(context) {
 
     fun setShifted(value: Boolean) {
         shifted = value
+        rebuildKeys(width.toFloat(), height.toFloat())
+        invalidate()
+    }
+
+    fun setPrivateSession(enabled: Boolean) {
+        if (privateSession == enabled) return
+        privateSession = enabled
+        if (enabled && (panel == Panel.CLIPBOARD || aiMode)) {
+            panel = Panel.NONE
+            aiMode = false
+        }
         rebuildKeys(width.toFloat(), height.toFloat())
         invalidate()
     }
@@ -368,6 +396,7 @@ class KeyboardView(context: Context) : View(context) {
                 key.id == "voice-toggle"
             keyPaint.color = when {
                 pointers.values.any { it.key == key } -> themePalette.pressed
+                key.id == "enter" && themePalette.actionKey != null -> themePalette.actionKey ?: themePalette.specialKey
                 key.id == "translate-input" || key.id == "ai-input" || key.action is KeyAction.Character || key.action is KeyAction.CommitText || key.action == KeyAction.Space -> themePalette.key
                 else -> themePalette.specialKey
             }
@@ -433,6 +462,28 @@ class KeyboardView(context: Context) : View(context) {
         popupTextPaint.textScaleX = 1f
         hintPaint.textScaleX = 1f
         if (adjustmentMode) drawResizeOverlay(canvas, translateX, scaleX)
+    }
+
+    fun setLeadingPunctuation(value: Char) {
+        if (leadingPunctuation == value) return
+        leadingPunctuation = value
+        rebuildKeys(width.toFloat(), height.toFloat())
+        invalidate()
+    }
+
+    fun setNumericMode(enabled: Boolean, decimal: Boolean = false, signed: Boolean = false, phone: Boolean = false) {
+        if (numericMode == enabled && numericDecimal == decimal && numericSigned == signed && numericPhone == phone) return
+        numericMode = enabled
+        numericDecimal = decimal
+        numericSigned = signed
+        numericPhone = phone
+        if (enabled) {
+            symbols = false
+            panel = Panel.NONE
+        }
+        rebuildKeys(width.toFloat(), height.toFloat())
+        requestLayout()
+        invalidate()
     }
 
     private fun drawSuggestionLabel(canvas: Canvas, key: KeyGeometry) {
@@ -899,7 +950,7 @@ class KeyboardView(context: Context) : View(context) {
         val stemHeight = 10f * density
         val top = (key.top - height - stemHeight + 2f * density).coerceAtLeast(2f * density)
         val bottom = top + height
-        keyPaint.color = if (dark) Color.rgb(71, 85, 105) else Color.WHITE
+        keyPaint.color = themePalette.pressed
         canvas.drawRoundRect(RectF(left, top, left + width, bottom), 13f * density, 13f * density, keyPaint)
         val stemCenter = key.centerX.coerceIn(left + 12f * density, left + width - 12f * density)
         val stem = Path().apply {
@@ -1205,7 +1256,7 @@ class KeyboardView(context: Context) : View(context) {
         }
         addToolbar(totalWidth)
         val usableHeight = totalHeight - keyboardTop - bottomOffsetDp * density
-        val rowCount = if (numberRowEnabled) 5 else 4
+        val rowCount = if (numberRowEnabled && !numericMode) 5 else 4
         val rowHeight = (usableHeight - margin * 2 - gap * (rowCount - 1)) / rowCount
         if (panel == Panel.EMOJI) {
             addEmojiPanel(totalWidth, rowCount, rowHeight, margin, gap)
@@ -1213,6 +1264,8 @@ class KeyboardView(context: Context) : View(context) {
             addClipboardPanel(totalWidth, rowCount, rowHeight, margin, gap)
         } else if (voicePanel) {
             addVoicePanel(totalWidth, totalHeight, margin)
+        } else if (numericMode) {
+            addNumericPad(totalWidth, rowHeight, margin, gap)
         } else if (symbols) {
             if (symbolPage == 0) {
                 addCharacterRow("1234567890", 0, 0f, 0f, rowHeight, margin, gap)
@@ -1238,7 +1291,39 @@ class KeyboardView(context: Context) : View(context) {
             addCharacterRow("asdfghjkl", offset + 1, totalWidth * 0.035f, totalWidth * 0.035f, rowHeight, margin, gap)
             addActionCharacterRow("zxcvbnm", offset + 2, totalWidth, rowHeight, margin, gap)
         }
-        if (panel == Panel.NONE && !voicePanel) addBottomRow(totalWidth, rowCount - 1, rowHeight, margin, gap)
+        if (panel == Panel.NONE && !voicePanel && !numericMode) addBottomRow(totalWidth, rowCount - 1, rowHeight, margin, gap)
+    }
+
+    private fun addNumericPad(totalWidth: Float, rowHeight: Float, margin: Float, gap: Float) {
+        val actionWidth = totalWidth * 0.23f
+        val digitAreaRight = totalWidth - margin - actionWidth - gap
+        val digitWidth = (digitAreaRight - margin - gap * 2) / 3f
+        arrayOf("123", "456", "789").forEachIndexed { row, digits ->
+            val top = keyboardTop + margin + row * (rowHeight + gap)
+            digits.forEachIndexed { column, digit ->
+                val left = margin + column * (digitWidth + gap)
+                addKey("numpad-$digit", digit.toString(), KeyAction.Character(digit), left, top, left + digitWidth, top + rowHeight)
+            }
+        }
+        val bottomTop = keyboardTop + margin + 3 * (rowHeight + gap)
+        val extras = when {
+            numericPhone -> '*' to '#'
+            numericDecimal && numericSigned -> '-' to '.'
+            numericDecimal -> null to '.'
+            numericSigned -> '-' to null
+            else -> null to null
+        }
+        extras.first?.let { addKey("numpad-extra-left", it.toString(), KeyAction.Character(it), margin, bottomTop, margin + digitWidth, bottomTop + rowHeight) }
+        val zeroLeft = margin + digitWidth + gap
+        addKey("numpad-0", "0", KeyAction.Character('0'), zeroLeft, bottomTop, zeroLeft + digitWidth, bottomTop + rowHeight)
+        extras.second?.let {
+            val left = zeroLeft + digitWidth + gap
+            addKey("numpad-extra-right", it.toString(), KeyAction.Character(it), left, bottomTop, left + digitWidth, bottomTop + rowHeight)
+        }
+        val actionLeft = totalWidth - margin - actionWidth
+        val splitTop = keyboardTop + margin + 2 * (rowHeight + gap) - gap / 2f
+        addKey("backspace", "⌫", KeyAction.Backspace, actionLeft, keyboardTop + margin, totalWidth - margin, splitTop)
+        addKey("enter", "↵", KeyAction.Enter, actionLeft, splitTop + gap, totalWidth - margin, bottomTop + rowHeight)
     }
 
     @Suppress("unused")
@@ -1299,7 +1384,7 @@ class KeyboardView(context: Context) : View(context) {
             addSuggestionToolbar(totalWidth, margin, bottom)
             return
         }
-        val actions = listOf(
+        val available = listOf(
             Triple("back", "", KeyAction.HideKeyboard),
             Triple("mic", "", KeyAction.VoiceInput),
             Triple("translate", "", KeyAction.OpenTranslator),
@@ -1307,7 +1392,11 @@ class KeyboardView(context: Context) : View(context) {
             Triple("clipboard", "", KeyAction.ToggleClipboard),
             Triple("settings", "", KeyAction.OpenSettings),
             Triple("emoji", "", KeyAction.ToggleEmoji),
-        )
+        ).associateBy { it.first }
+        val blocked = if (privateSession) setOf("ai", "clipboard") else emptySet()
+        val actions = KeyboardPreferences.smartbarOrder(context)
+            .filterNot(blocked::contains)
+            .mapNotNull(available::get)
         val cellWidth = (totalWidth - margin * 2) / actions.size
         actions.forEachIndexed { index, (id, label, action) ->
             val edgeWidth = 50f * density
@@ -1682,6 +1771,7 @@ class KeyboardView(context: Context) : View(context) {
     }
 
     private fun capturePrimaryClipboard() {
+        if (privateSession) return
         val clip = context.getSystemService(ClipboardManager::class.java)?.primaryClip ?: return
         if (clip.itemCount == 0) return
         ClipboardHistoryStore.add(context, clip.getItemAt(0).coerceToText(context).toString())
@@ -1719,7 +1809,7 @@ class KeyboardView(context: Context) : View(context) {
         val spaceLeft = margin + modeWidth + gap + punctuationWidth + gap
         val spaceRight = totalWidth - margin - enterWidth - gap - punctuationWidth - gap
         addKey("mode", if (symbols) "ABC" else "?123", KeyAction.ToggleSymbols, margin, top, margin + modeWidth, top + rowHeight)
-        addKey("comma", ",", KeyAction.Character(','), margin + modeWidth + gap, top, spaceLeft, top + rowHeight)
+        addKey("comma", leadingPunctuation.toString(), KeyAction.Character(leadingPunctuation), margin + modeWidth + gap, top, spaceLeft, top + rowHeight)
         addKey("space", spaceLabel, KeyAction.Space, spaceLeft + gap, top, spaceRight, top + rowHeight)
         addKey("period", ".", KeyAction.Character('.'), spaceRight + gap, top, spaceRight + gap + punctuationWidth, top + rowHeight)
         addKey(

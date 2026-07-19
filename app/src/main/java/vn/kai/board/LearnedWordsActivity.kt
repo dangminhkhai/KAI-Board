@@ -46,7 +46,7 @@ class LearnedWordsActivity : Activity() {
         val mode = KeyboardPreferences.theme(this)
         val dark = mode == ThemeMode.DARK || mode == ThemeMode.SYSTEM &&
             resources.configuration.uiMode and Configuration.UI_MODE_NIGHT_MASK == Configuration.UI_MODE_NIGHT_YES
-        val palette = KeyboardThemePalette.resolve(KeyboardPreferences.colorStyle(this), dark)
+        val palette = KeyboardThemePalette.resolve(this, dark)
         primaryText = palette.text
         secondaryText = palette.hint
         accent = palette.accent
