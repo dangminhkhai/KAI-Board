@@ -30,10 +30,14 @@ object TelexEngine {
         if (word.isEmpty()) return null
         val lower = key.lowercaseChar()
         repairAdjacentDTypo(word, lower)?.let { return it }
+        // A shape key may be typed after the tone and final consonant while
+        // correcting a syllable: canf + a -> cần. Try that valid Telex
+        // transformation before treating the new vowel as English text.
+        if (lower in "aeowd") applyShape(word, lower)?.let { return it }
         restoreRawToneBeforeLiteral(word, lower)?.let { return it }
         restoreRawShapeBeforeLiteralZ(word, lower)?.let { return it }
         if (lower in "sfrxjz") return applyTone(word, lower)
-        return applyShape(word, lower)
+        return null
     }
 
     /** True when [key] explicitly undoes a tone, shape, horn/breve, or đ. */
@@ -136,8 +140,14 @@ object TelexEngine {
         if (key == 'w' && word.length >= 2) {
             val lastVowel = word.indexOfLast(::isVowel)
             val start = lastVowel - 1
-            if (start >= 0 && word.substring(start, lastVowel + 1).lowercase() == "uo") {
-                return word.replaceRange(start, lastVowel + 1, preserveCase("ươ", word.substring(start, lastVowel + 1)))
+            if (start >= 0 && baseShape(word[start]) == 'u' && baseShape(word[lastVowel]) == 'o') {
+                val source = word.substring(start, lastVowel + 1)
+                val tone = maxOf(toneIndex(source[0]), toneIndex(source[1]))
+                val shaped = buildString(2) {
+                    append(matchCase(families.getValue('ư')[0], source[0]))
+                    append(matchCase(families.getValue('ơ')[tone], source[1]))
+                }
+                return word.replaceRange(start, lastVowel + 1, shaped)
             }
         }
         val (targets, replacement) = when (key) {

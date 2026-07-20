@@ -189,6 +189,23 @@ class TelexEngineTest {
         assertEquals("tuấn", TelexEngine.apply("tuân", 's'))
     }
 
+    @Test
+    fun lateShapeCorrectionWinsBeforeEnglishFallback() {
+        assertEquals("cần", TelexEngine.apply("càn", 'a'))
+        mapOf(
+            "canfa" to "cần",
+            "metje" to "mệt",
+            "tonfo" to "tồn",
+            "bangfw" to "bằng",
+            "lonjw" to "lợn",
+            "tungfw" to "từng",
+            "tuongjw" to "tượng",
+            "duongfw" to "dường",
+        ).forEach { (keys, expected) ->
+            assertEquals(keys, expected, typeSequence(keys))
+        }
+    }
+
     private fun typeSequence(keys: String): String = keys.fold("") { word, key ->
         TelexEngine.apply(word, key) ?: "$word$key"
     }

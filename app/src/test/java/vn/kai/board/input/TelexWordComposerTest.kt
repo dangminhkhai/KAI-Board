@@ -57,4 +57,21 @@ class TelexWordComposerTest {
             assertEquals(expected.length, escaped.literalLockLength)
         }
     }
+
+    @Test fun repairsShapeKeyTypedAfterToneAndFinalConsonant() {
+        mapOf(
+            "canfa" to "cần",
+            "metje" to "mệt",
+            "tonfo" to "tồn",
+            "bangfw" to "bằng",
+            "lonjw" to "lợn",
+            "tungfw" to "từng",
+            "tuongjw" to "tượng",
+            "duongfw" to "dường",
+        ).forEach { (keys, expected) ->
+            var text = ""
+            keys.forEach { key -> text = TelexWordComposer.append(text, key, 0).text }
+            assertEquals(keys, expected, text)
+        }
+    }
 }
