@@ -12,7 +12,7 @@ Test cần bao phủ Telex/hoàn tác kiểu UniKey, viết hoa đầu ô/đầu
 
 - Cold/warm show IME; gõ thường và Telex nhanh.
 - Backspace bấm/giữ, selection, con trỏ giữa từ, long-press và slide; xóa emoji có variation selector, skin tone, ZWJ và cờ mà không để lại ô vuông.
-- AI: thành công, hủy, timeout, 401/403, 429, 5xx, offline và nhiều key; xác minh `khaids-` chỉ nhận diện DS2API, fallback theo đúng thứ tự key đã lưu và `400` phải dừng.
+- AI: thành công, hủy, timeout, 401/403, 429, 5xx, offline và nhiều key; xác minh nhận diện provider, fallback theo đúng thứ tự key đã lưu và `400` phải dừng.
 - Gợi ý: thứ tự AI/cá nhân/offline, decay, nhận diện Việt/Anh, tải/xóa từng gói từ điển, tìm emoji Việt không dấu/Anh và fallback về dữ liệu cá nhân.
 - Clipboard: phân loại OTP/email/URL/số điện thoại, chèn đúng phần được tách, không nhầm số thường thành OTP, ghim và tự hết hạn 1 giờ/1 ngày.
 - Cử chỉ: vuốt Space trái/phải, Shift giữ/chạm đôi, Backspace bấm/giữ tăng tốc và không chèn nhầm ký tự khi kết thúc gesture.

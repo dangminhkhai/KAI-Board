@@ -762,6 +762,7 @@ class KaiBoardImeService : InputMethodService() {
                     val saved = AiKeyStatsStore.get(this, key)
                     val keyProvider = saved?.provider?.ifBlank { null } ?: AiProviderClient.detectProvider(key)
                         ?: return@mapNotNull null
+                    if (keyProvider !in AiProviderClient.providerChoices) return@mapNotNull null
                     val keyModels = when {
                         saved?.models?.isNotEmpty() == true -> saved.models
                         keyProvider == provider && models.isNotEmpty() -> models

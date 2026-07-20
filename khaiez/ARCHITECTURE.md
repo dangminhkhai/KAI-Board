@@ -6,7 +6,7 @@
 - `ui/KeyboardView`: vẽ bàn phím, geometry và chuyển action; không chứa mạng hay model.
 - `touch/`: hit testing, pointer ownership, slide, giữ phím và repeat.
 - `input/` và `telex/`: chính sách nhập, Telex, gợi ý, học từ, clipboard và emoji.
-- `ai/`: nhận diện provider/model, gồm DS2API tại deployment HTTPS cấu hình sẵn với prefix `khaids-`; request AI và fallback theo thứ tự API key người dùng sắp xếp, lưu key bằng Android Keystore và lưu metadata/lỗi gần nhất không chứa secret theo fingerprint SHA-256.
+- `ai/`: nhận diện provider/model, request AI và fallback theo thứ tự API key người dùng sắp xếp, lưu key bằng Android Keystore và lưu metadata/lỗi gần nhất không chứa secret theo fingerprint SHA-256.
 - `translation/`: ngôn ngữ, model ML Kit và tùy chọn dịch.
 - `voice/`: nhận dạng giọng nói hệ thống cho mic thường và panel inline AI/Dịch.
 - `settings/`: tùy chọn bàn phím, Theme Extension JSON và xuất/nhập cấu hình.
@@ -32,7 +32,7 @@ Tùy chọn dùng SharedPreferences. API key được mã hóa AES-GCM với kh�
 
 `ThemeExtensionStore` giới hạn mỗi gói JSON 64 KB, xác thực ID/palette/font và lưu trong `filesDir/theme_extensions`. Preset màu dựng sẵn chỉ còn Mặc định; các theme khác được phân phối ngoài APK. Backup đóng gói nội dung theme đã xác thực, còn chia sẻ file dùng `FileProvider` với quyền đọc tạm thời.
 
-Mỗi API key có profile provider/model riêng trong `AiKeyStatsStore`. Thứ tự trong `SecureApiKeyStore` là thứ tự fallback thực tế và được chỉnh bằng RecyclerView/ItemTouchHelper trong Quản lý API; thứ tự chỉ lưu khi thả card. DS2API dùng `GET /v1/models` và `POST /v1/chat/completions`. Lỗi xác thực được ghi trạng thái; quota/rate-limit, timeout, model không tương thích hoặc lỗi máy chủ cho phép chuyển sang key tiếp theo. Lỗi yêu cầu `400` không tự chuyển để tránh lặp một yêu cầu sai và tốn quota.
+Mỗi API key có profile provider/model riêng trong `AiKeyStatsStore`. Thứ tự trong `SecureApiKeyStore` là thứ tự fallback thực tế và được chỉnh bằng RecyclerView/ItemTouchHelper trong Quản lý API; thứ tự chỉ lưu khi thả card. Lỗi xác thực được ghi trạng thái; quota/rate-limit, timeout, model không tương thích hoặc lỗi máy chủ cho phép chuyển sang key tiếp theo. Lỗi yêu cầu `400` không tự chuyển để tránh lặp một yêu cầu sai và tốn quota.
 
 Hình học bàn phím gồm chiều cao, khoảng nâng đáy, phần trăm chiều rộng và lệch trái. Preset chỉ ghi bốn giá trị này qua `KeyboardPreferences`; đường xử lý chạm và timing commit không thay đổi.
 

@@ -7,7 +7,6 @@ import org.junit.Test
 class AiProviderClientTest {
     @Test
     fun detectsProviderWithoutSendingKeyToWrongEndpoint() {
-        assertEquals("DS2API", AiProviderClient.detectProvider("khaids-example"))
         assertEquals("Groq", AiProviderClient.detectProvider("gsk_example"))
         assertEquals("NVIDIA NIM", AiProviderClient.detectProvider("nvapi-example"))
         assertEquals("OpenRouter", AiProviderClient.detectProvider("sk-or-example"))

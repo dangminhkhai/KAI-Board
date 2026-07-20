@@ -71,14 +71,11 @@ Nhà cung cấp hiện hỗ trợ:
 
 | Nhà cung cấp | Nhận diện tự động |
 | --- | --- |
-| DS2API | Prefix `khaids-`; có thể chọn DS2API thủ công với prefix khác |
 | OpenRouter | `sk-or-` |
 | Gemini | `AIza` |
 | OpenAI | `sk-` |
 | Groq | `gsk_` |
 | NVIDIA NIM | `nvapi-` |
-
-DS2API sử dụng endpoint OpenAI-compatible HTTPS đã cấu hình, gồm `/v1/models` và `/v1/chat/completions`. Key DS2API không được gửi sang endpoint OpenAI khi đã nhận diện hoặc chọn provider thủ công.
 
 ### Dịch và giọng nói
 

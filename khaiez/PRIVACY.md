@@ -17,7 +17,6 @@ Theme tải bằng URL chỉ kết nối HTTPS sau thao tác của người dùn
 - API key được mã hóa bằng Android Keystore và không nằm trong file sao lưu.
 - Màn Quản lý API chỉ hiển thị key đã che bớt. Thống kê provider/model và lỗi gần nhất phục vụ fallback được liên kết bằng fingerprint SHA-256, không chứa key dạng rõ.
 - Khi API key ưu tiên không dùng được, cùng một nội dung yêu cầu có thể được gửi sang key/provider tiếp theo theo thứ tự người dùng đã kéo thả; clipboard, lịch sử gõ và dữ liệu học không được đính kèm.
-- Key có prefix `khaids-` được gửi riêng tới deployment DS2API HTTPS đã cấu hình; không được gửi tới endpoint OpenAI.
 - Key mới chỉ được lưu sau khi người dùng bấm lưu/quét và provider chấp nhận key; quá trình quét không chạy nền khi rời trang.
 - Dịch ML Kit ưu tiên model trên thiết bị; tải model có thể cần mạng.
 - Nhập giọng nói phụ thuộc dịch vụ speech recognition được cài trên thiết bị; KAI Board không ghi âm nền và panel inline dừng khi rời IME.

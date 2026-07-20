@@ -20,7 +20,6 @@
 - Tự nhận biết tiếng Việt/Anh bằng luật nhẹ để ưu tiên đúng nguồn từ điển; thêm tìm kiếm emoji bằng từ khóa Việt không dấu hoặc tiếng Anh.
 - Vuốt Space để di chuyển con trỏ; giữ Backspace xóa tăng tốc và xóa ngay ký tự composing cuối cùng; giữ/chạm hai lần Shift để bật Caps Lock.
 - Cho phép Telex trong ô URL và đồng bộ palette/gradient cho Quản lý API, từ cá nhân và model dịch.
-- Thêm DS2API OpenAI-compatible qua deployment HTTPS, tự nhận diện key prefix `khaids-`, quét model và tham gia failover nhiều key.
 - Quản lý API cho phép chạm giữ trực tiếp card để kéo thả thứ tự ưu tiên; card đang kéo nổi viền accent và các card khác tự tạo vị trí chèn.
 - Thứ tự API key được dùng trực tiếp khi gửi AI và chỉ được lưu sau khi thả card.
 - Loại bỏ gói N-gram/cụm từ dựng sẵn; gợi ý cụm từ chỉ học từ dữ liệu cá nhân trên thiết bị.
