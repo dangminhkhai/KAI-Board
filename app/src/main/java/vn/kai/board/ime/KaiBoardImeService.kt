@@ -25,6 +25,7 @@ import android.os.Build
 import java.util.Locale
 import vn.kai.board.input.KeyAction
 import vn.kai.board.input.TelexInputPolicy
+import vn.kai.board.input.EditorActionPolicy
 import vn.kai.board.input.WordCursorContext
 import vn.kai.board.input.WordRecomposer
 import vn.kai.board.input.VietnameseSuggestionEngine
@@ -81,6 +82,7 @@ class KaiBoardImeService : InputMethodService() {
     private var composing = ""
     private var literalTelexLockLength = 0
     private var telexEnabled = true
+    private var directCommitTelex = false
     private var selectionActive = false
     private var privateSession = false
     private var lastAutoCorrection: AutoCorrection? = null
@@ -180,9 +182,14 @@ class KaiBoardImeService : InputMethodService() {
 
     override fun onStartInputView(info: EditorInfo?, restarting: Boolean) {
         super.onStartInputView(info, restarting)
+        capsLocked = false
+        shifted = false
+        keyboardView?.setCapsLocked(false)
+        keyboardView?.setShifted(false)
         composing = ""
         literalTelexLockLength = 0
         telexEnabled = info?.let { TelexInputPolicy.isEnabled(it.inputType) } ?: true
+        directCommitTelex = info?.let { TelexInputPolicy.requiresDirectCommit(it.inputType, it.imeOptions) } ?: false
         privateSession = InputPrivacyPolicy.isPrivateSession(info)
         selectionActive = false
         lastAutoCorrection = null
@@ -238,7 +245,7 @@ class KaiBoardImeService : InputMethodService() {
         super.onUpdateSelection(oldSelStart, oldSelEnd, newSelStart, newSelEnd, candidatesStart, candidatesEnd)
         keyboardView?.closeMediaPanel()
         selectionActive = newSelStart != newSelEnd
-        if (composing.isNotEmpty() && candidatesStart >= 0) {
+        if (composing.isNotEmpty() && !directCommitTelex && candidatesStart >= 0) {
             val cursorOutside = newSelStart < candidatesStart || newSelEnd > candidatesEnd
             val hasSelection = newSelStart != newSelEnd
             if (cursorOutside || hasSelection) {
@@ -321,9 +328,13 @@ class KaiBoardImeService : InputMethodService() {
                         Unit
                     } else {
                         val result = TelexWordComposer.append(composing, value, literalTelexLockLength)
+                        val previousComposing = composing
                         composing = result.text
                         literalTelexLockLength = result.literalLockLength
-                        connection.setComposingText(composing, 1)
+                        if (directCommitTelex) {
+                            if (previousComposing.isNotEmpty()) connection.deleteSurroundingText(previousComposing.length, 0)
+                            connection.commitText(composing, 1)
+                        } else connection.setComposingText(composing, 1)
                     }
                 } else {
                     rememberCurrentHashtag()
@@ -369,9 +380,13 @@ class KaiBoardImeService : InputMethodService() {
                     lastAutoCorrection = null
                 }
                 if (composing.isNotEmpty()) {
+                    val previousComposing = composing
                     composing = TelexWordComposer.removeLast(composing)
                     literalTelexLockLength = TelexWordComposer.lockAfterBackspace(composing.length, literalTelexLockLength)
-                    if (composing.isEmpty()) {
+                    if (directCommitTelex) {
+                        connection.deleteSurroundingText(previousComposing.length, 0)
+                        if (composing.isNotEmpty()) connection.commitText(composing, 1)
+                    } else if (composing.isEmpty()) {
                         connection.setComposingText("", 1)
                         connection.finishComposingText()
                     } else connection.setComposingText(composing, 1)
@@ -416,7 +431,7 @@ class KaiBoardImeService : InputMethodService() {
                     val history = previousWords()
                     val previous = history.lastOrNull()
                     val learned = UserLexiconStore.read(this)
-                    val corrected = if (KeyboardPreferences.autoCorrect(this) && original.isNotEmpty()) {
+                    val corrected = if (!directCommitTelex && KeyboardPreferences.autoCorrect(this) && original.isNotEmpty()) {
                         VietnameseSuggestionEngine.bestAutoCorrection(original, learned, previous)
                     } else null
                     if (corrected != null) {
@@ -440,9 +455,8 @@ class KaiBoardImeService : InputMethodService() {
                 rememberCurrentHashtag()
                 finishComposing()
                 val info = currentInputEditorInfo
-                val multiline = ((info?.inputType ?: 0) and InputType.TYPE_TEXT_FLAG_MULTI_LINE) != 0
-                val actionId = info?.imeOptions?.and(EditorInfo.IME_MASK_ACTION) ?: EditorInfo.IME_ACTION_NONE
-                if (multiline || actionId == EditorInfo.IME_ACTION_NONE) connection.commitText("\n", 1)
+                val actionId = EditorActionPolicy.resolve(info?.imeOptions ?: EditorInfo.IME_ACTION_NONE)
+                if (actionId == null) connection.commitText("\n", 1)
                 else connection.performEditorAction(actionId)
                 if (sentenceAutomationAllowed()) updateAutomaticShift(forceCapital = true)
             }
@@ -1203,13 +1217,15 @@ class KaiBoardImeService : InputMethodService() {
 
     private fun transformWordAtCursor(key: Char): Boolean {
         val connection = currentInputConnection ?: return false
-        val before = connection.getTextBeforeCursor(80, 0) ?: return false
+        val before = connection.getTextBeforeCursor(80, 0)
+        before ?: return false
         val after = connection.getTextAfterCursor(80, 0) ?: ""
         val context = WordCursorContext.read(before, after) ?: return false
         val transformed = TelexEngine.apply(context.word, key) ?: return false
         connection.deleteSurroundingText(context.before.length, context.after.length)
         composing = transformed
-        connection.setComposingText(composing, 1)
+        if (directCommitTelex) connection.commitText(composing, 1)
+        else connection.setComposingText(composing, 1)
         return true
     }
 

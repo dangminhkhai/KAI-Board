@@ -75,13 +75,15 @@ Các bảo vệ cho tiếng Anh và tên riêng:
 
 #### Phạm vi bật Telex và chỉnh sửa
 
-- Bật trong ô text thường, multiline và URL.
-- Tắt trong email, web email/web editor, mật khẩu, visible password và các ô số để không sửa địa chỉ hoặc dữ liệu nhạy cảm ngoài ý muốn.
+- Bật trong ô text thường, multiline, URL và web editor/ô tìm kiếm web.
+- Tắt trong email, web email, mật khẩu, visible password và các ô số để không sửa địa chỉ hoặc dữ liệu nhạy cảm ngoài ý muốn.
+- Tương thích các ô tìm kiếm tùy biến làm mất `TYPE_CLASS_TEXT` hoặc không giữ composing span: KAI Board nhận diện các cờ text an toàn và dùng cơ chế thay thế trực tiếp. Trường số, điện thoại và dữ liệu nhạy cảm vẫn không bật Telex.
+- Phím Enter ưu tiên action do ứng dụng khai báo (`Search`, `Go`, `Send`, `Next`, `Done`); chỉ xuống dòng khi editor không cung cấp action hoặc yêu cầu Enter thuần.
 - Backspace xóa ngay ký tự composing cuối, hỗ trợ vùng chọn và cho phép quay lại từ trước để sửa tiếp.
 - Sau khi đã Space, người dùng có thể Backspace về từ trước và thêm dấu/biến âm; trạng thái composing được dựng lại từ nội dung trước con trỏ.
 - Chọn từ gợi ý hoàn thiện từ đó, thêm Space và chuyển sang từ mới.
 - Tự viết hoa khi bắt đầu nhập hoặc xuống dòng mới; không tự thêm Space hay bật Shift sau dấu câu.
-- Giữ Backspace để xóa tăng tốc; giữ hoặc chạm hai lần Shift để bật Caps Lock.
+- Giữ Backspace để xóa tăng tốc; giữ hoặc chạm hai lần Shift để bật Caps Lock. Shift/Caps Lock được trả về trạng thái thường khi mở lại bàn phím cho một phiên nhập mới.
 
 ### Gợi ý, từ điển và học cá nhân
 
