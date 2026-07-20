@@ -1,5 +1,7 @@
 # Bảo mật
 
+Liên quan: [PRIVACY.md](PRIVACY.md), [RELEASE.md](RELEASE.md) (ký bản phát hành).
+
 ## Báo cáo lỗ hổng
 
 Không đăng công khai API key, dữ liệu người dùng hoặc chi tiết khai thác chưa được sửa. Gửi báo cáo riêng cho chủ dự án, kèm phiên bản, thiết bị, bước tái hiện và mức ảnh hưởng.

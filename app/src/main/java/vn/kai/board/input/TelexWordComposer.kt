@@ -54,10 +54,62 @@ object TelexWordComposer {
     fun lockAfterBackspace(newLength: Int, literalLockLength: Int): Int =
         literalLockLength.takeIf { it > 0 && newLength >= it } ?: 0
 
-    fun backspace(rawWord: String, literalLockLength: Int): TelexComposeResult {
-        val raw = rawWord.dropLast(1)
-        val lock = lockAfterBackspace(raw.length, literalLockLength)
-        return if (lock > 0) TelexComposeResult(raw, lock, raw) else compose(raw)
+    fun backspace(word: String, rawWord: String, literalLockLength: Int): TelexComposeResult {
+        if (word.isEmpty() && rawWord.isEmpty()) return TelexComposeResult("", 0, "")
+
+        // Marked Vietnamese (display ≠ raw), no lock: delete one *visible* char.
+        // Mí -> M, Gô -> G, Sà -> S — never strip only the raw tone key.
+        if (word.isNotEmpty() && word != rawWord && literalLockLength == 0 && word.any(::isVietnameseMarked)) {
+            val visible = word.dropLast(1)
+            return TelexComposeResult(visible, 0, visible)
+        }
+
+        // Always remove one visible character when the buffer is Latin (including locked
+        // shape/tone escapes where raw can be longer than display: aaa→aa, lock=2).
+        if (word.isEmpty()) {
+            val raw = rawWord.dropLast(1)
+            return if (raw.isEmpty()) TelexComposeResult("", 0, "") else compose(raw)
+        }
+
+        val newWord = word.dropLast(1)
+        var newRaw = rawWord.dropLast(1)
+        // Shape escape keeps extra raw keys (aaa displayed as aa). Keep raw in sync
+        // with the shorter visible string so the next BS deletes again.
+        if (newRaw.length > newWord.length) {
+            newRaw = newRaw.take(newWord.length)
+        }
+        if (newWord.isEmpty()) return TelexComposeResult("", 0, "")
+
+        val lock = lockAfterBackspace(newWord.length, literalLockLength)
+        if (lock > 0) {
+            return TelexComposeResult(newWord, lock, newRaw.ifEmpty { newWord })
+        }
+
+        // Fully Latin remainder: never recompose through Telex (Saf must not become Sà;
+        // aa/ee/oo/aw/ow/uw/dd tails must not reshape).
+        val raw = newRaw.ifEmpty { newWord }
+        val wasLatinBuffer = !newWord.any(::isVietnameseMarked)
+        if (wasLatinBuffer) {
+            val recomposed = compose(raw)
+            if (recomposed.text != raw && recomposed.text != newWord) {
+                val relock = firstTelexTransformLength(raw).coerceIn(1, raw.length)
+                return TelexComposeResult(newWord, relock, raw)
+            }
+            // Prefer the visible Latin drop when compose would re-mark.
+            if (recomposed.text != newWord && newWord == raw) {
+                val relock = firstTelexTransformLength(newWord).coerceIn(1, newWord.length)
+                return TelexComposeResult(newWord, relock, newWord)
+            }
+            if (recomposed.text == newWord || newWord == raw) {
+                return if (recomposed.text != newWord) {
+                    TelexComposeResult(newWord, firstTelexTransformLength(newWord).coerceIn(1, newWord.length), newWord)
+                } else {
+                    recomposed.copy(rawText = raw)
+                }
+            }
+            return TelexComposeResult(newWord, 0, raw)
+        }
+        return compose(raw)
     }
 
     private fun shouldRestoreRaw(raw: String, rendered: String): Boolean {

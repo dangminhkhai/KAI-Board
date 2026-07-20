@@ -1,33 +1,28 @@
 # Changelog
 
+Định dạng [Keep a Changelog](https://keepachangelog.com/); phiên bản theo Semantic Versioning khi phù hợp.
+
 ## Chưa phát hành
 
-- Nâng cấp Telex theo trạng thái chuỗi phím gốc: hỗ trợ modifier sai thứ tự, khôi phục đúng thứ tự từ Latin/Anh khi âm tiết Việt không hợp lệ và bao phủ `s f r x j`, `dd`, `aa ee oo`, `aw ow uw`.
-- Sửa hoa/thường khi hoàn tác modifier theo đúng phím vừa bấm (`A+s+i+s` → `Ais`); kết thúc composing khi con trỏ được kéo vào giữa từ để Backspace xóa đúng vị trí.
-- Giữ khóa Latin khi Backspace qua từ tiếng Anh có modifier Telex (`Google`, `case`, `safe`, `care`, `pixel`, `object`), tránh phần còn lại bị biến đổi lại thành chữ có dấu.
-- Tối ưu trang Giao diện tùy chỉnh thành gallery hai cột đồng đều; preview bàn phím giữ tỷ lệ 400:225, nút Dùng/trạng thái active rõ ràng và Xuất/Chia sẻ/Xóa nằm trong menu gọn.
-- Làm lại UI Quản lý từ cá nhân: card dọc không ép chữ, điểm ưu tiên dạng badge, thống kê đầy đủ chiều rộng, thao tác cùng hàng và xác nhận trước khi xóa.
-- Thêm hai gói theme tải riêng `pastel-pink.json` và `retro-japanese-manga.json`, đều có palette sáng/tối và không tăng dung lượng APK.
-- Tách **Giao diện tùy chỉnh** thành trang quản lý riêng; Theme Extension JSON hỗ trợ file/HTTPS, bảng màu, xem trước trước khi dùng, trạng thái đang áp dụng, xuất/chia sẻ và xóa có xác nhận.
-- Chỉ giữ bộ màu Mặc định trong APK; Gradient AI và Ocean bị loại bỏ, Rừng Pastel chuyển thành gói `theme-packs/pastel-forest.json` tải riêng.
-- Clipboard nhận diện offline OTP, email, URL và số điện thoại để chèn nhanh phần hữu ích; thêm tự xóa sau 1 giờ/1 ngày hoặc không xóa, mục ghim luôn được giữ.
-- Quản lý từ cá nhân hiển thị điểm decay/lần dùng gần nhất và cho phép đặt lại ưu tiên.
-- Bản sao lưu gồm Theme Extensions và thứ tự Smartbar, vẫn loại trừ API key, clipboard và ghi chú.
-- Xóa emoji theo grapheme gần đúng để không còn ký tự ô vuông khi Backspace emoji ghép, variation selector hoặc cờ.
-- Thêm chế độ riêng tư theo ô mật khẩu và `IME_FLAG_NO_PERSONALIZED_LEARNING`: tắt học từ, clipboard và KAI AI.
-- Thêm Inline Autofill cho OTP/trình quản lý mật khẩu trên Android 11 trở lên và cho phép đổi thứ tự nút Smartbar.
-- Thêm numpad cho số/OTP/điện thoại, dấu `@` cho email, dấu `/` cho URL và giới hạn chiều cao bàn phím ngang.
-- Thêm gói từ điển mở rộng tùy chọn gồm 40.000 từ Việt và 15.000 từ Anh; tải một lần và dùng offline, không tăng dung lượng APK.
-- Từ điển cá nhân dùng decay 14 ngày để từ lâu không dùng tự giảm ưu tiên.
-- Gợi ý trong ô AI tự học từ câu lệnh người dùng và dùng chung thanh gợi ý theo thứ tự AI → cá nhân → từ điển offline.
-- Tự nhận biết tiếng Việt/Anh bằng luật nhẹ để ưu tiên đúng nguồn từ điển; thêm tìm kiếm emoji bằng từ khóa Việt không dấu hoặc tiếng Anh.
-- Vuốt Space để di chuyển con trỏ; giữ Backspace xóa tăng tốc và xóa ngay ký tự composing cuối cùng; giữ/chạm hai lần Shift để bật Caps Lock.
-- Cho phép Telex trong ô URL và đồng bộ palette/gradient cho Quản lý API, từ cá nhân và model dịch.
-- Quản lý API cho phép chạm giữ trực tiếp card để kéo thả thứ tự ưu tiên; card đang kéo nổi viền accent và các card khác tự tạo vị trí chèn.
-- Thứ tự API key được dùng trực tiếp khi gửi AI và chỉ được lưu sau khi thả card.
-- Loại bỏ gói N-gram/cụm từ dựng sẵn; gợi ý cụm từ chỉ học từ dữ liệu cá nhân trên thiết bị.
+### Sửa
 
-Định dạng theo Keep a Changelog; phiên bản theo Semantic Versioning khi phù hợp.
+- Backspace `Safe`→`Saff` (và `Cafe`→`Caff`) trên Vivo OriginOS: co chuỗi chỉ **xóa đuôi** trên editor, không xóa cả từ rồi `commitText` dạng ngắn (OEM nhân đôi tone Latin `s/f/r/x/j`).
+- `commitText` từ kết thúc bằng modifier Telex `sfrxjaeowd` (tone + shape) tách body/tail và gỡ chữ kép nếu còn.
+- Latin lock khi mất lock; suppress `onUpdateSelection` finish khi IME đang ghi `InputConnection`.
+- Backspace sau escape shape (`aaa`→`aa`, `eee`/`ooo`/`aww`/`oww`/`uww`/`ddd`/`uoww`) xóa đúng 1 ký tự **hiển thị** (raw dài hơn display không làm BS no-op).
+- Hoa/thường khi hoàn tác modifier theo phím vừa bấm (`A+s+i+s` → `Ais`); kết thúc composing khi con trỏ vào giữa từ.
+- Giữ khóa Latin khi BS qua từ Anh có modifier (`Google`, `case`, `safe`, `care`, `pixel`, `object`).
+
+### Thêm / cải thiện Telex
+
+- Telex theo chuỗi phím gốc: modifier sai thứ tự; restore Latin khi âm tiết không hợp lệ; bao phủ `s f r x j`, `dd`, `aa ee oo`, `aw ow uw`.
+- Unit: `TelexModifierBackspaceMatrixTest`, `ComposingEditorSync*`, `SafeTraceTest`; checklist thiết bị đầy đủ trong `TESTING.md`.
+- Docs: `ARCHITECTURE.md` (luồng ghi editor OEM), `ROADMAP`, `CONTRIBUTING`, README Telex/BS.
+
+### UI & tính năng (gom unreleased trước 1.2.x)
+
+- Gallery theme hai cột (preview 400:225); Theme Extension JSON file/HTTPS; chỉ Mặc định trong APK; packs `pastel-forest` / `pastel-pink` / `retro-japanese-manga` tải riêng.
+- Quản lý từ cá nhân (decay, badge ưu tiên); clipboard OTP/email/URL/SĐT + TTL + ghim; privacy mode; Inline Autofill; numpad; dictionary packs offline; gợi ý AI command; vuốt Space; Telex URL; Smartbar reorder; kéo thả API key; backup theme+Smartbar không secret; xóa emoji grapheme; bỏ N-gram dựng sẵn.
 
 ## 1.2.0 - 2026-07-18
 

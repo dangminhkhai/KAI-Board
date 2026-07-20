@@ -7,13 +7,18 @@ param(
 $ErrorActionPreference = "Stop"
 $projectDir = Split-Path -Parent $PSScriptRoot
 $adb = Join-Path $env:LOCALAPPDATA "Android\Sdk\platform-tools\adb.exe"
-$javaHome = "C:\Program Files\Eclipse Adoptium\jdk-17.0.19.10-hotspot"
+$javaCandidates = @(
+    $env:JAVA_HOME,
+    "C:\Program Files\Microsoft\jdk-17.0.19.10-hotspot",
+    "C:\Program Files\Eclipse Adoptium\jdk-17.0.19.10-hotspot"
+) | Where-Object { $_ -and (Test-Path -LiteralPath $_) }
+$javaHome = $javaCandidates | Select-Object -First 1
 $apk = Join-Path $projectDir "app\build\outputs\apk\debug\app-arm64-v8a-debug.apk"
-$outputApk = Join-Path $projectDir "outputs\KAI-Board-0.29.9-debug.apk"
+$outputApk = Join-Path $projectDir "outputs\KAI-Board-1.2.0-debug.apk"
 $ime = "vn.kai.board/.ime.KaiBoardImeService"
 
 if (-not (Test-Path -LiteralPath $adb)) { throw "ADB not found: $adb" }
-if (-not (Test-Path -LiteralPath $javaHome)) { throw "JDK 17 not found: $javaHome" }
+if (-not $javaHome) { throw "JDK 17 not found. Set JAVA_HOME or install Microsoft/Eclipse JDK 17." }
 
 if (-not $Serial) {
     $devices = @(& $adb devices | Select-Object -Skip 1 | Where-Object { $_ -match "\sdevice$" })

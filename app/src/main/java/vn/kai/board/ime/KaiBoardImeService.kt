@@ -15,6 +15,7 @@ import android.view.KeyEvent
 import android.view.inputmethod.EditorInfo
 import android.view.inputmethod.InlineSuggestionsRequest
 import android.view.inputmethod.InlineSuggestionsResponse
+import android.view.inputmethod.InputConnection
 import android.view.inputmethod.InputMethodManager
 import android.widget.HorizontalScrollView
 import android.widget.LinearLayout
@@ -45,7 +46,11 @@ import vn.kai.board.input.InputPunctuationPolicy
 import vn.kai.board.input.NumericInputPolicy
 import vn.kai.board.input.UnicodeDeletionPolicy
 import vn.kai.board.input.ComposingCursorPolicy
+import vn.kai.board.input.ComposingEditorSync
+import vn.kai.board.input.ComposingRewriteMode
+import vn.kai.board.input.ComposingRewritePolicy
 import vn.kai.board.settings.KeyboardPreferences
+import android.util.Log
 import vn.kai.board.telex.TelexEngine
 import vn.kai.board.input.TelexWordComposer
 import vn.kai.board.input.SentenceAutomationPolicy
@@ -85,6 +90,12 @@ class KaiBoardImeService : InputMethodService() {
     private var literalTelexLockLength = 0
     private var telexEnabled = true
     private var directCommitTelex = false
+    /** Nested depth while this IME mutates InputConnection; blocks selection-driven finish. */
+    private var imeWriteDepth = 0
+    /** Vivo/iQOO composing spans corrupt Latin restore (Safe→Saff); use commitText there. */
+    private val preferDirectTelexCommit: Boolean by lazy {
+        ComposingEditorSync.manufacturersPreferDirectCommit(Build.MANUFACTURER, Build.BRAND)
+    }
     private var selectionActive = false
     private var privateSession = false
     private var lastAutoCorrection: AutoCorrection? = null
@@ -249,16 +260,183 @@ class KaiBoardImeService : InputMethodService() {
         super.onUpdateSelection(oldSelStart, oldSelEnd, newSelStart, newSelEnd, candidatesStart, candidatesEnd)
         keyboardView?.closeMediaPanel()
         selectionActive = newSelStart != newSelEnd
+        val useDirect = directCommitTelex || preferDirectTelexCommit
         if (ComposingCursorPolicy.shouldFinish(
-                composing.isNotEmpty(), directCommitTelex,
+                composing.isNotEmpty(), useDirect,
                 newSelStart, newSelEnd, candidatesStart, candidatesEnd,
+                suppressForImeWrite = imeWriteDepth > 0,
             )) {
                 composing = ""
                 rawComposing = ""
                 literalTelexLockLength = 0
                 currentInputConnection?.finishComposingText()
                 updateSuggestions()
+        } else if (
+            composing.isNotEmpty() &&
+            useDirect &&
+            imeWriteDepth == 0 &&
+            newSelStart == newSelEnd
+        ) {
+            // No composing span on direct-commit OEMs: drop internal Telex state when the
+            // cursor leaves the trailing edge of the word we believe we own.
+            val before = currentInputConnection?.getTextBeforeCursor(composing.length, 0)?.toString()
+            if (before != composing) {
+                composing = ""
+                rawComposing = ""
+                literalTelexLockLength = 0
+                updateSuggestions()
+            }
         }
+    }
+
+    private fun withImeWrite(block: () -> Unit) {
+        imeWriteDepth++
+        try {
+            block()
+        } finally {
+            imeWriteDepth--
+        }
+    }
+
+    /**
+     * Push [next] as the active word.
+     *
+     * Critical Vivo rule: when [next] is a pure prefix of [previous] (Backspace `Safe`→`Saf`),
+     * **only delete** the dropped tail. Never delete-all + [commitText] the shorter form — that
+     * path has been observed to double a trailing Telex tone letter (`Saf`→`Saff`).
+     */
+    private fun applyComposingText(connection: InputConnection, previous: String, next: String) {
+        val useDirect = directCommitTelex || preferDirectTelexCommit
+        withImeWrite {
+            connection.beginBatchEdit()
+            try {
+                // Prefix shrink (Backspace / drop last): delete only — do not re-commit.
+                if (ComposingEditorSync.isPrefixShrink(previous, next) || (previous.isNotEmpty() && next.isEmpty())) {
+                    applyPrefixShrink(connection, previous, next)
+                    return@withImeWrite
+                }
+                when (ComposingRewritePolicy.mode(previous, next, directCommitTelex, useDirect)) {
+                    ComposingRewriteMode.DirectCommit -> applyDirectCommitWord(connection, previous, next)
+                    ComposingRewriteMode.Clear -> applyPrefixShrink(connection, previous, next = "")
+                    ComposingRewriteMode.SetOnly -> connection.setComposingText(next, 1)
+                    ComposingRewriteMode.FinishDeleteSet -> {
+                        connection.finishComposingText()
+                        val before = connection.getTextBeforeCursor(previous.length + next.length + 8, 0)
+                            ?.toString().orEmpty()
+                        val suffix = ComposingEditorSync.suffixToDelete(before, previous, next)
+                        if (suffix.isNotEmpty()) connection.deleteSurroundingText(suffix.length, 0)
+                        else if (previous.isNotEmpty()) connection.deleteSurroundingText(previous.length, 0)
+                        if (next.isNotEmpty()) connection.setComposingText(next, 1)
+                        repairDoubledToneTail(connection, next)
+                    }
+                }
+            } finally {
+                connection.endBatchEdit()
+            }
+        }
+    }
+
+    /** Delete the trailing slice so the editor ends with [next] without committing [next]. */
+    private fun applyPrefixShrink(connection: InputConnection, previous: String, next: String) {
+        connection.finishComposingText()
+        val probe = maxOf(previous.length, next.length, 1) + 16
+        val before = connection.getTextBeforeCursor(probe, 0)?.toString().orEmpty()
+
+        when {
+            // Already correct (e.g. external delete).
+            next.isNotEmpty() && before.endsWith(next) &&
+                (previous.isEmpty() || !before.endsWith(previous)) -> return
+
+            // Normal case: editor still has the full previous word.
+            previous.isNotEmpty() && before.endsWith(previous) && previous.startsWith(next) -> {
+                val tailLen = previous.length - next.length
+                if (tailLen > 0) connection.deleteSurroundingText(tailLen, 0)
+            }
+
+            // Corrupted `Saff` while we wanted shrink Safe→Saf or already target Saf.
+            next.isNotEmpty() && before.endsWith(next + next.last()) -> {
+                connection.deleteSurroundingText(1, 0)
+            }
+
+            // Corrupted doubled form of previous (`Safe`→`Saffee` etc.) — rare.
+            previous.length >= 2 && before.endsWith(previous.dropLast(1) + previous.last() + previous.last()) -> {
+                val corrupt = previous.dropLast(1) + previous.last() + previous.last()
+                connection.deleteSurroundingText(corrupt.length - next.length, 0)
+            }
+
+            // Fallback: delete one code point per dropped char (matches TelexWordComposer.dropLast).
+            else -> {
+                val units = if (previous.length > next.length) previous.length - next.length else 1
+                repeat(units.coerceAtLeast(1)) {
+                    connection.deleteSurroundingTextInCodePoints(1, 0)
+                }
+            }
+        }
+
+        // Final guard: if OEM still shows …Saff and we want …Saf, strip one more code unit.
+        if (next.isNotEmpty()) {
+            val after = connection.getTextBeforeCursor(next.length + 2, 0)?.toString().orEmpty()
+            if (after.endsWith(next + next.last())) {
+                Log.w(TAG, "prefix-shrink strip doubled tone: …$after → $next")
+                connection.deleteSurroundingText(1, 0)
+            } else if (!after.endsWith(next)) {
+                Log.w(TAG, "prefix-shrink desync want=…$next have=…$after prev=$previous")
+                // Last resort only when editor is empty of our word: commit next without rewrite of longer form.
+                if (!after.endsWith(previous) && next.isNotEmpty()) {
+                    commitTextAvoidingToneDouble(connection, next)
+                }
+            }
+        }
+    }
+
+    private fun applyDirectCommitWord(connection: InputConnection, previous: String, next: String) {
+        connection.finishComposingText()
+        val probe = maxOf(previous.length, next.length, 1) + 16
+        val before = connection.getTextBeforeCursor(probe, 0)?.toString().orEmpty()
+        val suffix = ComposingEditorSync.suffixToDelete(before, previous, next)
+        if (suffix.isNotEmpty()) {
+            connection.deleteSurroundingText(suffix.length, 0)
+        } else if (previous.isNotEmpty()) {
+            connection.deleteSurroundingText(previous.length, 0)
+        }
+        if (next.isNotEmpty()) commitTextAvoidingToneDouble(connection, next)
+        repairDoubledToneTail(connection, next)
+    }
+
+    /**
+     * commitText of a word ending in a Latin Telex tone letter (`Saf`, `Mas`…) can be
+     * re-parsed by some OEM stacks and double the tone letter. Commit body + tail separately
+     * and strip a doubled tail if it appears.
+     */
+    private fun commitTextAvoidingToneDouble(connection: InputConnection, text: String) {
+        if (text.isEmpty()) return
+        if (!ComposingEditorSync.endsWithTelexModifierLetter(text) || text.length == 1) {
+            connection.commitText(text, 1)
+            return
+        }
+        val body = text.dropLast(1)
+        val tail = text.last().toString()
+        connection.commitText(body, 1)
+        connection.commitText(tail, 1)
+        val after = connection.getTextBeforeCursor(text.length + 2, 0)?.toString().orEmpty()
+        if (after.endsWith(text + text.last())) {
+            connection.deleteSurroundingText(1, 0)
+        }
+    }
+
+    private fun repairDoubledToneTail(connection: InputConnection, next: String) {
+        if (next.isEmpty()) return
+        val after = connection.getTextBeforeCursor(next.length + 2, 0)?.toString().orEmpty()
+        if (after.endsWith(next + next.last())) {
+            Log.w(TAG, "repair doubled tail: …$after → $next")
+            connection.deleteSurroundingText(1, 0)
+        } else if (!after.endsWith(next)) {
+            Log.w(TAG, "telex editor desync want=…$next have=…$after")
+        }
+    }
+
+    companion object {
+        private const val TAG = "KAIBoard"
     }
 
     private fun handleAction(action: KeyAction) {
@@ -337,10 +515,7 @@ class KaiBoardImeService : InputMethodService() {
                         composing = result.text
                         rawComposing = result.rawText
                         literalTelexLockLength = result.literalLockLength
-                        if (directCommitTelex) {
-                            if (previousComposing.isNotEmpty()) connection.deleteSurroundingText(previousComposing.length, 0)
-                            connection.commitText(composing, 1)
-                        } else connection.setComposingText(composing, 1)
+                        applyComposingText(connection, previousComposing, composing)
                     }
                 } else {
                     rememberCurrentHashtag()
@@ -389,17 +564,11 @@ class KaiBoardImeService : InputMethodService() {
                 }
                 if (composing.isNotEmpty()) {
                     val previousComposing = composing
-                    val restored = TelexWordComposer.backspace(rawComposing, literalTelexLockLength)
+                    val restored = TelexWordComposer.backspace(composing, rawComposing, literalTelexLockLength)
                     composing = restored.text
                     rawComposing = restored.rawText
                     literalTelexLockLength = restored.literalLockLength
-                    if (directCommitTelex) {
-                        connection.deleteSurroundingText(previousComposing.length, 0)
-                        if (composing.isNotEmpty()) connection.commitText(composing, 1)
-                    } else if (composing.isEmpty()) {
-                        connection.setComposingText("", 1)
-                        connection.finishComposingText()
-                    } else connection.setComposingText(composing, 1)
+                    applyComposingText(connection, previousComposing, composing)
                 } else {
                     val beforeCursor = connection.getTextBeforeCursor(80, 0) ?: ""
                     val previousWord = WordRecomposer.beforeSingleWhitespace(beforeCursor)
@@ -1237,8 +1406,8 @@ class KaiBoardImeService : InputMethodService() {
         connection.deleteSurroundingText(context.before.length, context.after.length)
         composing = transformed
         rawComposing = "${context.word}$key"
-        if (directCommitTelex) connection.commitText(composing, 1)
-        else connection.setComposingText(composing, 1)
+        literalTelexLockLength = 0
+        applyComposingText(connection, "", composing)
         return true
     }
 

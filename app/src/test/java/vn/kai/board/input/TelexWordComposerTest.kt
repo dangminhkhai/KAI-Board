@@ -1,6 +1,7 @@
 package vn.kai.board.input
 
 import org.junit.Assert.assertEquals
+import org.junit.Assert.assertTrue
 import org.junit.Test
 
 class TelexWordComposerTest {
@@ -168,7 +169,7 @@ class TelexWordComposerTest {
     @Test fun backspaceReplaysTheRemainingRawKeys() {
         val typed = TelexWordComposer.compose("user")
         assertEquals("user", typed.text)
-        assertEquals("use", TelexWordComposer.backspace(typed.rawText, typed.literalLockLength).text)
+        assertEquals("use", TelexWordComposer.backspace(typed.text, typed.rawText, typed.literalLockLength).text)
     }
 
     @Test fun deletingEnglishWordDoesNotTurnRemainingDoubleVowelIntoTelex() {
@@ -176,7 +177,7 @@ class TelexWordComposerTest {
         assertEquals("Google", state.text)
         val expected = listOf("Googl", "Goog", "Goo", "Go")
         expected.forEach { text ->
-            state = TelexWordComposer.backspace(state.rawText, state.literalLockLength)
+            state = TelexWordComposer.backspace(state.text, state.rawText, state.literalLockLength)
             assertEquals(text, text, state.text)
         }
     }
@@ -191,9 +192,59 @@ class TelexWordComposerTest {
         ).forEach { (word, expected) ->
             var state = TelexWordComposer.compose(word)
             expected.forEach { text ->
-                state = TelexWordComposer.backspace(state.rawText, state.literalLockLength)
+                state = TelexWordComposer.backspace(state.text, state.rawText, state.literalLockLength)
                 assertEquals("$word -> $text", text, state.text)
             }
+        }
+    }
+
+    @Test fun backspaceDeletesAVisibleVietnameseCharacterInsteadOfItsLastTelexKey() {
+        val accented = TelexWordComposer.compose("Mis")
+        assertEquals("Mí", accented.text)
+        assertEquals("M", TelexWordComposer.backspace(accented.text, accented.rawText, accented.literalLockLength).text)
+
+        val shaped = TelexWordComposer.compose("Goo")
+        assertEquals("Gô", shaped.text)
+        assertEquals("G", TelexWordComposer.backspace(shaped.text, shaped.rawText, shaped.literalLockLength).text)
+    }
+
+    @Test fun uppercaseEnglishWordStillDeletesOneLiteralCharacter() {
+        mapOf("Safe" to "Saf", "Cafe" to "Caf").forEach { (word, expected) ->
+            val state = TelexWordComposer.compose(word)
+            assertEquals(word, state.text)
+            assertTrue(state.literalLockLength > 0)
+            assertEquals(expected, TelexWordComposer.backspace(state.text, state.rawText, state.literalLockLength).text)
+        }
+    }
+
+    @Test fun latinBackspaceStaysLiteralEvenIfLockWasLost() {
+        // Simulates OEM selection callbacks clearing literalTelexLockLength while the
+        // buffer is still fully Latin (Safe/Cafe). Must not recompose Saf → Sà.
+        mapOf("Safe" to listOf("Saf", "Sa", "S"), "Cafe" to listOf("Caf", "Ca", "C")).forEach { (word, steps) ->
+            var state = TelexWordComposer.compose(word)
+            state = TelexComposeResult(state.text, 0, state.rawText)
+            steps.forEach { expected ->
+                state = TelexWordComposer.backspace(state.text, state.rawText, state.literalLockLength)
+                assertEquals("$word -> $expected", expected, state.text)
+                assertEquals(expected, state.rawText)
+                assertTrue(
+                    "$word reintroduced marks at $expected: ${state.text}",
+                    state.text.none { ch ->
+                        ch.lowercaseChar() == 'đ' ||
+                            (ch.lowercaseChar() in "aáàảãạăắằẳẵặâấầẩẫậeéèẻẽẹêếềểễệiíìỉĩịoóòỏõọôốồổỗộơớờởỡợuúùủũụưứừửữựyýỳỷỹỵ" &&
+                                ch.lowercaseChar() !in "aeiouy")
+                    },
+                )
+            }
+            // The hazardous step is Safe/Cafe → Saf/Caf: must re-lock so the next
+            // keystroke cannot re-apply tone on the remaining `f`.
+            val afterFirst = TelexWordComposer.backspace(
+                TelexComposeResult(word, 0, word).text,
+                word,
+                0,
+            )
+            assertEquals(word.dropLast(1), afterFirst.text)
+            assertTrue(afterFirst.literalLockLength > 0)
         }
     }
 }

@@ -22,9 +22,10 @@
 
 1. Đọc `kai-board-ime-development` để xác định guardrail.
 2. Thêm skill chuyên môn: AI, Material UI hoặc performance.
-3. Implement và chạy unit test/build.
-4. Dùng `android-adb-fast-loop` để xác minh thiết bị.
-5. Chỉ dùng GitHub publishing skill khi người dùng yêu cầu commit/push/PR.
+3. Implement và chạy unit test/build (`testDebugUnitTest assembleDebug`).
+4. Đổi Telex/IME/Backspace: đọc [ARCHITECTURE.md](ARCHITECTURE.md) (ghi editor OEM) và tick [TESTING.md](TESTING.md) smoke + regression.
+5. Dùng `android-adb-fast-loop` / `dev-install.cmd` để xác minh thiết bị (Vivo: đặc biệt Safe/Cafe BS).
+6. Chỉ dùng GitHub publishing skill khi người dùng yêu cầu commit/push/PR.
 
 Không dùng skill để mở rộng phạm vi ngoài yêu cầu; không đưa API key, nội dung gõ hoặc clipboard vào log, ảnh hay tài liệu.
 

@@ -1,5 +1,7 @@
 # Quyền riêng tư
 
+Tóm tắt người dùng cũng nằm trong [README gốc](../README.md#quyền-riêng-tư). Tài liệu này là bản chi tiết cho phát hành và review.
+
 ## Dữ liệu cục bộ
 
 KAI Board có thể lưu tùy chọn, từ/cặp từ, email, hashtag đã học, emoji gần đây, clipboard và ghi chú trên thiết bị. Email/hashtag được xếp hạng bằng số lần sử dụng. Người dùng có thể xóa dữ liệu học trong ứng dụng.

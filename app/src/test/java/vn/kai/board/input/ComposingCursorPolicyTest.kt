@@ -17,4 +17,18 @@ class ComposingCursorPolicyTest {
         assertTrue(ComposingCursorPolicy.shouldFinish(true, false, 1, 3, 0, 4))
         assertTrue(ComposingCursorPolicy.shouldFinish(true, false, 5, 5, 0, 4))
     }
+
+    @Test fun imeWriteSuppressesFinishEvenWhenCursorLooksInside() {
+        assertFalse(
+            ComposingCursorPolicy.shouldFinish(
+                hasComposingText = true,
+                directCommit = false,
+                newSelectionStart = 2,
+                newSelectionEnd = 2,
+                candidatesStart = 0,
+                candidatesEnd = 4,
+                suppressForImeWrite = true,
+            ),
+        )
+    }
 }

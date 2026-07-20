@@ -2,8 +2,8 @@
 
 ## Chuẩn bị
 
-1. Cập nhật `versionCode`, `versionName` và `CHANGELOG.md`.
-2. Chạy test, build debug và kiểm thử thiết bị.
+1. Cập nhật `versionCode`, `versionName` và `CHANGELOG.md` (chuyển mục *Chưa phát hành* thành version mới nếu ship).
+2. Chạy test, build debug và kiểm thử thiết bị theo [TESTING.md](TESTING.md) (ít nhất **smoke 5 phút** + regression Telex trên một máy thật; Vivo nếu có thay đổi composing/Backspace).
 3. Chuẩn bị bộ ký. Cấu hình Gradle nhận bốn biến môi trường:
    - `KAI_RELEASE_STORE_FILE`
    - `KAI_RELEASE_STORE_PASSWORD`

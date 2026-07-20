@@ -75,6 +75,8 @@ Các bảo vệ cho tiếng Anh và tên riêng:
 - Khi một từ đã được khôi phục về Latin, Backspace giữ trạng thái đó cho tới khi xóa qua modifier đầu tiên: `Google → Googl → Goog → Goo → Go`, `pixel → pixe → pix → pi`; phần còn lại không bị đổi ngược thành `Gô` hay `pĩ`.
 - Hoa/thường của modifier được lấy từ phím người dùng thực sự bấm. Ví dụ `A+s+i+s` tạo `Ais`; chỉ `A+s+i+S` mới tạo `AiS`.
 - Nhầm phím `s` cạnh `d` được sửa có điều kiện: `ds` đứng riêng vẫn giữ nguyên, nhưng khi có nguyên âm theo sau thì `dsa...` được hiểu như `dda...`; ví dụ `dsangwj` → `đặng`.
+- **Backspace trên editor:** khi chuỗi co lại (prefix-shrink), IME chỉ xóa phần đuôi trên `InputConnection`, không xóa cả từ rồi `commitText` lại dạng ngắn. Trên một số máy (ví dụ Vivo OriginOS) cách ghi lại `Saf` sau `Safe` có thể nhân đôi chữ tone Latin thành `Saff`. Cùng cơ chế áp dụng cho tone `s f r x j` và shape `aa ee oo aw ow uw dd`.
+- Escape shape (`aaa`→`aa`, `ddd`→`dd`, …): Backspace xóa đúng một ký tự **hiển thị**, kể cả khi buffer phím gốc dài hơn chuỗi đang thấy.
 
 #### Phạm vi bật Telex và chỉnh sửa
 
@@ -185,15 +187,18 @@ cd KAI-Board
 
 APK debug nằm trong `app/build/outputs/apk/debug/`.
 
-Cài nhanh lên thiết bị đang kết nối ADB:
+Cài nhanh lên thiết bị đang kết nối ADB (một máy, hoặc chỉ định serial):
 
 ```powershell
 .\dev-install.cmd -WithTests
+.\dev-install.cmd -Serial <adb-serial>
 ```
 
-Mọi thay đổi Telex bắt buộc chạy ma trận `s f r x j`, `dd`, `aa ee oo`, `aw ow uw`, gồm gõ đúng/sai thứ tự, hoa/thường, hoàn tác, Backspace, con trỏ giữa từ và va chạm với từ Latin/Anh. Các nhóm unit test khác bao phủ chính sách input, gợi ý, từ điển cá nhân, emoji Unicode, clipboard, touch/repeat, AI provider/fallback, cài đặt và palette.
+`dev-install` dò JDK 17 từ `JAVA_HOME` hoặc Microsoft/Eclipse Temurin; ADB từ Android SDK mặc định.
 
-Thay đổi liên quan đến touch, IME lifecycle, AI, mic hoặc dịch vẫn cần kiểm thử trên thiết bị thật. Ma trận kiểm thử chi tiết nằm tại [khaiez/TESTING.md](khaiez/TESTING.md).
+Mọi thay đổi Telex bắt buộc chạy ma trận `s f r x j`, `dd`, `aa ee oo`, `aw ow uw` (gõ đúng/sai thứ tự, hoa/thường, hoàn tác, Backspace, con trỏ giữa từ, va chạm Latin/Anh). Unit test còn cover composer/OEM editor sync, policy input, gợi ý, emoji, clipboard, touch, AI, palette.
+
+Thay đổi touch, IME lifecycle, Telex/Backspace, AI, mic hoặc dịch cần thiết bị thật. Checklist tick (smoke 5 phút, app, Telex, AI, release): [khaiez/TESTING.md](khaiez/TESTING.md).
 
 ## Build release
 
@@ -210,8 +215,9 @@ Không commit keystore, credential, API key hoặc file secret. Thư mục `Res/
 ```text
 app/src/main/java/vn/kai/board/
 ├── ai/            Provider, model discovery, key pool và AI request
-├── ime/           Vòng đời IME, composing và điều phối InputConnection
-├── input/         Telex policy, gợi ý, từ điển, clipboard và emoji
+├── ime/           Vòng đời IME; applyComposingText / InputConnection
+├── input/         TelexWordComposer, ComposingEditorSync, gợi ý, clipboard…
+├── telex/         TelexEngine (tone/shape thuần)
 ├── settings/      Preferences, backup và Theme Extensions
 ├── touch/         Hit-test, pointer, slide, giữ phím và repeat
 ├── translation/   Quản lý model và luồng dịch ML Kit
@@ -219,7 +225,8 @@ app/src/main/java/vn/kai/board/
 └── voice/         Speech recognition cho mic thường, AI và Dịch
 
 theme-packs/        Các gói theme JSON cài riêng
-khaiez/             Kiến trúc, kiểm thử, riêng tư và phát hành
+khaiez/             Kiến trúc, kiểm thử (checklist), riêng tư, phát hành
+scripts/            dev-install, build-release, adb-shot
 ```
 
 Đường gõ chính:
@@ -228,20 +235,25 @@ khaiez/             Kiến trúc, kiểm thử, riêng tư và phát hành
 MotionEvent → TouchDispatcher → KeyAction → KaiBoardImeService → InputConnection
 ```
 
-Đường này không thực hiện network, tải model hoặc parse dữ liệu lớn để giữ độ trễ gõ ổn định.
+Telex: `TelexWordComposer` + `TelexEngine` → `applyComposingText` (prefix-shrink / direct commit OEM).  
+Đường gõ không network, không tải model, không parse dữ liệu lớn trên hot path.
 
 ## Tài liệu
 
-- [Kiến trúc](khaiez/ARCHITECTURE.md)
-- [Changelog](khaiez/CHANGELOG.md)
-- [Kiểm thử](khaiez/TESTING.md)
-- [Quyền riêng tư](khaiez/PRIVACY.md)
-- [Phát hành](khaiez/RELEASE.md)
-- [Lộ trình](khaiez/ROADMAP.md)
-- [Đóng góp](khaiez/CONTRIBUTING.md)
-- [Bảo mật](khaiez/SECURITY.md)
-- [Theme Extension](theme-packs/README.md)
-- [Thông báo bên thứ ba](THIRD_PARTY_NOTICES.md)
+Chỉ mục đầy đủ: [khaiez/README.md](khaiez/README.md).
+
+| Tài liệu | Mô tả |
+| --- | --- |
+| [Kiến trúc](khaiez/ARCHITECTURE.md) | Module, Telex, ghi editor OEM |
+| [Kiểm thử](khaiez/TESTING.md) | Unit + checklist tick thiết bị |
+| [Changelog](khaiez/CHANGELOG.md) | Lịch sử phiên bản |
+| [Quyền riêng tư](khaiez/PRIVACY.md) | Dữ liệu cục bộ, AI, backup |
+| [Bảo mật](khaiez/SECURITY.md) | Secret, báo cáo lỗ hổng |
+| [Phát hành](khaiez/RELEASE.md) | Ký, verify artifact |
+| [Lộ trình](khaiez/ROADMAP.md) | Gần / beta / sau beta |
+| [Đóng góp](khaiez/CONTRIBUTING.md) | Guardrail PR |
+| [Theme Extension](theme-packs/README.md) | Schema theme JSON |
+| [Thông báo bên thứ ba](THIRD_PARTY_NOTICES.md) | License phụ thuộc |
 
 ## Lưu ý
 
