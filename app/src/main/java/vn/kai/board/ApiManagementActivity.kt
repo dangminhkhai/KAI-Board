@@ -6,6 +6,7 @@ import android.animation.ValueAnimator
 import android.content.res.ColorStateList
 import android.content.res.Configuration
 import android.graphics.Color
+import android.graphics.drawable.GradientDrawable
 import android.os.Bundle
 import android.text.InputType
 import android.view.Gravity
@@ -52,9 +53,9 @@ class ApiManagementActivity : Activity() {
             ThemeMode.LIGHT -> false
             ThemeMode.SYSTEM -> resources.configuration.uiMode and Configuration.UI_MODE_NIGHT_MASK == Configuration.UI_MODE_NIGHT_YES
         }
-        val palette = KeyboardThemePalette.resolve(KeyboardPreferences.colorStyle(this), dark)
-        window.statusBarColor = palette.background
-        window.navigationBarColor = palette.background
+        val palette = KeyboardThemePalette.resolve(this, dark)
+        window.statusBarColor = palette.gradientColors?.first() ?: palette.background
+        window.navigationBarColor = palette.gradientColors?.last() ?: palette.background
 
         val providers = AiProviderClient.providerChoices
         var providerHint = AiPreferences.providerHint(this).takeIf { it in providers } ?: "Tự động"
@@ -264,7 +265,9 @@ class ApiManagementActivity : Activity() {
             }, LinearLayout.LayoutParams(-1, -2).apply { topMargin = dp(14) })
         }
         val scroll = ScrollView(this).apply {
-            setBackgroundColor(palette.background)
+            palette.gradientColors?.let {
+                background = GradientDrawable(GradientDrawable.Orientation.TL_BR, it)
+            } ?: setBackgroundColor(palette.background)
             clipToPadding = false
             addView(content)
         }
@@ -304,8 +307,8 @@ class ApiManagementActivity : Activity() {
             if (from !in items.indices || to !in items.indices || from == to) return false
             val item = items.removeAt(from)
             items.add(to, item)
+            // Reorder only the in-memory list while dragging. Persist once in clearView.
             notifyItemMoved(from, to)
-            notifyItemRangeChanged(minOf(from, to), kotlin.math.abs(from - to) + 1)
             return true
         }
 
@@ -405,6 +408,7 @@ class ApiManagementActivity : Activity() {
         override fun onSelectedChanged(viewHolder: RecyclerView.ViewHolder?, actionState: Int) {
             super.onSelectedChanged(viewHolder, actionState)
             if (actionState != ItemTouchHelper.ACTION_STATE_DRAG || viewHolder == null) return
+            (viewHolder.itemView.parent as? RecyclerView)?.parent?.requestDisallowInterceptTouchEvent(true)
             viewHolder.itemView.performHapticFeedback(android.view.HapticFeedbackConstants.LONG_PRESS)
             (viewHolder.itemView as? MaterialCardView)?.apply {
                 cardElevation = dp(10).toFloat()
@@ -416,6 +420,7 @@ class ApiManagementActivity : Activity() {
 
         override fun clearView(recyclerView: RecyclerView, viewHolder: RecyclerView.ViewHolder) {
             super.clearView(recyclerView, viewHolder)
+            recyclerView.parent?.requestDisallowInterceptTouchEvent(false)
             (viewHolder.itemView as? MaterialCardView)?.apply {
                 cardElevation = 0f
                 strokeWidth = dp(1)

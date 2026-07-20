@@ -7,13 +7,18 @@ $ErrorActionPreference = "Stop"
 $projectRoot = Split-Path -Parent $PSScriptRoot
 $releaseHome = Join-Path $env:USERPROFILE ".kai-board"
 $localReleaseDir = Join-Path $projectRoot "Res"
+$legacySigningDir = Join-Path $projectRoot ".signing"
 $keyStorePath = if (Test-Path -LiteralPath (Join-Path $localReleaseDir "kai-board-release.jks")) {
     Join-Path $localReleaseDir "kai-board-release.jks"
+} elseif (Test-Path -LiteralPath (Join-Path $legacySigningDir "kai-board-release.jks")) {
+    Join-Path $legacySigningDir "kai-board-release.jks"
 } else {
     Join-Path $releaseHome "kai-board-release.jks"
 }
 $secretPath = if (Test-Path -LiteralPath (Join-Path $localReleaseDir "signing-secret.xml")) {
     Join-Path $localReleaseDir "signing-secret.xml"
+} elseif (Test-Path -LiteralPath (Join-Path $legacySigningDir "signing-secret.xml")) {
+    Join-Path $legacySigningDir "signing-secret.xml"
 } else {
     Join-Path $releaseHome "signing-secret.xml"
 }

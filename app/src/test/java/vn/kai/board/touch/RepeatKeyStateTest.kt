@@ -28,4 +28,12 @@ class RepeatKeyStateTest {
         repeat.cancel()
         assertNull(repeat.pointerId)
     }
+    @Test fun repeatAcceleratesAndStopsAtSafeMinimum() {
+        val repeat = RepeatKeyState()
+        repeat.start(3)
+        val delays = List(30) { repeat.nextDelayMs() }
+        assertTrue(delays.zipWithNext().all { (first, second) -> second <= first })
+        assertTrue(delays.last() < delays.first())
+        assertEquals(18L, delays.last())
+    }
 }

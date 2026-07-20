@@ -10,24 +10,6 @@ object PhraseLearningStore {
     private const val FIELD = "\u001E"
     private const val LIMIT = 512
     @Volatile private var cachedPairs: Map<String, Int>? = null
-    private val defaultPhrases = listOf(
-        listOf("xin", "chào", "bạn", "nhé"),
-        listOf("cảm", "ơn", "bạn", "rất", "nhiều"),
-        listOf("hôm", "nay", "thời", "tiết", "rất", "đẹp"),
-        listOf("tôi", "đang", "sử", "dụng", "bàn", "phím"),
-        listOf("chúng", "ta", "cùng", "kiểm", "tra"),
-        listOf("việt", "nam", "rất", "tuyệt", "vời"),
-        listOf("bạn", "có", "khỏe", "không"),
-        listOf("tôi", "muốn", "làm", "thêm"),
-        listOf("ứng", "dụng", "này", "rất", "tốt"),
-        listOf("chúc", "bạn", "một", "ngày", "vui"),
-    )
-    private val defaultEntries: List<Pair<List<String>, Int>> = buildList {
-        defaultPhrases.forEach { phrase ->
-            phrase.windowed(2).forEach { add(it to 1) }
-            phrase.windowed(3).forEach { add(it to 1) }
-        }
-    }
 
     fun record(context: Context, first: String?, second: String) {
         record(context, listOfNotNull(first), second)
@@ -48,11 +30,14 @@ object PhraseLearningStore {
         return suggest(context, listOfNotNull(previous), limit)
     }
 
-    fun suggest(context: Context, history: List<String>, limit: Int = 3): List<String> = rankCandidates(
-        read(context).map { (key, count) -> key.split(FIELD) to count } + VietnameseNGramModel.entries(context),
-        history,
-        limit,
+    fun suggest(context: Context, history: List<String>, limit: Int = 3): List<String> =
+        suggestPersonal(context, history, limit)
+
+    fun suggestPersonal(context: Context, history: List<String>, limit: Int = 3): List<String> = rankCandidates(
+        read(context).map { (key, count) -> key.split(FIELD) to count }, history, limit,
     )
+
+    fun suggestOffline(context: Context, history: List<String>, limit: Int = 3): List<String> = emptyList()
 
     internal fun rankCandidates(
         entries: List<Pair<List<String>, Int>>,
@@ -63,7 +48,7 @@ object PhraseLearningStore {
         val contextWords = history.mapNotNull(::clean).takeLast(2)
         val last = contextWords.lastOrNull() ?: return emptyList()
         val scores = LinkedHashMap<String, Int>()
-        (entries + defaultEntries).forEach { (words, count) ->
+        entries.forEach { (words, count) ->
             val score = when {
                 words.size == 3 && contextWords.size == 2 && words.take(2) == contextWords -> 10_000 + count * 10
                 words.size == 2 && words[0] == last -> 1_000 + count * 10

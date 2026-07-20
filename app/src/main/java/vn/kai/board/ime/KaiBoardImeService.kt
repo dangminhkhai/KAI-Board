@@ -10,8 +10,16 @@ import android.os.Looper
 import android.os.ResultReceiver
 import android.text.InputType
 import android.view.View
+import android.view.ViewGroup
+import android.view.KeyEvent
 import android.view.inputmethod.EditorInfo
+import android.view.inputmethod.InlineSuggestionsRequest
+import android.view.inputmethod.InlineSuggestionsResponse
 import android.view.inputmethod.InputMethodManager
+import android.widget.HorizontalScrollView
+import android.widget.LinearLayout
+import android.widget.inline.InlinePresentationSpec
+import android.util.Size
 import android.widget.Toast
 import android.os.Build
 import java.util.Locale
@@ -27,9 +35,14 @@ import vn.kai.board.input.HashtagSuggestionStore
 import vn.kai.board.input.UserLexiconStore
 import vn.kai.board.input.LearnSource
 import vn.kai.board.input.PhraseLearningStore
+import vn.kai.board.input.WordDictionaryPack
+import vn.kai.board.input.SuggestionPriority
 import vn.kai.board.input.AutoCorrectionStatsStore
 import vn.kai.board.input.SelectionDeletionPolicy
 import vn.kai.board.input.InputPrivacyPolicy
+import vn.kai.board.input.InputPunctuationPolicy
+import vn.kai.board.input.NumericInputPolicy
+import vn.kai.board.input.UnicodeDeletionPolicy
 import vn.kai.board.settings.KeyboardPreferences
 import vn.kai.board.telex.TelexEngine
 import vn.kai.board.input.TelexWordComposer
@@ -52,6 +65,8 @@ import vn.kai.board.ai.AiProviderCandidate
 import vn.kai.board.ai.AiKeyStatsStore
 import vn.kai.board.ai.AiRequestCancellation
 import vn.kai.board.ai.SecureApiKeyStore
+import vn.kai.board.ai.AiCommandSuggestionEngine
+import vn.kai.board.ai.AiCommandSuggestionStore
 import com.google.mlkit.common.model.DownloadConditions
 import com.google.mlkit.nl.translate.TranslateLanguage
 import com.google.mlkit.nl.translate.Translation
@@ -59,11 +74,15 @@ import com.google.mlkit.nl.translate.TranslatorOptions
 
 class KaiBoardImeService : InputMethodService() {
     private var shifted = false
+    private var capsLocked = false
     private var keyboardView: KeyboardView? = null
+    private var inlineAutofillStrip: LinearLayout? = null
+    private var inlineAutofillGeneration = 0
     private var composing = ""
     private var literalTelexLockLength = 0
     private var telexEnabled = true
     private var selectionActive = false
+    private var privateSession = false
     private var lastAutoCorrection: AutoCorrection? = null
     private var translationMode = false
     private var translationSource = ""
@@ -78,6 +97,7 @@ class KaiBoardImeService : InputMethodService() {
     private var aiCancellation: AiRequestCancellation? = null
     private val aiHandler = Handler(Looper.getMainLooper())
     private val aiRunnable = Runnable { sendAiNow() }
+    private val aiSuggestionTokenRegex = Regex("[\\p{L}\\p{N}._+-]+")
     private var inlineVoiceRecognizer: InlineVoiceRecognizer? = null
     private var voiceGeneration = 0
     private var activeVoiceTarget: VoiceTarget? = null
@@ -90,18 +110,72 @@ class KaiBoardImeService : InputMethodService() {
         super.onCreate()
         // Asset parsing and index construction stay off both startup rendering and key dispatch.
         Thread({
-            runCatching {
-                assets.open("suggestions.tsv").reader(Charsets.UTF_8).use(VietnameseSuggestionEngine::load)
-            }
+            runCatching { WordDictionaryPack.load(this) }
         }, "kai-dictionary-loader").start()
     }
 
-    override fun onCreateInputView(): View = KeyboardView(this).also { view ->
+    override fun onCreateInputView(): View {
+        val density = resources.displayMetrics.density
+        val strip = LinearLayout(this).apply {
+            orientation = LinearLayout.HORIZONTAL
+            visibility = View.GONE
+            setPadding((4 * density).toInt(), (3 * density).toInt(), (4 * density).toInt(), (3 * density).toInt())
+        }
+        inlineAutofillStrip = strip
+        val view = KeyboardView(this)
         keyboardView = view
         view.onKeyAction = ::handleAction
         view.setShifted(shifted)
+        view.setCapsLocked(capsLocked)
         view.setSpaceLabel(resolveSpaceLabel(currentInputEditorInfo))
+        view.setLeadingPunctuation(InputPunctuationPolicy.leadingKey(currentInputEditorInfo?.inputType ?: 0))
         view.setSuggestionsEnabled(suggestionsAllowed(currentInputEditorInfo))
+        view.setPrivateSession(privateSession)
+        syncNumericMode(view, currentInputEditorInfo)
+        return LinearLayout(this).apply {
+            orientation = LinearLayout.VERTICAL
+            addView(HorizontalScrollView(this@KaiBoardImeService).apply {
+                isHorizontalScrollBarEnabled = false
+                visibility = View.GONE
+                addView(strip, ViewGroup.LayoutParams(ViewGroup.LayoutParams.WRAP_CONTENT, ViewGroup.LayoutParams.MATCH_PARENT))
+                strip.tag = this
+            }, LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, (50 * density).toInt()))
+            addView(view, LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT))
+        }
+    }
+
+    override fun onCreateInlineSuggestionsRequest(uiExtras: Bundle): InlineSuggestionsRequest? {
+        if (Build.VERSION.SDK_INT < Build.VERSION_CODES.R) return null
+        val density = resources.displayMetrics.density
+        val spec = InlinePresentationSpec.Builder(
+            Size((72 * density).toInt(), (40 * density).toInt()),
+            Size((240 * density).toInt(), (44 * density).toInt()),
+        ).build()
+        return InlineSuggestionsRequest.Builder(listOf(spec))
+            .setMaxSuggestionCount(4)
+            .build()
+    }
+
+    override fun onInlineSuggestionsResponse(response: InlineSuggestionsResponse): Boolean {
+        if (Build.VERSION.SDK_INT < Build.VERSION_CODES.R) return false
+        val strip = inlineAutofillStrip ?: return false
+        val host = strip.tag as? View ?: return false
+        val suggestions = response.inlineSuggestions.take(4)
+        val generation = ++inlineAutofillGeneration
+        strip.removeAllViews()
+        strip.visibility = if (suggestions.isEmpty()) View.GONE else View.VISIBLE
+        host.visibility = strip.visibility
+        if (suggestions.isEmpty()) return true
+        val density = resources.displayMetrics.density
+        suggestions.forEach { suggestion ->
+            suggestion.inflate(this, Size((220 * density).toInt(), (44 * density).toInt()), mainExecutor) { content ->
+                if (generation != inlineAutofillGeneration || content == null) return@inflate
+                strip.addView(content, LinearLayout.LayoutParams((220 * density).toInt(), (44 * density).toInt()).apply {
+                    marginEnd = (4 * density).toInt()
+                })
+            }
+        }
+        return true
     }
 
     override fun onStartInputView(info: EditorInfo?, restarting: Boolean) {
@@ -109,15 +183,36 @@ class KaiBoardImeService : InputMethodService() {
         composing = ""
         literalTelexLockLength = 0
         telexEnabled = info?.let { TelexInputPolicy.isEnabled(it.inputType) } ?: true
+        privateSession = InputPrivacyPolicy.isPrivateSession(info)
         selectionActive = false
         lastAutoCorrection = null
         updateAutomaticShift()
         keyboardView?.setSpaceLabel(resolveSpaceLabel(info))
+        keyboardView?.setLeadingPunctuation(InputPunctuationPolicy.leadingKey(info?.inputType ?: 0))
         keyboardView?.setSuggestionsEnabled(suggestionsAllowed(info))
+        keyboardView?.setPrivateSession(privateSession)
+        keyboardView?.let { syncNumericMode(it, info) }
         updateSuggestions()
     }
 
+    /** Keep the host app visible in landscape instead of Android's full-screen extract UI. */
+    override fun onEvaluateFullscreenMode(): Boolean = false
+
+    private fun syncNumericMode(view: KeyboardView, info: EditorInfo?) {
+        val mode = NumericInputPolicy.resolve(info?.inputType ?: 0)
+        view.setNumericMode(
+            enabled = mode.enabled,
+            decimal = mode.decimal,
+            signed = mode.signed,
+            phone = mode.phone,
+        )
+    }
+
     override fun onFinishInputView(finishingInput: Boolean) {
+        inlineAutofillGeneration++
+        inlineAutofillStrip?.removeAllViews()
+        inlineAutofillStrip?.visibility = View.GONE
+        (inlineAutofillStrip?.tag as? View)?.visibility = View.GONE
         confirmPendingCorrection()
         rememberCurrentEmail()
         rememberCurrentHashtag()
@@ -157,6 +252,7 @@ class KaiBoardImeService : InputMethodService() {
 
     private fun handleAction(action: KeyAction) {
         val connection = currentInputConnection ?: return
+        if (privateSession && (action == KeyAction.OpenAi || action == KeyAction.ToggleClipboard)) return
         if (voicePaused && action == KeyAction.Backspace && activeVoiceTarget != null) {
             activeVoicePartial = activeVoicePartial.dropLast(1)
             syncVoiceTextToFeatureInput(activeVoicePartial)
@@ -168,6 +264,11 @@ class KaiBoardImeService : InputMethodService() {
         if (action != KeyAction.Backspace) confirmPendingCorrection()
         when (action) {
             is KeyAction.CommitText -> {
+                finishComposing()
+                connection.commitText(action.value, 1)
+                updateSuggestions()
+            }
+            is KeyAction.CommitClipboard -> {
                 finishComposing()
                 connection.commitText(action.value, 1)
                 updateSuggestions()
@@ -229,7 +330,7 @@ class KaiBoardImeService : InputMethodService() {
                     finishComposing()
                     connection.commitText(value.toString(), 1)
                 }
-                if (shifted) {
+                if (shifted && !capsLocked) {
                     shifted = false
                     keyboardView?.setShifted(false)
                 }
@@ -256,9 +357,11 @@ class KaiBoardImeService : InputMethodService() {
                         connection.setComposingText(composing, 1)
                         // Undo means the original spelling was intentional. Learn it
                         // immediately so the next Space does not apply the same fix again.
-                        UserLexiconStore.decrement(this, correction.corrected, 2)
-                        UserLexiconStore.record(this, correction.original, LearnSource.TYPED, 4)
-                        AutoCorrectionStatsStore.rejected(this, correction.original, correction.corrected)
+                        if (learningAllowed()) {
+                            UserLexiconStore.decrement(this, correction.corrected, 2)
+                            UserLexiconStore.record(this, correction.original, LearnSource.TYPED, 4)
+                            AutoCorrectionStatsStore.rejected(this, correction.original, correction.corrected)
+                        }
                         lastAutoCorrection = null
                         updateSuggestions()
                         return
@@ -266,10 +369,12 @@ class KaiBoardImeService : InputMethodService() {
                     lastAutoCorrection = null
                 }
                 if (composing.isNotEmpty()) {
-                    composing = composing.dropLast(1)
+                    composing = TelexWordComposer.removeLast(composing)
                     literalTelexLockLength = TelexWordComposer.lockAfterBackspace(composing.length, literalTelexLockLength)
-                    if (composing.isEmpty()) connection.finishComposingText()
-                    else connection.setComposingText(composing, 1)
+                    if (composing.isEmpty()) {
+                        connection.setComposingText("", 1)
+                        connection.finishComposingText()
+                    } else connection.setComposingText(composing, 1)
                 } else {
                     val beforeCursor = connection.getTextBeforeCursor(80, 0) ?: ""
                     val previousWord = WordRecomposer.beforeSingleWhitespace(beforeCursor)
@@ -279,8 +384,19 @@ class KaiBoardImeService : InputMethodService() {
                         literalTelexLockLength = 0
                         connection.setComposingText(composing, 1)
                     } else {
-                        connection.deleteSurroundingText(1, 0)
+                        val deleteCount = UnicodeDeletionPolicy.charactersToDeleteBeforeCursor(beforeCursor)
+                        if (deleteCount > 0) connection.deleteSurroundingText(deleteCount, 0)
+                        else connection.deleteSurroundingTextInCodePoints(1, 0)
                     }
+                }
+                updateSuggestions()
+            }
+            is KeyAction.MoveCursor -> {
+                finishComposing()
+                val keyCode = if (action.characters < 0) KeyEvent.KEYCODE_DPAD_LEFT else KeyEvent.KEYCODE_DPAD_RIGHT
+                repeat(kotlin.math.abs(action.characters)) {
+                    connection.sendKeyEvent(KeyEvent(KeyEvent.ACTION_DOWN, keyCode))
+                    connection.sendKeyEvent(KeyEvent(KeyEvent.ACTION_UP, keyCode))
                 }
                 updateSuggestions()
             }
@@ -347,9 +463,13 @@ class KaiBoardImeService : InputMethodService() {
             KeyAction.VoiceAi,
             KeyAction.CancelVoice,
             KeyAction.ToggleVoicePause -> Unit
-            is KeyAction.SetAiCursor -> Unit
+            is KeyAction.SetAiCursor,
+            is KeyAction.SelectAiSuggestion -> Unit
             KeyAction.ToggleEmoji,
             KeyAction.ToggleClipboard -> Unit
+            KeyAction.ToggleEmojiSearch,
+            KeyAction.EmojiSearchBackspace,
+            is KeyAction.EmojiSearchCharacter -> Unit
             is KeyAction.SelectEmojiGroup -> Unit
             is KeyAction.SelectClipboardTab -> Unit
             KeyAction.HideKeyboard -> requestHideSelf(0)
@@ -363,10 +483,8 @@ class KaiBoardImeService : InputMethodService() {
             KeyAction.DecreaseKeyboardHeight,
             KeyAction.IncreaseKeyboardHeight,
             KeyAction.FinishKeyboardAdjustment -> Unit
-            KeyAction.Shift -> {
-                shifted = !shifted
-                keyboardView?.setShifted(shifted)
-            }
+            KeyAction.Shift -> handleShiftTap()
+            KeyAction.CapsLock -> toggleCapsLock()
         }
     }
 
@@ -381,6 +499,11 @@ class KaiBoardImeService : InputMethodService() {
     private fun sentenceAutomationAllowed(): Boolean = telexEnabled && !selectionActive
 
     private fun updateAutomaticShift(forceCapital: Boolean = false) {
+        if (capsLocked) {
+            shifted = true
+            keyboardView?.setShifted(true)
+            return
+        }
         if (!KeyboardPreferences.autoCapitalization(this) || !sentenceAutomationAllowed()) {
             shifted = false
             keyboardView?.setShifted(false)
@@ -391,6 +514,24 @@ class KaiBoardImeService : InputMethodService() {
         )
         shifted = shouldShift
         keyboardView?.setShifted(shouldShift)
+    }
+
+    private fun handleShiftTap() {
+        if (capsLocked) {
+            capsLocked = false
+            keyboardView?.setCapsLocked(false)
+            shifted = false
+        } else {
+            shifted = !shifted
+        }
+        keyboardView?.setShifted(shifted)
+    }
+
+    private fun toggleCapsLock() {
+        capsLocked = !capsLocked
+        shifted = capsLocked
+        keyboardView?.setCapsLocked(capsLocked)
+        keyboardView?.setShifted(shifted)
     }
 
     private fun updateSuggestions() {
@@ -426,13 +567,13 @@ class KaiBoardImeService : InputMethodService() {
 
     private fun suggestionsAllowed(info: EditorInfo?): Boolean =
         KeyboardPreferences.wordSuggestions(this) &&
-            !isSensitiveInput(info) &&
+            !InputPrivacyPolicy.isPrivateSession(info) &&
             (isEmailInput(info) || (info?.let { TelexInputPolicy.isEnabled(it.inputType) } ?: false))
 
     private fun isSensitiveInput(info: EditorInfo?): Boolean =
         info?.let { InputPrivacyPolicy.isSensitive(it.inputType) } == true
 
-    private fun learningAllowed(): Boolean = !isSensitiveInput(currentInputEditorInfo)
+    private fun learningAllowed(): Boolean = !InputPrivacyPolicy.isPrivateSession(currentInputEditorInfo)
 
     private fun isEmailInput(info: EditorInfo?): Boolean {
         val inputType = info?.inputType ?: return false
@@ -475,7 +616,7 @@ class KaiBoardImeService : InputMethodService() {
 
     private fun confirmPendingCorrection() {
         val correction = lastAutoCorrection ?: return
-        AutoCorrectionStatsStore.accepted(this, correction.original, correction.corrected)
+        if (learningAllowed()) AutoCorrectionStatsStore.accepted(this, correction.original, correction.corrected)
         lastAutoCorrection = null
     }
 
@@ -539,13 +680,20 @@ class KaiBoardImeService : InputMethodService() {
                 aiCursor = action.index.coerceIn(0, aiPrompt.length)
                 updateAiUi()
             }
+            is KeyAction.SelectAiSuggestion -> {
+                val edit = AiCommandSuggestionEngine.applySuggestion(aiPrompt, aiCursor, action.value)
+                aiPrompt = edit.prompt
+                aiCursor = edit.cursor
+                updateAiUi()
+                scheduleAi()
+            }
             is KeyAction.Character -> {
                 val value = if (shifted) action.value.uppercaseChar() else action.value
                 val before = aiPrompt.substring(0, aiCursor)
                 val changed = appendAiInput(before, value)
                 aiPrompt = (changed + aiPrompt.substring(aiCursor)).take(2_000)
                 aiCursor = changed.length.coerceAtMost(aiPrompt.length)
-                if (shifted) { shifted = false; keyboardView?.setShifted(false) }
+                if (shifted && !capsLocked) { shifted = false; keyboardView?.setShifted(false) }
                 updateAiUi(); scheduleAi()
             }
             KeyAction.Space -> {
@@ -557,13 +705,16 @@ class KaiBoardImeService : InputMethodService() {
             }
             KeyAction.Backspace -> {
                 if (aiCursor > 0) {
-                    aiPrompt = aiPrompt.removeRange(aiCursor - 1, aiCursor)
-                    aiCursor--
+                    val before = aiPrompt.substring(0, aiCursor)
+                    val deleteCount = UnicodeDeletionPolicy.charactersToDeleteBeforeCursor(before)
+                    aiPrompt = aiPrompt.removeRange(aiCursor - deleteCount, aiCursor)
+                    aiCursor -= deleteCount
                 }
                 updateAiUi(); scheduleAi()
             }
             KeyAction.Enter -> sendAiNow()
-            KeyAction.Shift -> { shifted = !shifted; keyboardView?.setShifted(shifted) }
+            KeyAction.Shift -> handleShiftTap()
+            KeyAction.CapsLock -> toggleCapsLock()
             KeyAction.HideKeyboard -> { stopAi(commit = true); requestHideSelf(0) }
             else -> return false
         }
@@ -588,6 +739,7 @@ class KaiBoardImeService : InputMethodService() {
         aiHandler.removeCallbacks(aiRunnable)
         val prompt = aiPrompt.trim()
         if (prompt.isEmpty()) return
+        AiCommandSuggestionStore.record(this, prompt)
         if (KeyboardPreferences.offlineMode(this)) {
             updateAiUi("AI bị tắt trong chế độ offline")
             return
@@ -641,7 +793,32 @@ class KaiBoardImeService : InputMethodService() {
     }
 
     private fun updateAiUi(status: String = "") {
-        keyboardView?.setAiState(aiMode, aiPrompt, aiCursor, status, AiPreferences.tone(this).label)
+        val suggestions = if (aiMode) buildAiSuggestions() else emptyList()
+        keyboardView?.setAiState(aiMode, aiPrompt, aiCursor, status, AiPreferences.tone(this).label, suggestions)
+    }
+
+    private fun buildAiSuggestions(): List<String> {
+        if (aiPrompt.isBlank()) return emptyList()
+        val cursor = aiCursor.coerceIn(0, aiPrompt.length)
+        val before = aiPrompt.substring(0, cursor)
+        val words = aiSuggestionTokenRegex.findAll(before).map { it.value }.toList()
+        val hasPartial = before.lastOrNull()?.isWhitespace() != true && words.isNotEmpty()
+        val partial = if (hasPartial) words.last() else ""
+        val history = if (hasPartial) words.dropLast(1) else words
+        val ai = AiCommandSuggestionEngine.suggest(
+            aiPrompt, cursor, AiCommandSuggestionStore.read(this), limit = 3,
+        )
+        val personal: List<String>
+        val offline: List<String>
+        if (partial.isNotEmpty()) {
+            personal = VietnameseSuggestionEngine.suggestLearnedOnly(partial, UserLexiconStore.read(this), 3)
+            offline = VietnameseSuggestionEngine.suggest(partial, learned = emptyMap(), previousWord = history.lastOrNull())
+                .filterNot { it.equals(partial, ignoreCase = true) }
+        } else {
+            personal = PhraseLearningStore.suggestPersonal(this, history, 3)
+            offline = PhraseLearningStore.suggestOffline(this, history, 3)
+        }
+        return SuggestionPriority.merge(ai, personal, offline)
     }
 
     private fun stopAi(commit: Boolean) {
@@ -678,7 +855,7 @@ class KaiBoardImeService : InputMethodService() {
             is KeyAction.Character -> {
                 val value = if (shifted) action.value.uppercaseChar() else action.value
                 translationSource = appendTranslatedInput(translationSource, value).takeLast(500)
-                if (shifted) { shifted = false; keyboardView?.setShifted(false) }
+                if (shifted && !capsLocked) { shifted = false; keyboardView?.setShifted(false) }
                 updateTranslationUi(); scheduleTranslation()
             }
             KeyAction.Space -> {
@@ -686,7 +863,7 @@ class KaiBoardImeService : InputMethodService() {
                 updateTranslationUi(); scheduleTranslation()
             }
             KeyAction.Backspace -> {
-                translationSource = translationSource.dropLast(1)
+                translationSource = UnicodeDeletionPolicy.removeLastCluster(translationSource)
                 if (translationSource.isEmpty()) {
                     translationResult = ""
                     currentInputConnection?.setComposingText("", 1)
@@ -697,9 +874,8 @@ class KaiBoardImeService : InputMethodService() {
                 currentInputConnection?.finishComposingText()
                 translationSource = ""; translationResult = ""; updateTranslationUi()
             }
-            KeyAction.Shift -> {
-                shifted = !shifted; keyboardView?.setShifted(shifted)
-            }
+            KeyAction.Shift -> handleShiftTap()
+            KeyAction.CapsLock -> toggleCapsLock()
             KeyAction.HideKeyboard -> { stopTranslation(commit = true); requestHideSelf(0) }
             else -> return false
         }

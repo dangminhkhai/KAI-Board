@@ -9,6 +9,8 @@ data class TelexComposeResult(
 
 /** Keeps the rest of a word literal after the user explicitly escapes a tone. */
 object TelexWordComposer {
+    fun removeLast(word: String): String = word.dropLast(1)
+
     fun append(word: String, key: Char, literalLockLength: Int): TelexComposeResult {
         if (literalLockLength > 0) return TelexComposeResult("$word$key", literalLockLength)
         val escapedModifier = TelexEngine.isRepeatedModifierEscape(word, key)

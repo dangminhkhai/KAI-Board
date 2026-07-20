@@ -4,6 +4,10 @@ import org.junit.Assert.assertEquals
 import org.junit.Test
 
 class TelexWordComposerTest {
+    @Test fun backspaceRemovesSingleComposingCharacterImmediately() {
+        assertEquals("", TelexWordComposer.removeLast("d"))
+    }
+
     @Test fun repeatedToneEscapeKeepsRestOfCurrentWordLiteral() {
         var text = "Vin"
         var lock = 0

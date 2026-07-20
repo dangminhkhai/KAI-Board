@@ -12,6 +12,7 @@ local.properties
 Thumbs.db
 
 # Signing keys and credentials
+.signing/
 *.jks
 *.keystore
 keystore.properties

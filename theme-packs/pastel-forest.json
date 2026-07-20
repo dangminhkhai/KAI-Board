@@ -1,0 +1,28 @@
+{
+  "schemaVersion": 1,
+  "id": "pastel-forest",
+  "name": "Rừng Pastel",
+  "author": "KAI Board",
+  "light": {
+    "background": "#D5E5CD",
+    "key": "#F7F4DC",
+    "specialKey": "#689D8E",
+    "pressed": "#79B59E",
+    "text": "#1F3733",
+    "hint": "#48675B",
+    "accent": "#2B695B",
+    "gradient": ["#E8EFD5", "#C1DCC4", "#70A99A"],
+    "fontFamily": "sans-serif-rounded"
+  },
+  "dark": {
+    "background": "#19302B",
+    "key": "#2B4841",
+    "specialKey": "#235E51",
+    "pressed": "#5B9D86",
+    "text": "#EFF2DA",
+    "hint": "#B2CDBB",
+    "accent": "#7BBEA3",
+    "gradient": ["#233D35", "#184940", "#113430"],
+    "fontFamily": "sans-serif-rounded"
+  }
+}

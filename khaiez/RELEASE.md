@@ -37,5 +37,5 @@
 - Package: `vn.kai.board`.
 - Version: `1.2.0` (`versionCode 120`).
 - ABI: `arm64-v8a`.
-- Tên artifact: `KAI-Board-1.2.0-release.apk`.
+- Tên artifact: `KAI-Board-1.2.0.apk`; mọi bản sau phải kèm `versionName` trong tên file.
 
