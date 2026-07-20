@@ -22,7 +22,7 @@ KAI Board là bàn phím Android viết bằng Kotlin, tập trung vào cảm gi
 
 ### Gõ tiếng Việt và Telex
 
-KAI Board xử lý Telex theo từng từ đang composing trước con trỏ. Engine thuần trạng thái biến đổi từ hiện tại ngay khi nhận phím; `KaiBoardImeService` chịu trách nhiệm đồng bộ composing text với ứng dụng. Không có network, tải model hoặc đọc dữ liệu lớn trên đường xử lý này.
+KAI Board xử lý Telex theo từng từ đang composing trước con trỏ. `TelexWordComposer` giữ song song chữ đang hiển thị và chuỗi phím gốc; engine biến đổi ngay khi nhận phím, kiểm tra cấu trúc âm tiết và có thể dựng lại đúng chuỗi Latin khi từ không còn hợp lệ như tiếng Việt. `KaiBoardImeService` chịu trách nhiệm đồng bộ composing text với ứng dụng. Không có network, tải model hoặc đọc dữ liệu lớn trên đường xử lý này.
 
 #### Bảng phím Telex
 
@@ -71,6 +71,8 @@ Các bảo vệ cho tiếng Anh và tên riêng:
 - `z` là chữ thường nếu từ chưa có dấu; `zalo`, `zero`, `amazon`, `mazda`, `pizza` giữ nguyên. Nó chỉ là lệnh xóa khi đang tồn tại dấu thanh.
 - Những onset không thể bắt đầu âm tiết Việt không tiêu thụ modifier: `free`, `smart`, `javascript`, `zoom`, `jazz`, `frozen` giữ nguyên.
 - Nếu một phím dấu đã tạm bị tiêu thụ nhưng phần sau chứng minh từ là Latin, engine khôi phục phím thô; `Vinfast` không bị giữ thành `Vínfast`.
+- Việc bảo vệ không dựa trên danh sách từ cố định: `Router`, `user`, `order`, `server`, `address`, `google`, `power` chỉ là các ca kiểm thử cho cơ chế chuỗi phím gốc và kiểm tra âm tiết.
+- Hoa/thường của modifier được lấy từ phím người dùng thực sự bấm. Ví dụ `A+s+i+s` tạo `Ais`; chỉ `A+s+i+S` mới tạo `AiS`.
 - Nhầm phím `s` cạnh `d` được sửa có điều kiện: `ds` đứng riêng vẫn giữ nguyên, nhưng khi có nguyên âm theo sau thì `dsa...` được hiểu như `dda...`; ví dụ `dsangwj` → `đặng`.
 
 #### Phạm vi bật Telex và chỉnh sửa
@@ -79,7 +81,7 @@ Các bảo vệ cho tiếng Anh và tên riêng:
 - Tắt trong email, web email, mật khẩu, visible password và các ô số để không sửa địa chỉ hoặc dữ liệu nhạy cảm ngoài ý muốn.
 - Tương thích các ô tìm kiếm tùy biến làm mất `TYPE_CLASS_TEXT` hoặc không giữ composing span: KAI Board nhận diện các cờ text an toàn và dùng cơ chế thay thế trực tiếp. Trường số, điện thoại và dữ liệu nhạy cảm vẫn không bật Telex.
 - Phím Enter ưu tiên action do ứng dụng khai báo (`Search`, `Go`, `Send`, `Next`, `Done`); chỉ xuống dòng khi editor không cung cấp action hoặc yêu cầu Enter thuần.
-- Backspace xóa ngay ký tự composing cuối, hỗ trợ vùng chọn và cho phép quay lại từ trước để sửa tiếp.
+- Khi kéo con trỏ vào giữa từ, KAI Board kết thúc composing trước khi chỉnh sửa; Backspace vì vậy xóa đúng ký tự ngay trước con trỏ thay vì xóa ký tự cuối của từ. Backspace ở cuối từ vẫn xóa và dựng lại Telex từ chuỗi phím gốc.
 - Sau khi đã Space, người dùng có thể Backspace về từ trước và thêm dấu/biến âm; trạng thái composing được dựng lại từ nội dung trước con trỏ.
 - Chọn từ gợi ý hoàn thiện từ đó, thêm Space và chuyển sang từ mới.
 - Tự viết hoa khi bắt đầu nhập hoặc xuống dòng mới; không tự thêm Space hay bật Shift sau dấu câu.

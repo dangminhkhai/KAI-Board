@@ -44,6 +44,7 @@ import vn.kai.board.input.InputPrivacyPolicy
 import vn.kai.board.input.InputPunctuationPolicy
 import vn.kai.board.input.NumericInputPolicy
 import vn.kai.board.input.UnicodeDeletionPolicy
+import vn.kai.board.input.ComposingCursorPolicy
 import vn.kai.board.settings.KeyboardPreferences
 import vn.kai.board.telex.TelexEngine
 import vn.kai.board.input.TelexWordComposer
@@ -80,6 +81,7 @@ class KaiBoardImeService : InputMethodService() {
     private var inlineAutofillStrip: LinearLayout? = null
     private var inlineAutofillGeneration = 0
     private var composing = ""
+    private var rawComposing = ""
     private var literalTelexLockLength = 0
     private var telexEnabled = true
     private var directCommitTelex = false
@@ -187,6 +189,7 @@ class KaiBoardImeService : InputMethodService() {
         keyboardView?.setCapsLocked(false)
         keyboardView?.setShifted(false)
         composing = ""
+        rawComposing = ""
         literalTelexLockLength = 0
         telexEnabled = info?.let { TelexInputPolicy.isEnabled(it.inputType) } ?: true
         directCommitTelex = info?.let { TelexInputPolicy.requiresDirectCommit(it.inputType, it.imeOptions) } ?: false
@@ -229,6 +232,7 @@ class KaiBoardImeService : InputMethodService() {
         stopTranslation(commit = true)
         stopAi(commit = true)
         composing = ""
+        rawComposing = ""
         literalTelexLockLength = 0
         selectionActive = false
         super.onFinishInputView(finishingInput)
@@ -245,15 +249,15 @@ class KaiBoardImeService : InputMethodService() {
         super.onUpdateSelection(oldSelStart, oldSelEnd, newSelStart, newSelEnd, candidatesStart, candidatesEnd)
         keyboardView?.closeMediaPanel()
         selectionActive = newSelStart != newSelEnd
-        if (composing.isNotEmpty() && !directCommitTelex && candidatesStart >= 0) {
-            val cursorOutside = newSelStart < candidatesStart || newSelEnd > candidatesEnd
-            val hasSelection = newSelStart != newSelEnd
-            if (cursorOutside || hasSelection) {
+        if (ComposingCursorPolicy.shouldFinish(
+                composing.isNotEmpty(), directCommitTelex,
+                newSelStart, newSelEnd, candidatesStart, candidatesEnd,
+            )) {
                 composing = ""
+                rawComposing = ""
                 literalTelexLockLength = 0
                 currentInputConnection?.finishComposingText()
                 updateSuggestions()
-            }
         }
     }
 
@@ -299,6 +303,7 @@ class KaiBoardImeService : InputMethodService() {
                     showNextWordSuggestions(history + action.value)
                 } else if (composing.isNotEmpty()) {
                     composing = action.value
+                    rawComposing = action.value
                     literalTelexLockLength = 0
                     connection.setComposingText(composing, 1)
                     if (learningAllowed()) {
@@ -327,9 +332,10 @@ class KaiBoardImeService : InputMethodService() {
                     if (composing.isEmpty() && !selectionActive && isTelexModifier(value) && transformWordAtCursor(value)) {
                         Unit
                     } else {
-                        val result = TelexWordComposer.append(composing, value, literalTelexLockLength)
+                        val result = TelexWordComposer.append(composing, value, literalTelexLockLength, rawComposing)
                         val previousComposing = composing
                         composing = result.text
+                        rawComposing = result.rawText
                         literalTelexLockLength = result.literalLockLength
                         if (directCommitTelex) {
                             if (previousComposing.isNotEmpty()) connection.deleteSurroundingText(previousComposing.length, 0)
@@ -351,6 +357,7 @@ class KaiBoardImeService : InputMethodService() {
                 val selectedText = connection.getSelectedText(0)
                 if (SelectionDeletionPolicy.shouldDeleteSelection(selectionActive, selectedText)) {
                     composing = ""
+                    rawComposing = ""
                     connection.finishComposingText()
                     connection.commitText("", 1)
                     selectionActive = false
@@ -364,6 +371,7 @@ class KaiBoardImeService : InputMethodService() {
                     if (before == "${correction.corrected} ") {
                         connection.deleteSurroundingText(correction.corrected.length + 1, 0)
                         composing = correction.original
+                        rawComposing = correction.original
                         literalTelexLockLength = 0
                         connection.setComposingText(composing, 1)
                         // Undo means the original spelling was intentional. Learn it
@@ -381,8 +389,10 @@ class KaiBoardImeService : InputMethodService() {
                 }
                 if (composing.isNotEmpty()) {
                     val previousComposing = composing
-                    composing = TelexWordComposer.removeLast(composing)
-                    literalTelexLockLength = TelexWordComposer.lockAfterBackspace(composing.length, literalTelexLockLength)
+                    rawComposing = TelexWordComposer.removeLast(rawComposing)
+                    val restored = TelexWordComposer.compose(rawComposing)
+                    composing = restored.text
+                    literalTelexLockLength = restored.literalLockLength
                     if (directCommitTelex) {
                         connection.deleteSurroundingText(previousComposing.length, 0)
                         if (composing.isNotEmpty()) connection.commitText(composing, 1)
@@ -396,6 +406,7 @@ class KaiBoardImeService : InputMethodService() {
                     if (previousWord != null) {
                         connection.deleteSurroundingText(previousWord.length + 1, 0)
                         composing = previousWord
+                        rawComposing = previousWord
                         literalTelexLockLength = 0
                         connection.setComposingText(composing, 1)
                     } else {
@@ -504,6 +515,7 @@ class KaiBoardImeService : InputMethodService() {
 
     private fun finishComposing() {
         literalTelexLockLength = 0
+        rawComposing = ""
         if (composing.isEmpty()) return
         composing = ""
         currentInputConnection?.finishComposingText()
@@ -1224,6 +1236,7 @@ class KaiBoardImeService : InputMethodService() {
         val transformed = TelexEngine.apply(context.word, key) ?: return false
         connection.deleteSurroundingText(context.before.length, context.after.length)
         composing = transformed
+        rawComposing = "${context.word}$key"
         if (directCommitTelex) connection.commitText(composing, 1)
         else connection.setComposingText(composing, 1)
         return true

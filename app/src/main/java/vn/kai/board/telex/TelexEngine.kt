@@ -33,10 +33,10 @@ object TelexEngine {
         // A shape key may be typed after the tone and final consonant while
         // correcting a syllable: canf + a -> cần. Try that valid Telex
         // transformation before treating the new vowel as English text.
-        if (lower in "aeowd") applyShape(word, lower)?.let { return it }
+        if (lower in "aeowd") applyShape(word, lower, key)?.let { return it }
         restoreRawToneBeforeLiteral(word, lower)?.let { return it }
         restoreRawShapeBeforeLiteralZ(word, lower)?.let { return it }
-        if (lower in "sfrxjz") return applyTone(word, lower)
+        if (lower in "sfrxjz") return applyTone(word, lower, key)
         return null
     }
 
@@ -116,8 +116,8 @@ object TelexEngine {
         return "$cleared$toneKey$key"
     }
 
-    private fun applyShape(word: String, key: Char): String? {
-        undoRepeatedShape(word, key)?.let { return it }
+    private fun applyShape(word: String, key: Char, typedKey: Char): String? {
+        undoRepeatedShape(word, key, typedKey)?.let { return it }
         // Accept both prefix `dd...` and UniKey-style trailing `d...d`.
         if (key == 'd') {
             val target = when {
@@ -173,11 +173,11 @@ object TelexEngine {
      * â+a→aa, ô+o→oo, đ+d→dd, ă+w→aw, ươ+w→uow.
      * Existing tone is kept on the unshaped vowel (ấ+a→áa).
      */
-    private fun undoRepeatedShape(word: String, key: Char): String? {
+    private fun undoRepeatedShape(word: String, key: Char, typedKey: Char): String? {
         if (key == 'd') {
             if (word.last().lowercaseChar() != 'đ') return null
-            val raw = if (word.last().isUpperCase()) "DD" else "dd"
-            return word.dropLast(1) + raw
+            val rawD = if (word.last().isUpperCase()) 'D' else 'd'
+            return word.dropLast(1) + rawD + typedKey
         }
 
         if (key == 'w') {
@@ -187,7 +187,7 @@ object TelexEngine {
                     val rawU = unshape(word[i], 'u')
                     val rawO = unshape(word[i + 1], 'o')
                     val unshaped = word.replaceRange(i, i + 2, "$rawU$rawO")
-                    return "${unshaped}w"
+                    return "$unshaped$typedKey"
                 }
             }
         }
@@ -202,12 +202,11 @@ object TelexEngine {
         for (i in word.indices.reversed()) {
             val base = shapedToBase[baseShape(word[i])] ?: continue
             val rawVowel = unshape(word[i], base)
-            val rawKey = if (word[i].isUpperCase()) key.uppercaseChar() else key
             val unshaped = word.replaceRange(i, i + 1, rawVowel.toString())
             // When the original modifier reached back across a final consonant,
             // its repeated escape belongs at the cursor, not beside the vowel:
             // bôt + o -> boto (not boot), dât + a -> data (not daat).
-            return "$unshaped$rawKey"
+            return "$unshaped$typedKey"
         }
         return null
     }
@@ -218,11 +217,18 @@ object TelexEngine {
         return matchCase(out, source)
     }
 
-    private fun applyTone(word: String, key: Char): String? {
+    private fun applyTone(word: String, key: Char, typedKey: Char): String? {
         // A plain z is a literal English letter. It only acts as the Telex
         // remove-tone command when there is an actual tone to remove.
         if (key == 'z' && word.none { toneIndex(it) > 0 }) return null
         if (!hasVietnameseOnset(word)) return null
+        // A Vietnamese syllable has one continuous vowel nucleus. English
+        // words such as route/router, user, water or server contain another
+        // vowel after a consonant, so their trailing s/f/r/x/j must stay raw.
+        if (hasSplitVowelNucleus(word)) {
+            // Preserve the existing repeated-key escape: majjorr -> major.
+            return word.takeIf { it.lastOrNull()?.lowercaseChar() == key }
+        }
         val vowels = vowelIndices(word)
         if (vowels.isEmpty()) return null
         val target = toneTargetIndex(word, vowels) ?: return null
@@ -236,8 +242,7 @@ object TelexEngine {
                 target + 1,
                 matchCase(plain, word[target]).toString()
             )
-            val rawKey = if (word[target].isUpperCase()) key.uppercaseChar() else key
-            return "$cleared$rawKey"
+            return "$cleared$typedKey"
         }
         val out = families.getValue(shape)[tone]
         return word.replaceRange(target, target + 1, matchCase(out, word[target]).toString())
@@ -299,6 +304,19 @@ object TelexEngine {
         val firstVowel = word.indexOfFirst(::isVowel)
         if (firstVowel < 0) return false
         return word.substring(0, firstVowel).lowercase() in vietnameseOnsets
+    }
+    private fun hasSplitVowelNucleus(word: String): Boolean {
+        val firstVowel = word.indexOfFirst(::isVowel)
+        if (firstVowel < 0) return false
+        var sawConsonantAfterVowel = false
+        for (index in firstVowel + 1 until word.length) {
+            if (isVowel(word[index])) {
+                if (sawConsonantAfterVowel) return true
+            } else {
+                sawConsonantAfterVowel = true
+            }
+        }
+        return false
     }
     private fun baseShape(c: Char) = familyByChar[c.lowercaseChar()] ?: c.lowercaseChar()
     private fun toneIndex(c: Char): Int {

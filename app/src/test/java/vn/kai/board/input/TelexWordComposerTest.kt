@@ -74,4 +74,100 @@ class TelexWordComposerTest {
             assertEquals(keys, expected, text)
         }
     }
+
+    @Test fun restoresOriginalKeyOrderForClearlyInvalidVietnameseSyllables() {
+        listOf(
+            "Router",
+            "router",
+            "user",
+            "order",
+            "server",
+            "laser",
+            "cursor",
+            "computer",
+            "water",
+        ).forEach { word ->
+            assertEquals(word, word, TelexWordComposer.compose(word).text)
+        }
+    }
+
+    @Test fun rawKeyRecoveryDoesNotDisableFlexibleVietnameseToneOrder() {
+        mapOf(
+            "hosa" to "hóa",
+            "canfa" to "cần",
+            "metje" to "mệt",
+            "tuongjw" to "tượng",
+        ).forEach { (keys, expected) ->
+            assertEquals(keys, expected, TelexWordComposer.compose(keys).text)
+        }
+    }
+
+    @Test fun supportsEveryTelexToneAndShapeKey() {
+        mapOf(
+            "mas" to "má",
+            "maf" to "mà",
+            "mar" to "mả",
+            "max" to "mã",
+            "maj" to "mạ",
+            "dd" to "đ",
+            "caa" to "câ",
+            "mee" to "mê",
+            "too" to "tô",
+            "taw" to "tă",
+            "tow" to "tơ",
+            "tuw" to "tư",
+        ).forEach { (keys, expected) ->
+            assertEquals(keys, expected, TelexWordComposer.compose(keys).text)
+        }
+    }
+
+    @Test fun escapedModifierUsesTheCaseOfTheActuallyPressedKey() {
+        assertEquals("Ais", TelexWordComposer.compose("Asis").text)
+        assertEquals("AiS", TelexWordComposer.compose("AsiS").text)
+    }
+
+    @Test fun supportsEveryToneWhenTheShapeKeyIsTypedLate() {
+        mapOf(
+            "cansa" to "cấn",
+            "canfa" to "cần",
+            "canra" to "cẩn",
+            "canxa" to "cẫn",
+            "canja" to "cận",
+            "metse" to "mết",
+            "metfe" to "mềt",
+            "metre" to "mểt",
+            "metxe" to "mễt",
+            "metje" to "mệt",
+            "tonso" to "tốn",
+            "tonfo" to "tồn",
+            "tonro" to "tổn",
+            "tonxo" to "tỗn",
+            "tonjo" to "tộn",
+        ).forEach { (keys, expected) ->
+            assertEquals(keys, expected, TelexWordComposer.compose(keys).text)
+        }
+    }
+
+    @Test fun restoresEnglishCollisionsAcrossToneAndShapeKeys() {
+        listOf(
+            "safe",
+            "router",
+            "pixel",
+            "object",
+            "address",
+            "screen",
+            "google",
+            "awesome",
+            "power",
+            "fluent",
+        ).forEach { word ->
+            assertEquals(word, word, TelexWordComposer.compose(word).text)
+        }
+    }
+
+    @Test fun backspaceReplaysTheRemainingRawKeys() {
+        val typed = TelexWordComposer.compose("user")
+        assertEquals("user", typed.text)
+        assertEquals("use", TelexWordComposer.compose(typed.rawText.dropLast(1)).text)
+    }
 }

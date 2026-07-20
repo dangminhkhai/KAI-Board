@@ -2,6 +2,8 @@
 
 ## Chưa phát hành
 
+- Nâng cấp Telex theo trạng thái chuỗi phím gốc: hỗ trợ modifier sai thứ tự, khôi phục đúng thứ tự từ Latin/Anh khi âm tiết Việt không hợp lệ và bao phủ `s f r x j`, `dd`, `aa ee oo`, `aw ow uw`.
+- Sửa hoa/thường khi hoàn tác modifier theo đúng phím vừa bấm (`A+s+i+s` → `Ais`); kết thúc composing khi con trỏ được kéo vào giữa từ để Backspace xóa đúng vị trí.
 - Tối ưu trang Giao diện tùy chỉnh thành gallery hai cột đồng đều; preview bàn phím giữ tỷ lệ 400:225, nút Dùng/trạng thái active rõ ràng và Xuất/Chia sẻ/Xóa nằm trong menu gọn.
 - Làm lại UI Quản lý từ cá nhân: card dọc không ép chữ, điểm ưu tiên dạng badge, thống kê đầy đủ chiều rộng, thao tác cùng hàng và xác nhận trước khi xóa.
 - Thêm hai gói theme tải riêng `pastel-pink.json` và `retro-japanese-manga.json`, đều có palette sáng/tối và không tăng dung lượng APK.

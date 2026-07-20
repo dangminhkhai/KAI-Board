@@ -22,7 +22,7 @@ Core typing phải hoạt động khi AI, mạng, micro hoặc model dịch lỗ
 
 Tùy chọn dùng SharedPreferences. API key được mã hóa AES-GCM với khóa trong Android Keystore; card quản lý chỉ hiện đầu/cuối key đã che bớt. Metadata provider/số model/hạn mức được lưu riêng theo fingerprint, không lưu lại key dạng rõ. Từ, cụm từ, email và hashtag đã học cùng clipboard đều ở cục bộ. File sao lưu có thể chứa dữ liệu học, Theme Extensions và thứ tự Smartbar nhưng không chứa API key, clipboard hoặc ghi chú.
 
-`TelexWordComposer` giữ trạng thái hoàn tác phím theo từng từ; `SentenceAutomationPolicy` chỉ bật viết hoa khi bắt đầu nhập hoặc xuống dòng mới, không tự thêm Space/bật Shift sau dấu câu. Email và hashtag được xếp hạng bằng bộ đếm tần suất có giới hạn.
+`TelexWordComposer` giữ song song chuỗi phím gốc và kết quả Telex theo từng từ. Khi kết quả có dấu nhưng cấu trúc âm tiết không hợp lệ, composer trả lại chuỗi Latin gốc; Backspace phát lại phần chuỗi phím còn lại. `ComposingCursorPolicy` kết thúc composing khi con trỏ rời mép cuối để chỉnh sửa giữa từ không xóa nhầm ký tự cuối. `SentenceAutomationPolicy` chỉ bật viết hoa khi bắt đầu nhập hoặc xuống dòng mới, không tự thêm Space/bật Shift sau dấu câu. Email và hashtag được xếp hạng bằng bộ đếm tần suất có giới hạn.
 
 `PhraseLearningStore` chỉ học bigram/trigram cá nhân và ưu tiên trigram đúng hai từ ngữ cảnh. `WordDictionaryPack` tải riêng gói Việt/Anh vào `filesDir`; `SuggestionLanguageDetector` dùng luật ký tự/prefix nhẹ để ưu tiên nguồn phù hợp mà không dùng model hoặc I/O trên đường gõ.
 

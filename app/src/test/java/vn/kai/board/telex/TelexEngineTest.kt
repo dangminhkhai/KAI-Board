@@ -25,7 +25,8 @@ class TelexEngineTest {
 
     @Test
     fun repeatedShapePreservesCaseAndTone() {
-        assertEquals("AA", TelexEngine.apply("Â", 'a'))
+        assertEquals("Aa", TelexEngine.apply("Â", 'a'))
+        assertEquals("AA", TelexEngine.apply("Â", 'A'))
         assertEquals("áa", TelexEngine.apply("ấ", 'a'))
         assertEquals("uów", TelexEngine.apply("ướ", 'w'))
     }
@@ -64,7 +65,8 @@ class TelexEngineTest {
                 assertEquals("${family[0]}$key", TelexEngine.apply(toned.toString(), key))
             }
         }
-        assertEquals("AS", TelexEngine.apply("Á", 's'))
+        assertEquals("As", TelexEngine.apply("Á", 's'))
+        assertEquals("AS", TelexEngine.apply("Á", 'S'))
         assertEquals("hoas", TelexEngine.apply("hóa", 's'))
         assertEquals("thuyr", TelexEngine.apply("thủy", 'r'))
     }
@@ -126,6 +128,16 @@ class TelexEngineTest {
         assertEquals("zoom", typeSequence("zoom"))
         assertEquals("jazz", typeSequence("jazz"))
         assertEquals("frozen", typeSequence("frozen"))
+    }
+
+    @Test
+    fun englishWordsWithSplitVowelNucleiKeepTrailingToneLetters() {
+        listOf(
+            "Router",
+            "router",
+            "water",
+            "computer",
+        ).forEach { word -> assertEquals(word, word, typeSequence(word)) }
     }
 
     @Test
