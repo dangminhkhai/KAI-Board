@@ -22,11 +22,65 @@ KAI Board là bàn phím Android viết bằng Kotlin, tập trung vào cảm gi
 
 ### Gõ tiếng Việt và Telex
 
-- Telex theo thói quen UniKey, gồm đặt dấu, biến âm, hoàn tác dấu và xử lý chuỗi Latin/tiếng Anh trong chế độ Telex.
-- Cho phép Telex trong ô URL nhưng vẫn áp dụng chính sách riêng cho email, mật khẩu, số, OTP và các loại input đặc biệt.
+KAI Board xử lý Telex theo từng từ đang composing trước con trỏ. Engine thuần trạng thái biến đổi từ hiện tại ngay khi nhận phím; `KaiBoardImeService` chịu trách nhiệm đồng bộ composing text với ứng dụng. Không có network, tải model hoặc đọc dữ liệu lớn trên đường xử lý này.
+
+#### Bảng phím Telex
+
+| Phím | Kết quả | Ví dụ |
+| --- | --- | --- |
+| `aa`, `ee`, `oo` | `â`, `ê`, `ô` | `tieng + e + s` → `tiếng` |
+| `aw`, `ow`, `uw` | `ă`, `ơ`, `ư` | `duong + w` → `dương` |
+| `uow` | `ươ` | `tuong + w` → `tương` |
+| `dd` | `đ` | `ddang` → `đang` |
+| `s`, `f`, `r`, `x`, `j` | sắc, huyền, hỏi, ngã, nặng | `chao + f` → `chào` |
+| `z` | xóa dấu thanh đang có | `á + z` → `a` |
+
+Modifier có thể đặt ngay sau nguyên âm hoặc ở cuối từ theo thói quen UniKey:
+
+- `tieengs` và `tieng + e + s` đều tạo `tiếng`.
+- `tuaans` và `tuan + a + s` đều tạo `tuấn`.
+- `dang + d` → `đang`.
+- `duong + w` → `dương`.
+
+Khi modifier nằm sau phụ âm cuối, engine chỉ tìm ngược qua các phụ âm cuối hợp lệ của tiếng Việt như `c`, `ch`, `m`, `n`, `ng`, `nh`, `p`, `t`. Cách này tránh biến đổi bừa các chuỗi Latin không giống âm tiết Việt.
+
+#### Vị trí đặt dấu kiểu mới
+
+- `gi` và `qu` được xem là phụ âm kép khi còn nguyên âm phía sau: `gias` → `giá`, `quas` → `quá`, `quys` → `quý`.
+- Nguyên âm đã biến đổi `ă â ê ô ơ ư` được ưu tiên mang dấu.
+- Âm tiết mở `oa`, `oe`, `uy` đặt dấu trên nguyên âm đầu: `hoaf` → `hòa`.
+- Âm tiết mở `ia`, `ya`, `ua`, `ưa` cũng đặt dấu trên nguyên âm đầu: `tias` → `tía`.
+- Âm tiết đóng bằng phụ âm đặt dấu trên nguyên âm cuối của cụm nguyên âm: `toans` → `toán`, `tuan + a + s` → `tuấn`.
+- Chữ hoa/thường của nguyên âm gốc được giữ khi thêm hoặc hoàn tác dấu.
+
+#### Hoàn tác và gõ tiếng Anh trong chế độ Telex
+
+Nhấn lặp lại đúng modifier sẽ trả về chuỗi phím Latin thay vì ép người dùng chuyển chế độ:
+
+| Đang có | Nhấn | Kết quả Latin |
+| --- | --- | --- |
+| `á`, `à`, `ả`, `ã`, `ạ` | lặp `s`, `f`, `r`, `x`, `j` tương ứng | `as`, `af`, `ar`, `ax`, `aj` |
+| `â`, `ê`, `ô` | lặp `a`, `e`, `o` | `aa`, `ee`, `oo` |
+| `ă`, `ơ`, `ư`, `ươ` | lặp `w` | `aw`, `ow`, `uw`, `uow` |
+| `đ` | lặp `d` | `dd` |
+
+Sau khi người dùng chủ động hoàn tác một modifier, phần còn lại của từ được khóa ở dạng Latin. Ví dụ `Vin + f` tạm thành `Vìn`; nhấn `f` lần nữa trở thành `Vinf`, sau đó gõ tiếp `ast` vẫn giữ `Vinfast`, không biến `s` thành dấu sắc. Nếu Backspace xóa lùi qua điểm thoát này, Telex được mở lại cho phần từ còn lại.
+
+Các bảo vệ cho tiếng Anh và tên riêng:
+
+- `z` là chữ thường nếu từ chưa có dấu; `zalo`, `zero`, `amazon`, `mazda`, `pizza` giữ nguyên. Nó chỉ là lệnh xóa khi đang tồn tại dấu thanh.
+- Những onset không thể bắt đầu âm tiết Việt không tiêu thụ modifier: `free`, `smart`, `javascript`, `zoom`, `jazz`, `frozen` giữ nguyên.
+- Nếu một phím dấu đã tạm bị tiêu thụ nhưng phần sau chứng minh từ là Latin, engine khôi phục phím thô; `Vinfast` không bị giữ thành `Vínfast`.
+- Nhầm phím `s` cạnh `d` được sửa có điều kiện: `ds` đứng riêng vẫn giữ nguyên, nhưng khi có nguyên âm theo sau thì `dsa...` được hiểu như `dda...`; ví dụ `dsangwj` → `đặng`.
+
+#### Phạm vi bật Telex và chỉnh sửa
+
+- Bật trong ô text thường, multiline và URL.
+- Tắt trong email, web email/web editor, mật khẩu, visible password và các ô số để không sửa địa chỉ hoặc dữ liệu nhạy cảm ngoài ý muốn.
+- Backspace xóa ngay ký tự composing cuối, hỗ trợ vùng chọn và cho phép quay lại từ trước để sửa tiếp.
+- Sau khi đã Space, người dùng có thể Backspace về từ trước và thêm dấu/biến âm; trạng thái composing được dựng lại từ nội dung trước con trỏ.
+- Chọn từ gợi ý hoàn thiện từ đó, thêm Space và chuyển sang từ mới.
 - Tự viết hoa khi bắt đầu nhập hoặc xuống dòng mới; không tự thêm Space hay bật Shift sau dấu câu.
-- Chọn từ gợi ý sẽ hoàn thiện từ và chuyển sang từ mới.
-- Backspace hỗ trợ sửa lại từ trước đó, xóa vùng chọn và xóa emoji ghép nhiều code point theo cụm hiển thị.
 - Giữ Backspace để xóa tăng tốc; giữ hoặc chạm hai lần Shift để bật Caps Lock.
 
 ### Gợi ý, từ điển và học cá nhân
