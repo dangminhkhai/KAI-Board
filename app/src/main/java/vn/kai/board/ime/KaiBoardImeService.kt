@@ -389,9 +389,9 @@ class KaiBoardImeService : InputMethodService() {
                 }
                 if (composing.isNotEmpty()) {
                     val previousComposing = composing
-                    rawComposing = TelexWordComposer.removeLast(rawComposing)
-                    val restored = TelexWordComposer.compose(rawComposing)
+                    val restored = TelexWordComposer.backspace(rawComposing, literalTelexLockLength)
                     composing = restored.text
+                    rawComposing = restored.rawText
                     literalTelexLockLength = restored.literalLockLength
                     if (directCommitTelex) {
                         connection.deleteSurroundingText(previousComposing.length, 0)

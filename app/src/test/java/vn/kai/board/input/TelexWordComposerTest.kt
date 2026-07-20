@@ -168,6 +168,32 @@ class TelexWordComposerTest {
     @Test fun backspaceReplaysTheRemainingRawKeys() {
         val typed = TelexWordComposer.compose("user")
         assertEquals("user", typed.text)
-        assertEquals("use", TelexWordComposer.compose(typed.rawText.dropLast(1)).text)
+        assertEquals("use", TelexWordComposer.backspace(typed.rawText, typed.literalLockLength).text)
+    }
+
+    @Test fun deletingEnglishWordDoesNotTurnRemainingDoubleVowelIntoTelex() {
+        var state = TelexWordComposer.compose("Google")
+        assertEquals("Google", state.text)
+        val expected = listOf("Googl", "Goog", "Goo", "Go")
+        expected.forEach { text ->
+            state = TelexWordComposer.backspace(state.rawText, state.literalLockLength)
+            assertEquals(text, text, state.text)
+        }
+    }
+
+    @Test fun deletingEnglishWordsKeepsEveryToneKeyLiteral() {
+        mapOf(
+            "case" to listOf("cas", "ca"),
+            "safe" to listOf("saf", "sa"),
+            "care" to listOf("car", "ca"),
+            "pixel" to listOf("pixe", "pix", "pi"),
+            "object" to listOf("objec", "obje", "obj", "ob"),
+        ).forEach { (word, expected) ->
+            var state = TelexWordComposer.compose(word)
+            expected.forEach { text ->
+                state = TelexWordComposer.backspace(state.rawText, state.literalLockLength)
+                assertEquals("$word -> $text", text, state.text)
+            }
+        }
     }
 }

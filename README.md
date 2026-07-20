@@ -72,6 +72,7 @@ Các bảo vệ cho tiếng Anh và tên riêng:
 - Những onset không thể bắt đầu âm tiết Việt không tiêu thụ modifier: `free`, `smart`, `javascript`, `zoom`, `jazz`, `frozen` giữ nguyên.
 - Nếu một phím dấu đã tạm bị tiêu thụ nhưng phần sau chứng minh từ là Latin, engine khôi phục phím thô; `Vinfast` không bị giữ thành `Vínfast`.
 - Việc bảo vệ không dựa trên danh sách từ cố định: `Router`, `user`, `order`, `server`, `address`, `google`, `power` chỉ là các ca kiểm thử cho cơ chế chuỗi phím gốc và kiểm tra âm tiết.
+- Khi một từ đã được khôi phục về Latin, Backspace giữ trạng thái đó cho tới khi xóa qua modifier đầu tiên: `Google → Googl → Goog → Goo → Go`, `pixel → pixe → pix → pi`; phần còn lại không bị đổi ngược thành `Gô` hay `pĩ`.
 - Hoa/thường của modifier được lấy từ phím người dùng thực sự bấm. Ví dụ `A+s+i+s` tạo `Ais`; chỉ `A+s+i+S` mới tạo `AiS`.
 - Nhầm phím `s` cạnh `d` được sửa có điều kiện: `ds` đứng riêng vẫn giữ nguyên, nhưng khi có nguyên âm theo sau thì `dsa...` được hiểu như `dda...`; ví dụ `dsangwj` → `đặng`.
 
@@ -190,7 +191,7 @@ Cài nhanh lên thiết bị đang kết nối ADB:
 .\dev-install.cmd -WithTests
 ```
 
-Các nhóm unit test bao phủ Telex, composing/cursor, chính sách input, gợi ý, từ điển cá nhân, emoji Unicode, clipboard, touch/repeat, AI provider/fallback, cài đặt và palette.
+Mọi thay đổi Telex bắt buộc chạy ma trận `s f r x j`, `dd`, `aa ee oo`, `aw ow uw`, gồm gõ đúng/sai thứ tự, hoa/thường, hoàn tác, Backspace, con trỏ giữa từ và va chạm với từ Latin/Anh. Các nhóm unit test khác bao phủ chính sách input, gợi ý, từ điển cá nhân, emoji Unicode, clipboard, touch/repeat, AI provider/fallback, cài đặt và palette.
 
 Thay đổi liên quan đến touch, IME lifecycle, AI, mic hoặc dịch vẫn cần kiểm thử trên thiết bị thật. Ma trận kiểm thử chi tiết nằm tại [khaiez/TESTING.md](khaiez/TESTING.md).
 

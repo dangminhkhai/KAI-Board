@@ -41,12 +41,24 @@ object TelexWordComposer {
         }
         val escapedModifier = TelexEngine.isRepeatedModifierEscape(word, key)
         val transformed = TelexEngine.apply(word, key) ?: "$word$key"
-        val text = if (restoreInvalidSyllable && shouldRestoreRaw(raw, transformed)) raw else transformed
-        return TelexComposeResult(text, if (escapedModifier) text.length else 0, raw)
+        val restoredLatin = restoreInvalidSyllable && shouldRestoreRaw(raw, transformed)
+        val text = if (restoredLatin) raw else transformed
+        val lock = when {
+            escapedModifier -> text.length
+            restoredLatin -> firstTelexTransformLength(raw)
+            else -> 0
+        }
+        return TelexComposeResult(text, lock, raw)
     }
 
     fun lockAfterBackspace(newLength: Int, literalLockLength: Int): Int =
         literalLockLength.takeIf { it > 0 && newLength >= it } ?: 0
+
+    fun backspace(rawWord: String, literalLockLength: Int): TelexComposeResult {
+        val raw = rawWord.dropLast(1)
+        val lock = lockAfterBackspace(raw.length, literalLockLength)
+        return if (lock > 0) TelexComposeResult(raw, lock, raw) else compose(raw)
+    }
 
     private fun shouldRestoreRaw(raw: String, rendered: String): Boolean {
         if (raw.equals(rendered, ignoreCase = false) || rendered.none(::isVietnameseMarked)) return false
@@ -79,6 +91,14 @@ object TelexWordComposer {
             }
         }
         return false
+    }
+
+    private fun firstTelexTransformLength(raw: String): Int {
+        for (index in raw.indices) {
+            val prefix = raw.substring(0, index)
+            if (TelexEngine.apply(prefix, raw[index]) != null) return index + 1
+        }
+        return raw.length.coerceAtLeast(1)
     }
 
     private fun isVietnameseMarked(char: Char): Boolean =

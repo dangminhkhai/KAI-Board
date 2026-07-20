@@ -6,7 +6,7 @@
 .\gradlew.bat testDebugUnitTest assembleDebug
 ```
 
-Test cần bao phủ đủ `s f r x j`, `dd`, `aa ee oo`, `aw ow uw`; modifier đúng/sai thứ tự; hoàn tác kiểu UniKey; khôi phục chuỗi phím gốc cho từ Latin/Anh; hoa/thường của phím modifier; con trỏ giữa composing; viết hoa đầu ô/đầu dòng nhưng không sau dấu câu; hashtag/email, input policy, selection deletion, touch dispatcher, repeat, gợi ý, voice routing, AI key pool/cancellation và sao lưu không chứa secret.
+Mọi thay đổi Telex bắt buộc bao phủ đủ `s f r x j`, `dd`, `aa ee oo`, `aw ow uw`; modifier đúng/sai thứ tự; hoàn tác kiểu UniKey; Backspace từng bước trên từ Việt và Latin/Anh; khôi phục chuỗi phím gốc; hoa/thường của phím modifier; con trỏ giữa composing. Các test còn lại bao phủ viết hoa đầu ô/đầu dòng nhưng không sau dấu câu; hashtag/email, input policy, selection deletion, touch dispatcher, repeat, gợi ý, voice routing, AI key pool/cancellation và sao lưu không chứa secret.
 
 ## Thiết bị
 
