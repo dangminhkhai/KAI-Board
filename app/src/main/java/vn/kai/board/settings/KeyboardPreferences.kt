@@ -23,6 +23,8 @@ object KeyboardPreferences {
     const val AUTO_CORRECT = "auto_correct"
     const val AUTO_CAPITALIZATION = "auto_capitalization"
     const val WORD_SUGGESTIONS = "word_suggestions"
+    /** Offline bigram seed (~100 pairs) for cold-start phrase / next-word hints. */
+    const val PHRASE_SEED = "phrase_seed"
     const val OFFLINE_MODE = "offline_mode"
     const val KEY_RADIUS_DP = "key_radius_dp"
     const val KEY_BORDER = "key_border"
@@ -66,6 +68,7 @@ object KeyboardPreferences {
     fun autoCorrect(context: Context) = prefs(context).getBoolean(AUTO_CORRECT, false)
     fun autoCapitalization(context: Context) = prefs(context).getBoolean(AUTO_CAPITALIZATION, true)
     fun wordSuggestions(context: Context) = prefs(context).getBoolean(WORD_SUGGESTIONS, true)
+    fun phraseSeedEnabled(context: Context) = prefs(context).getBoolean(PHRASE_SEED, true)
     fun offlineMode(context: Context) = prefs(context).getBoolean(OFFLINE_MODE, false)
     fun keyRadiusDp(context: Context) = prefs(context).getInt(KEY_RADIUS_DP, 7).coerceIn(0, 24)
     fun keyBorder(context: Context) = prefs(context).getBoolean(KEY_BORDER, false)

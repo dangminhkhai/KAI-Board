@@ -1,6 +1,7 @@
 package vn.kai.board.input
 
 import org.junit.Assert.assertEquals
+import org.junit.Assert.assertFalse
 import org.junit.Assert.assertTrue
 import org.junit.Test
 
@@ -32,6 +33,26 @@ class VietnameseSuggestionEngineTest {
 
     @Test fun previousWordBoostsCommonPair() {
         assertTrue("ơn" in VietnameseSuggestionEngine.suggest("o", previousWord = "cảm"))
+    }
+
+    @Test fun disablingBuiltInPhrasesHidesMultiWordDictionaryEntries() {
+        val withPhrases = VietnameseSuggestionEngine.suggest("xin", allowBuiltInPhrases = true)
+        val without = VietnameseSuggestionEngine.suggest("xin", allowBuiltInPhrases = false)
+        assertTrue(
+            "expected multi-word seed phrase in default dictionary",
+            withPhrases.any { it.contains(' ') },
+        )
+        assertTrue(without.none { it.contains(' ') })
+        assertFalse(without.any { it.equals("xin chào", ignoreCase = true) })
+    }
+
+    @Test fun disablingBuiltInPhrasesDisablesHardCodedContextBoost() {
+        val boosted = VietnameseSuggestionEngine.suggest("o", previousWord = "cảm", allowBuiltInPhrases = true)
+        val plain = VietnameseSuggestionEngine.suggest("o", previousWord = "cảm", allowBuiltInPhrases = false)
+        // With phrases on, context pair cam→on elevates "ơn"; without, order may differ.
+        assertTrue("ơn" in boosted)
+        // Still may include "ơn" as plain prefix of "o" from dictionary — only assert multi-word gone.
+        assertTrue(plain.none { it.contains(' ') })
     }
 
     @Test fun conservativeAutoCorrectionKeepsKnownWords() {

@@ -6,6 +6,8 @@
 
 ### Sửa
 
+- «Xóa từ đã học» / xóa từng từ / giữ gợi ý trên smartbar: xóa luôn cặp cụm trong `PhraseLearningStore` (trước chỉ xóa lexicon → cụm vẫn hiện).
+- Chọn gợi ý từ: thay prefix đang gõ bằng từ gợi ý qua `applyComposingText` (tránh `T`+`tôi` → `Ttôi` trên OEM direct-commit).
 - Backspace `Safe`→`Saff` (và `Cafe`→`Caff`) trên Vivo OriginOS: co chuỗi chỉ **xóa đuôi** trên editor, không xóa cả từ rồi `commitText` dạng ngắn (OEM nhân đôi tone Latin `s/f/r/x/j`).
 - `commitText` từ kết thúc bằng modifier Telex `sfrxjaeowd` (tone + shape) tách body/tail và gỡ chữ kép nếu còn.
 - Latin lock khi mất lock; suppress `onUpdateSelection` finish khi IME đang ghi `InputConnection`.
@@ -18,6 +20,13 @@
 - Telex theo chuỗi phím gốc: modifier sai thứ tự; restore Latin khi âm tiết không hợp lệ; bao phủ `s f r x j`, `dd`, `aa ee oo`, `aw ow uw`.
 - Unit: `TelexModifierBackspaceMatrixTest`, `ComposingEditorSync*`, `SafeTraceTest`; checklist thiết bị đầy đủ trong `TESTING.md`.
 - Docs: `ARCHITECTURE.md` (luồng ghi editor OEM), `ROADMAP`, `CONTRIBUTING`, README Telex/BS.
+
+### Gợi ý cụm từ (P1)
+
+- Mid-word blend: cụm theo ngữ cảnh (personal + seed) khớp prefix đang gõ, ưu tiên trước completion từ điển.
+- Seed offline ~100 bigram xã giao (`PhraseSeedCatalog`), bật/tắt cài đặt **Gợi ý cụm có sẵn**.
+- Khi tắt setting: ẩn seed **và** cụm nhiều từ hard-code trong từ điển (`xin chào`, `cảm ơn`…) + boost contextPairs; vẫn giữ cụm user đã học.
+- Phrase store v2: recency + decay nửa đời 21 ngày; migrate từ `pairs` cũ; personal luôn xếp trên seed.
 
 ### UI & tính năng (gom unreleased trước 1.2.x)
 

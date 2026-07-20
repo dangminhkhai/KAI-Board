@@ -30,6 +30,7 @@ Theme JSON: [`theme-packs/README.md`](../theme-packs/README.md).
 
 | File | Nội dung |
 | --- | --- |
+| **[HANDOFF.md](HANDOFF.md)** | **Chuyển máy / resume session** — việc đã xong + next |
 | [ARCHITECTURE.md](ARCHITECTURE.md) | Module, luồng gõ/Telex, ghi editor OEM, dữ liệu |
 | [TESTING.md](TESTING.md) | Unit + **checklist tick** thiết bị / smoke / ma trận Telex |
 | [CHANGELOG.md](CHANGELOG.md) | Lịch sử phiên bản (Keep a Changelog) |

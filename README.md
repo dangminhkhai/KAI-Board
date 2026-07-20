@@ -244,6 +244,7 @@ Chỉ mục đầy đủ: [khaiez/README.md](khaiez/README.md).
 
 | Tài liệu | Mô tả |
 | --- | --- |
+| [Handoff / máy khác](khaiez/HANDOFF.md) | Việc gần đây + tiếp theo |
 | [Kiến trúc](khaiez/ARCHITECTURE.md) | Module, Telex, ghi editor OEM |
 | [Kiểm thử](khaiez/TESTING.md) | Unit + checklist tick thiết bị |
 | [Changelog](khaiez/CHANGELOG.md) | Lịch sử phiên bản |

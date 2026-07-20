@@ -34,6 +34,7 @@ import vn.kai.board.settings.ThemeExtensionStore
 import vn.kai.board.input.UserLexiconStore
 import vn.kai.board.input.EmailSuggestionStore
 import vn.kai.board.input.HashtagSuggestionStore
+import vn.kai.board.input.PhraseLearningStore
 import vn.kai.board.input.WordDictionaryPack
 import vn.kai.board.input.DictionaryLanguagePack
 import vn.kai.board.translation.TranslationModelsActivity
@@ -321,6 +322,7 @@ class MainActivity : Activity() {
         }
         addSection(R.string.suggestions_language_title, "suggestions") { section ->
             addSwitch(section, R.string.setting_word_suggestions, KeyboardPreferences.WORD_SUGGESTIONS, KeyboardPreferences.wordSuggestions(this))
+            addSwitch(section, R.string.setting_phrase_seed, KeyboardPreferences.PHRASE_SEED, KeyboardPreferences.phraseSeedEnabled(this))
             section.addView(MaterialCardView(this).apply {
                 radius = dp(14).toFloat()
                 cardElevation = 0f
@@ -420,7 +422,8 @@ class MainActivity : Activity() {
             fun updateLearnedStatus() {
                 val count = UserLexiconStore.count(this@MainActivity) +
                     EmailSuggestionStore.count(this@MainActivity) +
-                    HashtagSuggestionStore.count(this@MainActivity)
+                    HashtagSuggestionStore.count(this@MainActivity) +
+                    PhraseLearningStore.count(this@MainActivity)
                 val usage = UserLexiconStore.totalUsage(this@MainActivity) +
                     EmailSuggestionStore.totalUsage(this@MainActivity) +
                     HashtagSuggestionStore.totalUsage(this@MainActivity)
@@ -453,13 +456,15 @@ class MainActivity : Activity() {
                             R.string.clear_learned_words_message,
                             UserLexiconStore.count(this@MainActivity) +
                                 EmailSuggestionStore.count(this@MainActivity) +
-                                HashtagSuggestionStore.count(this@MainActivity),
+                                HashtagSuggestionStore.count(this@MainActivity) +
+                                PhraseLearningStore.count(this@MainActivity),
                         ))
                         .setNegativeButton(R.string.cancel, null)
                         .setPositiveButton(R.string.clear) { _, _ ->
                             UserLexiconStore.clear(this@MainActivity)
                             EmailSuggestionStore.clear(this@MainActivity)
                             HashtagSuggestionStore.clear(this@MainActivity)
+                            PhraseLearningStore.clear(this@MainActivity)
                             updateLearnedStatus()
                             Toast.makeText(this@MainActivity, R.string.learned_words_cleared, Toast.LENGTH_SHORT).show()
                         }

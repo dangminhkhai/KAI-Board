@@ -32,6 +32,13 @@ class ComposingEditorSyncTest {
         assertFalse(ComposingEditorSync.isPrefixShrink("Sà", "Safe"))
     }
 
+    @Test fun suggestionReplaceDeletesTypedPrefix() {
+        // Typing "T" then picking "tôi" must delete "T", not leave "Ttôi".
+        assertEquals("T", ComposingEditorSync.suffixToDelete("T", "T", "tôi"))
+        assertEquals("T", ComposingEditorSync.suffixToDelete("xin T", "T", "tôi"))
+        assertFalse(ComposingEditorSync.isPrefixShrink("T", "tôi"))
+    }
+
     @Test fun detectsTrailingTelexToneLetterRisk() {
         assertTrue(ComposingEditorSync.endsWithTelexToneLetter("Saf"))
         assertTrue(ComposingEditorSync.endsWithTelexToneLetter("Mas"))

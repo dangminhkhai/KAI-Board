@@ -77,7 +77,9 @@ Tùy chọn: SharedPreferences. API key: AES-GCM + Android Keystore; UI chỉ hi
 | Thành phần | Ghi chú |
 | --- | --- |
 | `SentenceAutomationPolicy` | Hoa đầu ô/dòng; không Space/Shift sau dấu câu |
-| `PhraseLearningStore` | Bigram/trigram cá nhân |
+| `PhraseLearningStore` | Bigram/trigram cá nhân (decay 21 ngày) + seed offline |
+| `PhraseSeedCatalog` | ~100 bigram cold-start; tắt bằng `phrase_seed` |
+| `SuggestionPriority.mergePhraseAndCompletions` | Mid-word: phrase-prefix rồi dictionary |
 | `WordDictionaryPack` | Gói VI/EN offline trong `filesDir` |
 | `SuggestionLanguageDetector` | Luật nhẹ, không I/O trên hot path |
 | `AiCommandSuggestionStore` | Học lệnh AI đã gửi; gợi ý AI → cá nhân → offline |

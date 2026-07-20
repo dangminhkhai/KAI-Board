@@ -17,7 +17,10 @@ Liên quan: [ARCHITECTURE.md](ARCHITECTURE.md) (ghi editor), [CONTRIBUTING.md](C
 
 ### Xác nhận regression (bắt buộc sau mỗi đổi Telex/IME)
 
-- [ ] `Safe` → BS → `Saf` (không `Saff` / `Sà`)
+- [x] Gõ `T` → chọn gợi ý `tôi` → ra `tôi ` (không `Ttôi`) — pass (user, ~2026-07-21)
+- [x] `Safe` → BS → `Saf` (không `Saff` / `Sà`) — pass Vivo
+- [x] Gợi ý cụm (P0): học bigram sau Space/chọn gợi ý; privacy tắt học; chưa thấy lỗi — smoke pass (user)
+- [ ] Gợi ý cụm (P1): sau `xin`+Space thấy seed `chào`; gõ `xin ` rồi `c` thấy `chào` ưu tiên; tắt “Gợi ý cụm cơ bản” thì mất seed
 - [ ] `Cafe` → BS → `Caf`
 - [ ] `case` → BS → `cas`
 - [ ] `care` → BS → `car`
@@ -206,6 +209,7 @@ Chạy trước khi cài bản debug/release lên máy chính.
 | Ngày | Máy / OS | Bản APK | Người thử | Ghi chú |
 | --- | --- | --- | --- | --- |
 | 2026-07-20 | Vivo V2366GA / OriginOS 6 | debug 1.2.0 (Telex BS fix) | | Telex modifier + Safe→Saf: **pass** |
+| 2026-07-21 | Vivo (cùng máy) | debug (gợi ý + Telex) | | Chọn gợi ý `T`→`tôi` OK; **P0 cụm từ** smoke: tạm ổn, chưa thấy lỗi |
 | | | | | |
 
 ---

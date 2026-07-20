@@ -56,6 +56,12 @@ object VietnameseSuggestionEngine {
         limit: Int = 3,
         learned: Map<String, Int> = emptyMap(),
         previousWord: String? = null,
+        /**
+         * When false (user disabled “Gợi ý cụm cơ bản”), hide multi-word dictionary entries
+         * like "xin chào" / "cảm ơn" and hard-coded context pair boosts — those are phrase-like
+         * seeds baked into the word dictionary, not personal learning.
+         */
+        allowBuiltInPhrases: Boolean = true,
     ): List<String> {
         val trimmed = query.trim()
         if (trimmed.isEmpty() || limit <= 0 || trimmed.length > 32) return emptyList()
@@ -68,6 +74,7 @@ object VietnameseSuggestionEngine {
         }
         val candidates = dictionary.candidates(needle) + learnedEntries
         val matches = candidates.asSequence()
+            .filter { allowBuiltInPhrases || !it.word.any(Char::isWhitespace) }
             .filter { it.normalized.startsWith(needle) || (needle.length >= 4 && boundedEditDistance(it.normalized, needle, 1) <= 1) }
             .distinctBy { it.word.lowercase(Locale.ROOT) }
             .sortedBy { entry ->
@@ -77,7 +84,11 @@ object VietnameseSuggestionEngine {
                     entry.normalized.startsWith(needle) -> 500
                     else -> 2_500
                 }
-                val contextBoost = if (previous != null && entry.normalized in contextPairs[previous].orEmpty()) 400 else 0
+                val contextBoost = if (
+                    allowBuiltInPhrases &&
+                    previous != null &&
+                    entry.normalized in contextPairs[previous].orEmpty()
+                ) 400 else 0
                 val languageScore = when {
                     detectedLanguage == SuggestionLanguage.UNKNOWN || entry.language == SuggestionLanguage.UNKNOWN -> 0
                     detectedLanguage == entry.language -> -900

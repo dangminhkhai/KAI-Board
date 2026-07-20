@@ -7,9 +7,13 @@
 - [x] Ma trận modifier `s f r x j`, `aa ee oo aw ow uw dd`; escape shape BS visible.
 - [x] Checklist thiết bị đầy đủ trong [TESTING.md](TESTING.md).
 - [x] Theme Extension gallery; clipboard classifier; privacy mode; dictionary packs (trong nhánh unreleased / 1.2.x docs).
+- [x] Gợi ý từ: thay prefix khi chọn suggestion (không `Ttôi` trên direct-commit OEM).
+- [x] **P0 gợi ý cụm từ** — smoke user: tạm ổn, chưa thấy lỗi (2026-07-21).
+- [x] **P1 gợi ý cụm từ** — mid-word blend, decay 21 ngày, seed ~100 cặp + setting.
 
 ## Gần nhất
 
+- [ ] (P2 cụm từ) UI quản lý/xóa cụm đã học; accept-rate nội bộ không thu text.
 - [ ] Hoàn thiện lỗi AI, micro và dịch còn lại trên Samsung/Vivo (ngoài Telex).
 - [ ] Đo cold/warm IME show và key-down-to-commit (kịch bản lặp).
 - [ ] Chạy full checklist [TESTING.md](TESTING.md) trên Notes / Chrome / Zalo / Messenger / email / password.

@@ -14,4 +14,14 @@ class SuggestionPriorityTest {
             ),
         )
     }
+
+    @Test fun phrasePrefixHitsBeforeWordCompletions() {
+        assertEquals(
+            listOf("chào", "cháo", "chạm"),
+            SuggestionPriority.mergePhraseAndCompletions(
+                phrasePrefixHits = listOf("chào"),
+                wordCompletions = listOf("cháo", "chào", "chạm"),
+            ),
+        )
+    }
 }

@@ -480,19 +480,35 @@ class KaiBoardImeService : InputMethodService() {
                     if (learningAllowed()) EmailSuggestionStore.remember(this, action.value)
                     showNextWordSuggestions(history + action.value)
                 } else if (composing.isNotEmpty()) {
-                    composing = action.value
-                    rawComposing = action.value
+                    // Replace the typed prefix (e.g. "T") with the full suggestion ("tôi").
+                    // On direct-commit OEMs the prefix is already plain text, so setComposingText
+                    // alone would insert and produce "Ttôi".
+                    val previousComposing = composing
+                    val chosen = action.value
+                    composing = chosen
+                    rawComposing = chosen
                     literalTelexLockLength = 0
-                    connection.setComposingText(composing, 1)
+                    applyComposingText(connection, previousComposing, chosen)
                     if (learningAllowed()) {
-                        UserLexiconStore.record(this, composing, LearnSource.SUGGESTION, 3)
-                        PhraseLearningStore.record(this, history, composing)
+                        UserLexiconStore.record(this, chosen, LearnSource.SUGGESTION, 3)
+                        PhraseLearningStore.record(this, history, chosen)
                     }
                     finishComposing()
                     connection.commitText(" ", 1)
-                    showNextWordSuggestions(history + action.value)
+                    showNextWordSuggestions(history + chosen)
                 } else {
-                    connection.commitText("${action.value} ", 1)
+                    // Prefix may still sit in the editor if composing state was cleared (OEM).
+                    val before = connection.getTextBeforeCursor(48, 0)?.toString().orEmpty()
+                    val stalePrefix = WordCursorContext.read(before, "")?.word.orEmpty()
+                    if (stalePrefix.isNotEmpty() &&
+                        action.value.startsWith(stalePrefix, ignoreCase = true)
+                    ) {
+                        applyComposingText(connection, stalePrefix, action.value)
+                        finishComposing()
+                        connection.commitText(" ", 1)
+                    } else {
+                        connection.commitText("${action.value} ", 1)
+                    }
                     if (learningAllowed()) {
                         UserLexiconStore.record(this, action.value, LearnSource.SUGGESTION, 3)
                         PhraseLearningStore.record(this, history, action.value)
@@ -502,6 +518,7 @@ class KaiBoardImeService : InputMethodService() {
             }
             is KeyAction.ForgetSuggestion -> {
                 UserLexiconStore.forget(this, action.value)
+                PhraseLearningStore.removeInvolving(this, action.value)
                 updateSuggestions()
             }
             is KeyAction.Character -> {
@@ -743,8 +760,24 @@ class KaiBoardImeService : InputMethodService() {
                 )
             }
             info?.let { TelexInputPolicy.isEnabled(it.inputType) } == true ->
-                if (composing.isEmpty()) PhraseLearningStore.suggest(this, previousWords())
-                else VietnameseSuggestionEngine.suggest(composing, learned = UserLexiconStore.read(this), previousWord = previousWord())
+                if (composing.isEmpty()) {
+                    PhraseLearningStore.suggest(this, previousWords())
+                } else {
+                    val history = previousWords()
+                    val phraseSeedOn = KeyboardPreferences.phraseSeedEnabled(this)
+                    val completions = VietnameseSuggestionEngine.suggest(
+                        composing,
+                        learned = UserLexiconStore.read(this),
+                        previousWord = previousWord(),
+                        allowBuiltInPhrases = phraseSeedOn,
+                    )
+                    val phraseHits = PhraseLearningStore.suggestMatchingPrefix(
+                        this,
+                        history,
+                        composing,
+                    )
+                    SuggestionPriority.mergePhraseAndCompletions(phraseHits, completions)
+                }
             else -> emptyList()
         }
         keyboardView?.setSuggestions(values)
@@ -1008,8 +1041,12 @@ class KaiBoardImeService : InputMethodService() {
         val offline: List<String>
         if (partial.isNotEmpty()) {
             personal = VietnameseSuggestionEngine.suggestLearnedOnly(partial, UserLexiconStore.read(this), 3)
-            offline = VietnameseSuggestionEngine.suggest(partial, learned = emptyMap(), previousWord = history.lastOrNull())
-                .filterNot { it.equals(partial, ignoreCase = true) }
+            offline = VietnameseSuggestionEngine.suggest(
+                partial,
+                learned = emptyMap(),
+                previousWord = history.lastOrNull(),
+                allowBuiltInPhrases = KeyboardPreferences.phraseSeedEnabled(this),
+            ).filterNot { it.equals(partial, ignoreCase = true) }
         } else {
             personal = PhraseLearningStore.suggestPersonal(this, history, 3)
             offline = PhraseLearningStore.suggestOffline(this, history, 3)

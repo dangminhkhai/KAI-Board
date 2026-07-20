@@ -19,6 +19,7 @@ import com.google.android.material.button.MaterialButton
 import com.google.android.material.card.MaterialCardView
 import com.google.android.material.dialog.MaterialAlertDialogBuilder
 import com.google.android.material.textfield.TextInputLayout
+import vn.kai.board.input.PhraseLearningStore
 import vn.kai.board.input.UserLexiconStore
 import vn.kai.board.input.UserWord
 import vn.kai.board.settings.KeyboardPreferences
@@ -196,7 +197,11 @@ class LearnedWordsActivity : Activity() {
         MaterialAlertDialogBuilder(this).setTitle(R.string.delete_learned_word)
             .setMessage(getString(R.string.delete_learned_word_message, item.word))
             .setNegativeButton(R.string.cancel, null)
-            .setPositiveButton(R.string.clear) { _, _ -> UserLexiconStore.forget(this, item.word); render() }
+            .setPositiveButton(R.string.clear) { _, _ ->
+                UserLexiconStore.forget(this, item.word)
+                PhraseLearningStore.removeInvolving(this, item.word)
+                render()
+            }
             .show()
     }
 
