@@ -8,9 +8,12 @@
 git pull origin main
 .\gradlew.bat testDebugUnitTest assembleDebug
 .\dev-install.cmd
+# hoặc: adb install -r app\build\outputs\apk\debug\app-arm64-v8a-debug.apk
 ```
 
 **Trạng thái:** debug-only `0.1.0-debug` (`versionCode 1`). Không pipeline release/signing.
+
+**Chữ ký debug dùng chung:** `keystore/android-debug.keystore` (xem `keystore/README.md`). Máy khác `git pull` + build → cùng cert, cài đè không cần gỡ app.
 
 ---
 

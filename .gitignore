@@ -19,6 +19,8 @@ Thumbs.db
 .env
 .env.*
 !.env.example
+# Shared debug key only (same signature on every machine). Not for Play Store.
+!keystore/android-debug.keystore
 
 # Generated APKs, reports and local validation artifacts
 outputs/

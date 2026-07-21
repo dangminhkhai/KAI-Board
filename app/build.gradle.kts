@@ -14,15 +14,29 @@ android {
         versionName = "0.1.0-debug"
     }
 
+    // Shared debug keystore so every machine signs the same (adb install -r without uninstall).
+    // File: keystore/android-debug.keystore (checked in; debug-only, not for Play Store).
+    signingConfigs {
+        create("sharedDebug") {
+            storeFile = rootProject.file("keystore/android-debug.keystore")
+            storePassword = "android"
+            keyAlias = "androiddebugkey"
+            keyPassword = "android"
+        }
+    }
+
     buildTypes {
         getByName("debug") {
             isDebuggable = true
+            signingConfig = signingConfigs.getByName("sharedDebug")
         }
         // AGP requires a release type; this project is debug-only (no minify/signing).
         getByName("release") {
             isDebuggable = true
             isMinifyEnabled = false
             isShrinkResources = false
+            // Same cert as debug so accidental release builds still match device installs.
+            signingConfig = signingConfigs.getByName("sharedDebug")
         }
     }
 
