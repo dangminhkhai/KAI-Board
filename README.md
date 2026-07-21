@@ -4,7 +4,7 @@ KAI Board là bàn phím Android viết bằng Kotlin, tập trung vào cảm gi
 
 Ứng dụng hoạt động từ Android 8.0, có gợi ý và học từ trên thiết bị, clipboard, emoji, dịch ML Kit, nhập giọng nói, trợ lý AI nhiều nhà cung cấp, tùy chỉnh hình học bàn phím và Theme Extension cài độc lập với APK.
 
-> Trạng thái: dự án đang được phát triển và kiểm thử thực tế. Phiên bản hiện tại là **1.2.0** (`versionCode 120`).
+> Trạng thái: **debug / phát triển nội bộ**. Chỉ build và cài `assembleDebug`. Phiên bản hiện tại: **0.1.0-debug** (`versionCode 1`).
 
 ## Mục lục
 
@@ -14,7 +14,6 @@ KAI Board là bàn phím Android viết bằng Kotlin, tập trung vào cảm gi
 - [Quyền riêng tư](#quyền-riêng-tư)
 - [Yêu cầu hệ thống](#yêu-cầu-hệ-thống)
 - [Build và kiểm thử](#build-và-kiểm-thử)
-- [Build release](#build-release)
 - [Cấu trúc dự án](#cấu-trúc-dự-án)
 - [Tài liệu](#tài-liệu)
 
@@ -198,17 +197,9 @@ Cài nhanh lên thiết bị đang kết nối ADB (một máy, hoặc chỉ đ�
 
 Mọi thay đổi Telex bắt buộc chạy ma trận `s f r x j`, `dd`, `aa ee oo`, `aw ow uw` (gõ đúng/sai thứ tự, hoa/thường, hoàn tác, Backspace, con trỏ giữa từ, va chạm Latin/Anh). Unit test còn cover composer/OEM editor sync, policy input, gợi ý, emoji, clipboard, touch, AI, palette.
 
-Thay đổi touch, IME lifecycle, Telex/Backspace, AI, mic hoặc dịch cần thiết bị thật. Checklist tick (smoke 5 phút, app, Telex, AI, release): [khaiez/TESTING.md](khaiez/TESTING.md).
+Thay đổi touch, IME lifecycle, Telex/Backspace, AI, mic hoặc dịch cần thiết bị thật. Checklist tick (smoke 5 phút, app, Telex, AI, debug): [khaiez/TESTING.md](khaiez/TESTING.md).
 
-## Build release
-
-Release bật R8, resource shrinking và dùng APK tách theo ABI. Chuẩn bị keystore/credential cục bộ theo [khaiez/RELEASE.md](khaiez/RELEASE.md), sau đó chạy:
-
-```powershell
-.\build-release.cmd
-```
-
-Không commit keystore, credential, API key hoặc file secret. Thư mục `Res/` dành cho bộ ký local và đã được loại khỏi Git.
+Dự án **không** có pipeline ký/phát hành store. Không commit API key hoặc dữ liệu người dùng.
 
 ## Cấu trúc dự án
 
@@ -225,8 +216,8 @@ app/src/main/java/vn/kai/board/
 └── voice/         Speech recognition cho mic thường, AI và Dịch
 
 theme-packs/        Các gói theme JSON cài riêng
-khaiez/             Kiến trúc, kiểm thử (checklist), riêng tư, phát hành
-scripts/            dev-install, build-release, adb-shot
+khaiez/             Kiến trúc, kiểm thử (checklist), riêng tư, debug
+scripts/            dev-install, adb-shot
 ```
 
 Đường gõ chính:
@@ -247,15 +238,14 @@ Chỉ mục đầy đủ: [khaiez/README.md](khaiez/README.md).
 | [Handoff / máy khác](khaiez/HANDOFF.md) | Việc gần đây + tiếp theo |
 | [Kiến trúc](khaiez/ARCHITECTURE.md) | Module, Telex, ghi editor OEM |
 | [Kiểm thử](khaiez/TESTING.md) | Unit + checklist tick thiết bị |
-| [Changelog](khaiez/CHANGELOG.md) | Lịch sử phiên bản |
+| [Changelog](khaiez/CHANGELOG.md) | Lịch sử phát triển |
 | [Quyền riêng tư](khaiez/PRIVACY.md) | Dữ liệu cục bộ, AI, backup |
 | [Bảo mật](khaiez/SECURITY.md) | Secret, báo cáo lỗ hổng |
-| [Phát hành](khaiez/RELEASE.md) | Ký, verify artifact |
-| [Lộ trình](khaiez/ROADMAP.md) | Gần / beta / sau beta |
+| [Lộ trình](khaiez/ROADMAP.md) | Gần nhất / ổn định debug |
 | [Đóng góp](khaiez/CONTRIBUTING.md) | Guardrail PR |
 | [Theme Extension](theme-packs/README.md) | Schema theme JSON |
 | [Thông báo bên thứ ba](THIRD_PARTY_NOTICES.md) | License phụ thuộc |
 
 ## Lưu ý
 
-KAI Board là dự án đang phát triển. Trước khi phân phối rộng, cần kiểm thử thực tế trên nhiều ứng dụng nhập liệu, rà soát chính sách quyền riêng tư và tuân thủ điều khoản của từng dịch vụ AI/dịch được tích hợp.
+KAI Board đang ở chế độ **debug nội bộ**. Cần kiểm thử thực tế trên nhiều ứng dụng nhập liệu và tuân thủ điều khoản của từng dịch vụ AI/dịch khi dùng API key cá nhân.

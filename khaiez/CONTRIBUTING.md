@@ -36,4 +36,5 @@
 
 Script dò JDK 17 từ `JAVA_HOME` hoặc Microsoft/Eclipse path; ADB từ `%LOCALAPPDATA%\Android\Sdk\platform-tools\`.
 
-Không commit keystore, mật khẩu ký, `local.properties`, API key hoặc dữ liệu người dùng.
+Không commit `local.properties`, API key hoặc dữ liệu người dùng.
+

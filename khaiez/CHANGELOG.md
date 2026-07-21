@@ -1,8 +1,8 @@
 # Changelog
 
-Định dạng [Keep a Changelog](https://keepachangelog.com/); phiên bản theo Semantic Versioning khi phù hợp.
+Lịch sử mốc phát triển nội bộ (không còn pipeline ship).
 
-## Chưa phát hành
+## Debug / đang phát triển
 
 ### Sửa
 
@@ -28,7 +28,7 @@
 - Khi tắt setting: ẩn seed **và** cụm nhiều từ hard-code trong từ điển (`xin chào`, `cảm ơn`…) + boost contextPairs; vẫn giữ cụm user đã học.
 - Phrase store v2: recency + decay nửa đời 21 ngày; migrate từ `pairs` cũ; personal luôn xếp trên seed.
 
-### UI & tính năng (gom unreleased trước 1.2.x)
+### UI & tính năng
 
 - Gallery theme hai cột (preview 400:225); Theme Extension JSON file/HTTPS; chỉ Mặc định trong APK; packs `pastel-forest` / `pastel-pink` / `retro-japanese-manga` tải riêng.
 - Quản lý từ cá nhân (decay, badge ưu tiên); clipboard OTP/email/URL/SĐT + TTL + ghim; privacy mode; Inline Autofill; numpad; dictionary packs offline; gợi ý AI command; vuốt Space; Telex URL; Smartbar reorder; kéo thả API key; backup theme+Smartbar không secret; xóa emoji grapheme; bỏ N-gram dựng sẵn.
@@ -79,5 +79,4 @@
 
 ## 1.0.0
 
-- Mốc phát hành cấu hình; build release có sẵn.
-
+- Mốc cấu hình dự án ban đầu.

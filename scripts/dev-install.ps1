@@ -14,7 +14,7 @@ $javaCandidates = @(
 ) | Where-Object { $_ -and (Test-Path -LiteralPath $_) }
 $javaHome = $javaCandidates | Select-Object -First 1
 $apk = Join-Path $projectDir "app\build\outputs\apk\debug\app-arm64-v8a-debug.apk"
-$outputApk = Join-Path $projectDir "outputs\KAI-Board-1.2.0-debug.apk"
+$outputApk = Join-Path $projectDir "outputs\KAI-Board-debug.apk"
 $ime = "vn.kai.board/.ime.KaiBoardImeService"
 
 if (-not (Test-Path -LiteralPath $adb)) { throw "ADB not found: $adb" }

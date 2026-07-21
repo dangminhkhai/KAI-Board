@@ -2,17 +2,6 @@ plugins {
     id("com.android.application")
 }
 
-val releaseStorePath = providers.environmentVariable("KAI_RELEASE_STORE_FILE").orNull
-val releaseStorePassword = providers.environmentVariable("KAI_RELEASE_STORE_PASSWORD").orNull
-val releaseKeyAlias = providers.environmentVariable("KAI_RELEASE_KEY_ALIAS").orNull
-val releaseKeyPassword = providers.environmentVariable("KAI_RELEASE_KEY_PASSWORD").orNull
-val hasReleaseSigning = listOf(
-    releaseStorePath,
-    releaseStorePassword,
-    releaseKeyAlias,
-    releaseKeyPassword,
-).all { !it.isNullOrBlank() }
-
 android {
     namespace = "vn.kai.board"
     compileSdk = 37
@@ -21,34 +10,19 @@ android {
         applicationId = "vn.kai.board"
         minSdk = 26
         targetSdk = 35
-        versionCode = 120
-        versionName = "1.2.0"
-    }
-
-    signingConfigs {
-        if (hasReleaseSigning) {
-            create("release") {
-                storeFile = file(requireNotNull(releaseStorePath))
-                storePassword = releaseStorePassword
-                keyAlias = releaseKeyAlias
-                keyPassword = releaseKeyPassword
-                enableV1Signing = true
-                enableV2Signing = true
-                enableV3Signing = true
-            }
-        }
+        versionCode = 1
+        versionName = "0.1.0-debug"
     }
 
     buildTypes {
+        getByName("debug") {
+            isDebuggable = true
+        }
+        // AGP requires a release type; this project is debug-only (no minify/signing).
         getByName("release") {
-            isDebuggable = false
-            isMinifyEnabled = true
-            isShrinkResources = true
-            proguardFiles(
-                getDefaultProguardFile("proguard-android-optimize.txt"),
-                "proguard-rules.pro",
-            )
-            signingConfig = signingConfigs.findByName("release")
+            isDebuggable = true
+            isMinifyEnabled = false
+            isShrinkResources = false
         }
     }
 

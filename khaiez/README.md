@@ -2,15 +2,19 @@
 
 KAI Board là bàn phím Android (Kotlin) ưu tiên gõ Telex nhanh, riêng tư, ổn định. Hỗ trợ Telex trong ô URL, từ điển VI/EN offline tùy chọn, lexicon cá nhân có decay, gợi ý lệnh AI, Inline Autofill, chế độ riêng tư, Theme Extension JSON, emoji search, vuốt Space, clipboard, dịch ML Kit, voice và AI multi-provider.
 
-**Phiên bản hiện tại:** 1.2.0 (`versionCode 120`), đang phát triển; có checklist thiết bị trong [TESTING.md](TESTING.md).
+## Trạng thái
+
+Dự án đang **debug / phát triển nội bộ**. Chỉ dùng `assembleDebug` và `dev-install.cmd`. Không có quy trình ký hay phân phối store trong repo.
+
+Phiên bản: **0.1.0-debug** (`versionCode 1`). Checklist thiết bị: [TESTING.md](TESTING.md).
 
 ## Yêu cầu
 
 - JDK 17 (Microsoft hoặc Eclipse Temurin; `dev-install` tự dò `JAVA_HOME`).
 - Android SDK: `compileSdk 37`, `targetSdk 35`, `minSdk 26`.
-- Thiết bị/emulator; APK tách `arm64-v8a` (và `x86_64` khi build splits).
+- Thiết bị/emulator; APK debug tách `arm64-v8a` (và `x86_64` khi build splits).
 
-## Build nhanh
+## Build debug
 
 ```powershell
 .\gradlew.bat testDebugUnitTest assembleDebug
@@ -22,7 +26,6 @@ KAI Board là bàn phím Android (Kotlin) ưu tiên gõ Telex nhanh, riêng tư,
 
 - Debug APK: `app/build/outputs/apk/debug/`
 - Không đặt API key trong source, resource hay lệnh chia sẻ
-- Release: `build-release.cmd` — xem [RELEASE.md](RELEASE.md)
 
 Theme JSON: [`theme-packs/README.md`](../theme-packs/README.md).
 
@@ -33,11 +36,10 @@ Theme JSON: [`theme-packs/README.md`](../theme-packs/README.md).
 | **[HANDOFF.md](HANDOFF.md)** | **Chuyển máy / resume session** — việc đã xong + next |
 | [ARCHITECTURE.md](ARCHITECTURE.md) | Module, luồng gõ/Telex, ghi editor OEM, dữ liệu |
 | [TESTING.md](TESTING.md) | Unit + **checklist tick** thiết bị / smoke / ma trận Telex |
-| [CHANGELOG.md](CHANGELOG.md) | Lịch sử phiên bản (Keep a Changelog) |
+| [CHANGELOG.md](CHANGELOG.md) | Lịch sử phát triển |
 | [PRIVACY.md](PRIVACY.md) | Quyền riêng tư, backup, AI |
 | [SECURITY.md](SECURITY.md) | Báo cáo lỗ hổng, secret |
-| [RELEASE.md](RELEASE.md) | Ký, artifact, verify |
-| [ROADMAP.md](ROADMAP.md) | Gần / trước beta / sau beta |
+| [ROADMAP.md](ROADMAP.md) | Gần nhất / ổn định debug |
 | [CONTRIBUTING.md](CONTRIBUTING.md) | Guardrail PR và quy trình |
 | [SKILLS.md](SKILLS.md) | Skill agent khi dev KAI Board |
 | [THIRD_PARTY_NOTICES.md](THIRD_PARTY_NOTICES.md) | Thành phần bên thứ ba (bản trong `khaiez` nếu có; root có bản đầy đủ) |

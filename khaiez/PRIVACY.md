@@ -23,7 +23,7 @@ Theme tải bằng URL chỉ kết nối HTTPS sau thao tác của người dùn
 - Dịch ML Kit ưu tiên model trên thiết bị; tải model có thể cần mạng.
 - Nhập giọng nói phụ thuộc dịch vụ speech recognition được cài trên thiết bị; KAI Board không ghi âm nền và panel inline dừng khi rời IME.
 
-KAI Board không được âm thầm gửi clipboard, lịch sử gõ, từ đã học, định danh thiết bị hoặc dữ liệu tài khoản. Trước khi phát hành công khai, nội dung này cần được rà soát thành chính sách pháp lý phù hợp khu vực phân phối.
+KAI Board không được âm thầm gửi clipboard, lịch sử gõ, từ đã học, định danh thiết bị hoặc dữ liệu tài khoản.
 
 ## Gói từ điển mở rộng
 

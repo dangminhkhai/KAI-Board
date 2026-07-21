@@ -4,7 +4,7 @@
 
 **Không** chụp/log nội dung nhạy cảm (mật khẩu, OTP thật, API key, tin nhắn riêng).
 
-Liên quan: [ARCHITECTURE.md](ARCHITECTURE.md) (ghi editor), [CONTRIBUTING.md](CONTRIBUTING.md), [RELEASE.md](RELEASE.md).
+Liên quan: [ARCHITECTURE.md](ARCHITECTURE.md) (ghi editor), [CONTRIBUTING.md](CONTRIBUTING.md).
 
 ---
 
@@ -44,7 +44,7 @@ Mọi thay đổi Telex bắt buộc bao phủ đủ `s f r x j`, `dd`, `aa ee o
 
 ## Checklist 5 phút (smoke)
 
-Chạy trước khi cài bản debug/release lên máy chính.
+Chạy trước khi cài bản debug lên máy chính.
 
 - [ ] `Safe` / `case` / `care` / `Google` + BS
 - [ ] `mas` → `má` → BS → `m`
@@ -190,7 +190,7 @@ Chạy trước khi cài bản debug/release lên máy chính.
 
 ---
 
-## 9. Giao diện, sao lưu, release
+## 9. Giao diện, sao lưu, debug build
 
 | # | Thử | Pass |
 | --- | --- | --- |
@@ -199,8 +199,8 @@ Chạy trước khi cài bản debug/release lên máy chính.
 | 9.3 | Import theme file / HTTPS | [ ] |
 | 9.4 | Sticky ô thử — không tự bật IME khi mở app | [ ] |
 | 9.5 | Backup/restore: theme + Smartbar; **không** key/clipboard/notes | [ ] |
-| 9.6 | `assembleRelease`, `lintRelease`, R8/shrink | [ ] |
-| 9.7 | Chữ ký v2/v3, package/version/ABI, SHA-256 | [ ] |
+| 9.6 | `assembleDebug` + `dev-install.cmd` | [ ] |
+| 9.7 | Package/version/ABI trên thiết bị (`0.1.0-debug`) | [ ] |
 
 ---
 
@@ -217,6 +217,6 @@ Chạy trước khi cài bản debug/release lên máy chính.
 ## Thiết bị (tóm tắt nhanh)
 
 - Cold/warm IME; Telex nhanh; BS bấm/giữ; selection; emoji ZWJ/cờ.
-- AI multi-key + fallback; gợi ý; clipboard; cử chỉ Space/Shift; mic; dịch; theme; backup; release.
+- AI multi-key + fallback; gợi ý; clipboard; cử chỉ Space/Shift; mic; dịch; theme; backup; debug install.
 
 Ứng dụng mục tiêu: Samsung Notes, Chrome, Zalo, Messenger, email, ô mật khẩu.

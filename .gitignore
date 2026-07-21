@@ -11,15 +11,14 @@ local.properties
 .DS_Store
 Thumbs.db
 
-# Signing keys and credentials
-.signing/
+# Local secrets (never commit)
 *.jks
 *.keystore
-keystore.properties
-signing.properties
-signing-secret.xml
 *.pem
 *.p12
+.env
+.env.*
+!.env.example
 
 # Generated APKs, reports and local validation artifacts
 outputs/
@@ -27,10 +26,4 @@ work/
 *.apk
 *.aab
 *.apks
-Res/*.sha256
-Res/signing-secret*.xml
-
-# Local environment files
-.env
-.env.*
-!.env.example
+Res/
