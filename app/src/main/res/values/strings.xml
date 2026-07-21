@@ -117,7 +117,9 @@
     <string name="theme_action_failed">Không thể xử lý giao diện</string>
     <string name="back">Quay lại</string>
     <string name="privacy_notice_title">Quyền riêng tư</string>
-    <string name="privacy_notice_body">Gõ, clipboard, từ đã học và API key chỉ lưu trên thiết bị. AI chỉ gửi nội dung khi bạn chủ động dùng KAI AI. Bản sao lưu không chứa API key hay clipboard.</string>
+    <string name="privacy_notice_body">Gõ, clipboard, từ đã học và API key chỉ lưu trên thiết bị. AI chỉ gửi nội dung khi bạn chủ động dùng KAI AI. Bản sao lưu không chứa API key hay clipboard. Ô mật khẩu tự bật chế độ riêng tư (tắt Telex, gợi ý, học; ẩn AI và clipboard).</string>
+    <string name="private_session_banner">Chế độ mật khẩu · không Telex · không học · không gợi ý</string>
+    <string name="private_session_banner_short">Riêng tư · mật khẩu</string>
     <string name="theme_system">Theo hệ thống</string>
     <string name="theme_light">Sáng</string>
     <string name="theme_dark">Tối</string>

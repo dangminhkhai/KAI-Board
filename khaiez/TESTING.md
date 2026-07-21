@@ -22,14 +22,30 @@ Liên quan: [ARCHITECTURE.md](ARCHITECTURE.md) (ghi editor), [CONTRIBUTING.md](C
 - [x] Gợi ý cụm (P0): học bigram sau Space/chọn gợi ý; privacy tắt học; chưa thấy lỗi — smoke pass (user)
 - [x] Gợi ý cụm (P1): `xin`+Space / mid-word; personal+pack — smoke pass (user, 2026-07-21); seed APK đã gỡ
 - [x] PhrasePack: Tải gói; mid-word OK; clear học **không** xóa pack; personal+decay #1 — smoke pass (user); gói full ~720k + warmUp (không parse trên hot path)
-- [ ] `Cafe` → BS → `Caf`
-- [ ] `case` → BS → `cas`
-- [ ] `care` → BS → `car`
-- [ ] `Google` xóa dần: `Googl` … `Go` (không `Gô`)
-- [ ] `Mí` (từ `Mis`) → BS một lần → `M`
-- [ ] `aaa` (escape `aa`) → BS → `a`
-- [ ] `ddd` (escape `dd`) → BS → `d`
-- [ ] Tone `s f r x j` + shape `aa ee oo aw ow uw dd` (mẫu trong ma trận dưới)
+- [x] `Cafe` → BS → `Caf` — **unit** `SafeTraceTest` + `ComposingEditorSyncTest` (2026-07-21)
+- [x] `case` → BS → `cas` — **unit** Telex matrix / engine (`casse`→`case`)
+- [x] `care` → BS → `car` — **unit** (`carre`→`care`)
+- [x] `Google` Latin lock — **unit** `TelexWordComposerTest`
+- [ ] `Mí` (từ `Mis`) → BS một lần → `M` — còn tùy chọn
+- [x] `aaa` (escape `aa`) → BS → `a` — **unit** matrix `aaa`→`aa` + BS policy
+- [x] `ddd` (escape `dd`) → BS → `d` — **unit** matrix `ddd`→`dd`
+- [x] Tone `s f r x j` + shape `aa ee oo aw ow uw dd` — **unit** `TelexCompatibilityMatrixTest` (126 cases)
+
+### Checklist run 2026-07-21 (automated)
+
+| Hạng mục | Kết quả |
+| --- | --- |
+| `testDebugUnitTest` | **331 tests, 0 fail** |
+| `assembleDebug` | **OK** |
+| Máy | Samsung **SM-N986N** (`R3CN80C8Y7L`), Android 13 |
+| Package | `vn.kai.board` `0.1.0-debug` (`versionCode 1`) |
+| IME enabled | `vn.kai.board/.ime.KaiBoardImeService` **có trong ime list**; default IME cũng KAI Board |
+| Telex regression unit (Safe/Cafe/case/care/aaa/ddd/matrix) | **pass** |
+| Gợi ý cụm P0/P1/pack (user trước đó) | **pass** (xem nhật ký) |
+| Smoke tay 1: Safe/Cafe/case + BS (ô thử) | **pass** user 2026-07-21 |
+| Smoke tay 2: P2 UI tab Cụm | **pass** user 2026-07-21 |
+| Smoke tay 3: Zalo/Chrome Telex+BS | **pass** user 2026-07-21 |
+| Ma trận app đầy đủ (Messenger/email/password…) | còn mở rộng tùy chọn |
 
 ---
 
@@ -47,11 +63,11 @@ Mọi thay đổi Telex bắt buộc bao phủ đủ `s f r x j`, `dd`, `aa ee o
 
 Chạy trước khi cài bản debug lên máy chính.
 
-- [ ] `Safe` / `case` / `care` / `Google` + BS
+- [x] `Safe` / `case` / `care` / `Google` + BS — pass user 2026-07-21 (SM-N986N)
 - [ ] `mas` → `má` → BS → `m`
 - [ ] `aaa` → `aa` → BS → `a`
-- [ ] Zalo **hoặc** Messenger: gõ Telex + BS
-- [ ] Chrome URL/search: gõ + BS
+- [x] Zalo **hoặc** Messenger: gõ Telex + BS — pass user (Zalo/Chrome) 2026-07-21
+- [x] Chrome URL/search: gõ + BS — pass user 2026-07-21 (kèm smoke 3)
 - [ ] Ô mật khẩu: không Telex / không gợi ý cá nhân
 - [ ] Emoji cờ (🇻🇳) hoặc ZWJ + BS: không ô vuông
 
@@ -61,11 +77,11 @@ Chạy trước khi cài bản debug lên máy chính.
 
 | # | Hạng mục | Pass |
 | --- | --- | --- |
-| 1.1 | Ô thử trong app KAI Board | [ ] |
+| 1.1 | Ô thử trong app KAI Board | [x] user 2026-07-21 |
 | 1.2 | Samsung Notes / Notes hệ thống | [ ] |
-| 1.3 | Chrome — ô thường | [ ] |
-| 1.4 | Chrome — URL / search | [ ] |
-| 1.5 | Zalo | [ ] |
+| 1.3 | Chrome — ô thường | [x] user 2026-07-21 |
+| 1.4 | Chrome — URL / search | [x] user 2026-07-21 |
+| 1.5 | Zalo | [x] user 2026-07-21 |
 | 1.6 | Messenger | [ ] |
 | 1.7 | Gmail / email | [ ] |
 | 1.8 | Ô mật khẩu / visible password | [ ] |
@@ -213,6 +229,8 @@ Chạy trước khi cài bản debug lên máy chính.
 | 2026-07-21 | Vivo (cùng máy) | debug (gợi ý + Telex) | | Chọn gợi ý `T`→`tôi` OK; **P0 cụm từ** smoke: tạm ổn, chưa thấy lỗi |
 | 2026-07-21 | R3CN80C8Y7L (debug cài) | 0.1.0-debug + PhrasePack | user | Checklist nhanh cụm từ **pass**: xin→chào, mid-word, personal, clear không xóa pack |
 | 2026-07-21 | R3CN80C8Y7L | pack full ~720k / ~8 MB | | OpenSubtitles+Viet74K+collocation; warmUp; tiêu đề / hoàng hôn trong pack |
+| 2026-07-21 | SM-N986N (R3CN80C8Y7L) | 0.1.0-debug | agent | **Checklist auto:** 331 unit tests OK; Telex matrix/Safe/Cafe unit OK; IME enabled |
+| 2026-07-21 | SM-N986N | 0.1.0-debug | user | Smoke tay **1–2–3 OK**: Safe/Cafe/case BS; P2 tab Cụm; Zalo/Chrome Telex+BS |
 | | | | | |
 
 ---

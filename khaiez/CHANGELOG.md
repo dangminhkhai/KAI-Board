@@ -4,6 +4,11 @@ Lịch sử mốc phát triển nội bộ (không còn pipeline ship).
 
 ## Debug / đang phát triển
 
+### UI chế độ mật khẩu / riêng tư
+
+- Smartbar private: banner **«Riêng tư · mật khẩu»** + icon khóa; ẩn AI/clipboard/gợi ý; Telex tắt (logic cũ).
+- Gợi ý không hiện khi private; chạm banner/khóa = NoOp.
+
 ### P2 quản lý cụm cá nhân
 
 - Tab **Cụm** trong Quản lý từ & cụm: list/tìm/xóa từng cụm (`removeExact`), xóa hết cụm personal.

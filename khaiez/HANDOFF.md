@@ -57,8 +57,9 @@ py -3 tools\build_phrase_pack.py
 
 ## Next
 
-- [ ] Smoke P2 UI + pack ~720k trên máy  
-- AI/mic/dịch Samsung/Vivo; full checklist TESTING.md  
+- [x] Checklist **auto** 2026-07-21: 331 unit tests OK; Telex regression unit OK; SM-N986N IME enabled  
+- [x] Smoke **tay** 1–2–3 (user): Safe/Cafe/case BS; P2 tab Cụm; Zalo/Chrome Telex+BS  
+- [ ] (Tùy) ma trận app rộng / AI-mic-dịch / `Mí`+BS
 
 ---
 

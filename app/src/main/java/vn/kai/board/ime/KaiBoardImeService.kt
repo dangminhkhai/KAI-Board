@@ -4,6 +4,9 @@ import android.inputmethodservice.InputMethodService
 import android.Manifest
 import android.content.Intent
 import android.content.pm.PackageManager
+import android.graphics.Color
+import android.graphics.Rect
+import android.graphics.drawable.ColorDrawable
 import android.os.Bundle
 import android.os.Handler
 import android.os.Looper
@@ -138,13 +141,18 @@ class KaiBoardImeService : InputMethodService() {
 
     override fun onCreateInputView(): View {
         val density = resources.displayMetrics.density
+        // Transparent so Gboard-style resize can float over the app (dim drawn by KeyboardView).
+        window?.window?.setBackgroundDrawable(ColorDrawable(Color.TRANSPARENT))
         val strip = LinearLayout(this).apply {
             orientation = LinearLayout.HORIZONTAL
             visibility = View.GONE
+            setBackgroundColor(Color.TRANSPARENT)
             setPadding((4 * density).toInt(), (3 * density).toInt(), (4 * density).toInt(), (3 * density).toInt())
         }
         inlineAutofillStrip = strip
-        val view = KeyboardView(this)
+        val view = KeyboardView(this).apply {
+            setBackgroundColor(Color.TRANSPARENT)
+        }
         keyboardView = view
         view.onKeyAction = ::handleAction
         view.setShifted(shifted)
@@ -156,14 +164,42 @@ class KaiBoardImeService : InputMethodService() {
         syncNumericMode(view, currentInputEditorInfo)
         return LinearLayout(this).apply {
             orientation = LinearLayout.VERTICAL
+            setBackgroundColor(Color.TRANSPARENT)
             addView(HorizontalScrollView(this@KaiBoardImeService).apply {
                 isHorizontalScrollBarEnabled = false
                 visibility = View.GONE
+                setBackgroundColor(Color.TRANSPARENT)
                 addView(strip, ViewGroup.LayoutParams(ViewGroup.LayoutParams.WRAP_CONTENT, ViewGroup.LayoutParams.MATCH_PARENT))
                 strip.tag = this
             }, LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, (50 * density).toInt()))
             addView(view, LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT))
         }
+    }
+
+    /**
+     * Gboard-style insets while resizing: only the keyboard band is "content" / touchable,
+     * so the settings UI above stays visible and interactive.
+     */
+    override fun onComputeInsets(outInsets: Insets) {
+        super.onComputeInsets(outInsets)
+        val kb = keyboardView ?: return
+        if (!kb.isInAdjustmentMode() || kb.height <= 0) return
+        val contentTopInView = kb.adjustmentContentTopPx()
+        // KeyboardView may sit below the autofill strip inside the input root.
+        val kbTopInRoot = kb.top
+        val contentTop = kbTopInRoot + contentTopInView
+        outInsets.contentTopInsets = contentTop
+        outInsets.visibleTopInsets = contentTop
+        val frame = kb.adjustmentTouchableRect()
+        outInsets.touchableInsets = Insets.TOUCHABLE_INSETS_REGION
+        outInsets.touchableRegion.set(
+            Rect(
+                (frame.left + kb.left).toInt(),
+                (frame.top + kbTopInRoot).toInt(),
+                (frame.right + kb.left).toInt(),
+                (frame.bottom + kbTopInRoot).toInt(),
+            ),
+        )
     }
 
     override fun onCreateInlineSuggestionsRequest(uiExtras: Bundle): InlineSuggestionsRequest? {
@@ -447,8 +483,20 @@ class KaiBoardImeService : InputMethodService() {
     }
 
     private fun handleAction(action: KeyAction) {
+        if (action == KeyAction.NoOp) return
         val connection = currentInputConnection ?: return
-        if (privateSession && (action == KeyAction.OpenAi || action == KeyAction.ToggleClipboard)) return
+        if (privateSession && (
+                action == KeyAction.OpenAi ||
+                    action == KeyAction.ToggleClipboard ||
+                    action == KeyAction.VoiceInput ||
+                    action == KeyAction.OpenTranslator ||
+                    action == KeyAction.ToggleEmoji ||
+                    action == KeyAction.ToggleEmojiSearch ||
+                    action == KeyAction.OpenSettings
+                )
+        ) {
+            return
+        }
         if (voicePaused && action == KeyAction.Backspace && activeVoiceTarget != null) {
             activeVoicePartial = activeVoicePartial.dropLast(1)
             syncVoiceTextToFeatureInput(activeVoicePartial)
@@ -705,6 +753,7 @@ class KaiBoardImeService : InputMethodService() {
             KeyAction.FinishKeyboardAdjustment -> Unit
             KeyAction.Shift -> handleShiftTap()
             KeyAction.CapsLock -> toggleCapsLock()
+            KeyAction.NoOp -> Unit
         }
     }
 

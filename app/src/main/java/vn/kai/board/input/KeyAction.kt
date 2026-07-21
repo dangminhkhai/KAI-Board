@@ -44,4 +44,6 @@ sealed interface KeyAction {
     data object DecreaseKeyboardHeight : KeyAction
     data object IncreaseKeyboardHeight : KeyAction
     data object FinishKeyboardAdjustment : KeyAction
+    /** Non-interactive toolbar chrome (e.g. private-session banner). */
+    data object NoOp : KeyAction
 }
