@@ -50,12 +50,7 @@ object AiProviderClient {
         return when {
             key.startsWith("sk-or-") -> discoverOpenRouter(key)
             key.startsWith("AIza") -> discoverGemini(key)
-            key.startsWith("gsk_") -> discoverOpenAiCompatible(
-                "Groq",
-                "https://api.groq.com/openai/v1/models",
-                key,
-                freeTierByQuota = true,
-            )
+            key.startsWith("gsk_") -> discoverGroq(key)
             key.startsWith("nvapi-") -> discoverNvidia(key)
             key.startsWith("sk-") -> discoverOpenAi(key)
             else -> throw IllegalArgumentException("Không nhận diện được key; hãy chọn nhà cung cấp thủ công")
@@ -66,14 +61,19 @@ object AiProviderClient {
         "OpenRouter" -> discoverOpenRouter(key)
         "Gemini" -> discoverGemini(key)
         "OpenAI" -> discoverOpenAi(key)
-        "Groq" -> discoverOpenAiCompatible(
+        "Groq" -> discoverGroq(key)
+        "NVIDIA NIM" -> discoverNvidia(key)
+        else -> throw IllegalArgumentException("Nhà cung cấp chưa được hỗ trợ")
+    }
+
+    private fun discoverGroq(key: String): AiDiscovery {
+        val discovered = discoverOpenAiCompatible(
             "Groq",
             "https://api.groq.com/openai/v1/models",
             key,
             freeTierByQuota = true,
         )
-        "NVIDIA NIM" -> discoverNvidia(key)
-        else -> throw IllegalArgumentException("Nhà cung cấp chưa được hỗ trợ")
+        return discovered.copy(models = prioritizeChatModels("Groq", discovered.models))
     }
 
     private fun discoverOpenRouter(key: String): AiDiscovery {
@@ -129,25 +129,37 @@ object AiProviderClient {
 
     private fun discoverNvidia(key: String): AiDiscovery = try {
         val discovered = discoverOpenAiCompatible("NVIDIA NIM", "https://integrate.api.nvidia.com/v1/models", key)
-        discovered.copy(models = (NVIDIA_TEXT_MODELS + discovered.models).distinct())
+        // Prefer chat-capable IDs only. Do NOT prepend hard-coded models that may already be
+        // Gone (HTTP 410) on integrate.api.nvidia.com — that made every request fail first.
+        val chat = prioritizeChatModels("NVIDIA NIM", discovered.models)
+        discovered.copy(models = chat.ifEmpty { NVIDIA_PREFERRED_CHAT })
     } catch (error: HttpStatusException) {
         if (error.status != 404) throw error
-        // NVIDIA documents the shared chat endpoint but does not guarantee an
-        // OpenAI-compatible model-list endpoint. Probe one stable text model so
-        // a bad key is still rejected instead of being saved as recognized.
-        val payload = JSONObject()
-            .put("model", NVIDIA_TEXT_MODELS.first())
-            .put("max_tokens", 1)
-            .put("messages", org.json.JSONArray().put(
-                JSONObject().put("role", "user").put("content", "Hi"),
-            ))
-        post(
-            "https://integrate.api.nvidia.com/v1/chat/completions",
-            key,
-            payload,
-            AiRequestCancellation(),
-        )
-        AiDiscovery("NVIDIA NIM", NVIDIA_TEXT_MODELS, freeTierByQuota = true)
+        // NVIDIA may omit an OpenAI-style model list. Probe preferred chat models until one works.
+        var accepted: String? = null
+        var last: Throwable? = null
+        for (model in NVIDIA_PREFERRED_CHAT) {
+            try {
+                val payload = JSONObject()
+                    .put("model", model)
+                    .put("max_tokens", 1)
+                    .put("messages", org.json.JSONArray().put(
+                        JSONObject().put("role", "user").put("content", "Hi"),
+                    ))
+                post(
+                    "https://integrate.api.nvidia.com/v1/chat/completions",
+                    key,
+                    payload,
+                    AiRequestCancellation(),
+                )
+                accepted = model
+                break
+            } catch (probe: Throwable) {
+                last = probe
+            }
+        }
+        if (accepted == null) throw last ?: error
+        AiDiscovery("NVIDIA NIM", listOf(accepted) + NVIDIA_PREFERRED_CHAT.filterNot { it == accepted }, freeTierByQuota = true)
     }
 
     private fun request(url: String, bearer: String?): JSONObject {
@@ -167,10 +179,11 @@ object AiProviderClient {
     fun generate(provider: String, apiKeys: List<String>, models: List<String>, tone: AiTone, prompt: String, cancellation: AiRequestCancellation = AiRequestCancellation()): Pair<String, String> {
         if (prompt.isBlank()) throw IllegalArgumentException("Yêu cầu đang trống")
         if (apiKeys.isEmpty()) throw IllegalStateException("Chưa có API key")
-        if (models.isEmpty()) throw IllegalStateException("Chưa quét được model")
+        val chatModels = prioritizeChatModels(provider, models)
+        if (chatModels.isEmpty()) throw IllegalStateException("Chưa quét được model chat phù hợp")
         var lastError: Throwable? = null
         ApiKeyPool.normalize(apiKeys).forEach { apiKey ->
-            for (model in models.take(20)) {
+            for (model in chatModels.take(20)) {
                 cancellation.check()
                 try {
                     return model to when (provider) {
@@ -184,6 +197,8 @@ object AiProviderClient {
                 } catch (error: QuotaAiException) {
                     lastError = error
                     break
+                } catch (error: InvalidApiKeyException) {
+                    throw error
                 } catch (error: RetryableAiException) {
                     lastError = error
                 }
@@ -216,6 +231,8 @@ object AiProviderClient {
                     cancellation,
                 )
                 return AiGenerationResult(candidate.apiKey, candidate.provider, model, output)
+            } catch (error: CancellationException) {
+                throw error
             } catch (error: InvalidApiKeyException) {
                 lastError = error
                 onFailure(AiProviderFailure(candidate.apiKey, candidate.provider, error.message.orEmpty(), true))
@@ -223,6 +240,10 @@ object AiProviderClient {
                 lastError = error
                 onFailure(AiProviderFailure(candidate.apiKey, candidate.provider, error.message.orEmpty(), false))
             } catch (error: RetryableAiException) {
+                lastError = error
+                onFailure(AiProviderFailure(candidate.apiKey, candidate.provider, error.message.orEmpty(), false))
+            } catch (error: IllegalStateException) {
+                // e.g. unexpected HTTP after all models for this key — still try next key
                 lastError = error
                 onFailure(AiProviderFailure(candidate.apiKey, candidate.provider, error.message.orEmpty(), false))
             }
@@ -269,11 +290,51 @@ object AiProviderClient {
         }
         if (status in 300..399) throw IllegalStateException("AI từ chối chuyển hướng không an toàn")
         if (status in listOf(401, 403)) throw InvalidApiKeyException("API key không hợp lệ hoặc không có quyền")
-        if (status in listOf(402, 429)) throw QuotaAiException("Tất cả API key đã hết hạn mức (HTTP $status)")
-        if (status in listOf(404, 422)) throw RetryableAiException("Model không hỗ trợ yêu cầu này (HTTP $status)")
+        if (status in listOf(402, 429)) throw QuotaAiException("Hạn mức API đã hết hoặc bị giới hạn (HTTP $status)")
+        // 400/404/410/413/422: often wrong model (Gone, non-chat, tiny context) — try next model/key
+        if (status in listOf(400, 404, 410, 413, 422)) {
+            throw RetryableAiException("Model/endpoint không dùng được (HTTP $status)")
+        }
         if (status in 500..599) throw RetryableAiException("Provider tạm thời không sẵn sàng (HTTP $status)")
-        if (status !in 200..299) throw IllegalStateException("AI lỗi HTTP $status")
+        if (status !in 200..299) throw RetryableAiException("AI lỗi HTTP $status")
         return JSONObject(body)
+    }
+
+    /**
+     * Keep chat/completion models only and put known-good IDs first.
+     * Groq /models lists whisper/tts/guard; NVIDIA lists embed/rerank and retired IDs.
+     */
+    internal fun prioritizeChatModels(provider: String, models: List<String>): List<String> {
+        val filtered = models.map { it.trim() }.filter { it.isNotEmpty() && isLikelyChatModel(provider, it) }
+        val preferred = when (provider) {
+            "Groq" -> GROQ_PREFERRED_CHAT
+            "NVIDIA NIM" -> NVIDIA_PREFERRED_CHAT
+            else -> emptyList()
+        }
+        val head = preferred.filter { want -> filtered.any { it.equals(want, ignoreCase = true) } }
+            .map { want -> filtered.first { it.equals(want, ignoreCase = true) } }
+        return (head + filtered).distinct()
+    }
+
+    internal fun isLikelyChatModel(provider: String, modelId: String): Boolean {
+        val m = modelId.lowercase()
+        val excluded = listOf(
+            "whisper", "tts", "guard", "embed", "rerank", "retrieval", "clip",
+            "transcri", "speech", "audio", "moderation", "playai", "distance",
+            "nv-embed", "nv-rerank", "ocr", "detect",
+        )
+        if (excluded.any { m.contains(it) }) return false
+        return when (provider) {
+            "Groq" -> m.contains("llama") || m.contains("gemma") || m.contains("mixtral") ||
+                m.contains("qwen") || m.contains("deepseek") || m.contains("gpt-oss") ||
+                m.contains("compound") || m.contains("moonshot") || m.contains("kimi") ||
+                m.startsWith("openai/")
+            "NVIDIA NIM" -> m.contains("instruct") || m.contains("chat") || m.contains("llama") ||
+                m.contains("mistral") || m.contains("gemma") || m.contains("nemotron") ||
+                m.contains("qwen") || m.contains("deepseek") || m.contains("phi-") ||
+                m.contains("kimi") || m.contains("claude") || m.contains("gpt")
+            else -> true
+        }
     }
 
     private class InvalidApiKeyException(message: String) : RuntimeException(message)
@@ -281,9 +342,21 @@ object AiProviderClient {
     private class QuotaAiException(message: String) : RuntimeException(message)
     private class HttpStatusException(val status: Int, message: String) : RuntimeException(message)
     private const val MAX_RESPONSE_CHARS = 1_000_000
-    private val NVIDIA_TEXT_MODELS = listOf(
-        "nvidia/llama-3.1-nemotron-nano-8b-v1",
-        "moonshotai/kimi-k2-instruct",
+    /** Soft preference order — only used when still present in the live catalog. */
+    private val GROQ_PREFERRED_CHAT = listOf(
+        "llama-3.3-70b-versatile",
+        "llama-3.1-8b-instant",
+        "openai/gpt-oss-120b",
+        "openai/gpt-oss-20b",
+        "meta-llama/llama-4-scout-17b-16e-instruct",
+        "gemma2-9b-it",
+    )
+    private val NVIDIA_PREFERRED_CHAT = listOf(
+        "meta/llama-3.1-8b-instruct",
+        "meta/llama-3.3-70b-instruct",
+        "google/gemma-2-9b-it",
+        "mistralai/mistral-7b-instruct-v0.3",
+        "nvidia/llama-3.1-nemotron-70b-instruct",
     )
 }
 

@@ -53,10 +53,12 @@ adb shell am force-stop vn.kai.board
 
 - Compact sticky: hint `Thử gõ / dán…`, icon X nhỏ, bỏ underline (`setBackgroundResource(0)`), giữ stroke card.
 
-### E. HTTP 413 (ghi chú)
+### E. HTTP 413 (Groq) / 410 (NVIDIA) — đã vá + **pass máy**
 
-- **413** = Payload Too Large (server). Prompt ngắn *không* gây 413 trên Groq/NIM.
-- App map lỗi: `AI lỗi HTTP $status` (`AiProviderClient.post`).
+- **413** / **410** thường do **model** (non-chat / đã gỡ), không phải prompt ô AI thừa dữ liệu.
+- Body gửi: system (giọng văn Cài đặt) + `aiPrompt.trim()` only.
+- Vá: lọc chat models; NVIDIA không prepend ID chết; 410/413 retry model+key.
+- **Xác nhận 2026-07-21 (Vivo):** quét lại key → **Groq pass**, **NVIDIA NIM pass**.
 
 ### F. Thiết bị cài gần đây
 
@@ -96,11 +98,11 @@ AI bar: **next-word command** tách khỏi phrase chat (xem mục C).
 
 ## Next (gợi ý)
 
+- [x] Groq + NVIDIA NIM generate sau quét lại model — **pass** (Vivo 2026-07-21)
 - [ ] Smoke tay AI: `Tiêu` → chip `đề`; chọn → `ngắn`; không `Limo`/`Tiêu`/`đề ngắn`
 - [ ] Smoke: clipboard → AI / Dịch mở đủ chrome + body phím chữ
 - [ ] Smoke: ô Dịch — chạm giữa, gõ/BS tại cursor
-- [ ] (Tùy) unit ClipboardHistoryStore
-- [ ] (Tùy) `versionCode` bump nếu máy có bản lạ
+- [ ] Commit/push vá `AiProviderClient` (filter model + 410/413 retry) nếu chưa lên `origin/main`
 - [ ] Release: keystore riêng, không dùng android-debug
 
 ---

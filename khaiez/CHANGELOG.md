@@ -4,6 +4,14 @@ Lịch sử mốc phát triển nội bộ (không còn pipeline ship).
 
 ## Debug / đang phát triển
 
+### AI providers Groq / NVIDIA (413 / 410)
+
+- **Không phải prompt ô AI quá dài:** body chỉ system (giọng văn) + `aiPrompt`; 413/410 chủ yếu do **model sai**.
+- Lọc model chat (bỏ whisper/tts/guard/embed/rerank); ưu tiên model chat ổn định.
+- NVIDIA: **không** còn prepend model hardcode đã gỡ (HTTP **410 Gone**).
+- HTTP **400/404/410/413/422** → thử model/key tiếp (trước đây ném `IllegalStateException` chặn fallback).
+- Sau khi pull: **quét lại API key** trong Quản lý API để làm mới danh sách model.
+
 ### AI / Dịch panel + gợi ý command (2026-07-21)
 
 - **Clipboard → AI / Dịch:** mở AI hoặc Dịch từ panel clipboard không kẹt body clipboard / không “về ABC” oan; `setAiState` / `setTranslationState` xóa `panel` media; `rebuildKeys` ưu tiên feature body; offline AI check **trước** `finishComposing`.
