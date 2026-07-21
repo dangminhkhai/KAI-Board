@@ -23,29 +23,30 @@ data class KeyboardThemePalette(
 
         fun resolve(preset: KeyboardColorStyle, dark: Boolean): KeyboardThemePalette =
             when (preset) {
-                KeyboardColorStyle.CLASSIC -> if (dark) mintDark() else mintLight()
+                // Neutral grayscale defaults — same family as Light/Dark, no mint/green accent.
+                KeyboardColorStyle.CLASSIC -> if (dark) neutralDark() else neutralLight()
             }
 
-        private fun mintLight() = KeyboardThemePalette(
+        private fun neutralLight() = KeyboardThemePalette(
             background = Color.rgb(226, 226, 226),
             key = Color.WHITE,
-            specialKey = Color.WHITE,
+            specialKey = Color.rgb(232, 234, 237),
             pressed = Color.rgb(207, 207, 207),
-            text = Color.rgb(20, 20, 20),
+            text = Color.rgb(32, 33, 36),
             hint = Color.rgb(95, 99, 104),
-            accent = Color.rgb(76, 175, 80),
-            actionKey = Color.rgb(76, 175, 80),
+            accent = Color.rgb(60, 64, 67),
+            actionKey = Color.rgb(60, 64, 67),
         )
 
-        private fun mintDark() = KeyboardThemePalette(
+        private fun neutralDark() = KeyboardThemePalette(
             background = Color.rgb(32, 33, 36),
             key = Color.rgb(60, 64, 67),
-            specialKey = Color.rgb(60, 64, 67),
+            specialKey = Color.rgb(48, 49, 52),
             pressed = Color.rgb(95, 99, 104),
             text = Color.rgb(241, 243, 244),
             hint = Color.rgb(189, 193, 198),
-            accent = Color.rgb(76, 175, 80),
-            actionKey = Color.rgb(76, 175, 80),
+            accent = Color.rgb(154, 160, 166),
+            actionKey = Color.rgb(95, 99, 104),
         )
 
         /** Pure ARGB helpers keep palette resolution testable on the local JVM. */

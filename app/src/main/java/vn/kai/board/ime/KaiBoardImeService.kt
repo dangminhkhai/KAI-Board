@@ -2,23 +2,26 @@ package vn.kai.board.ime
 
 import android.inputmethodservice.InputMethodService
 import android.Manifest
+import android.content.ClipDescription
 import android.content.Intent
 import android.content.pm.PackageManager
 import android.graphics.Color
 import android.graphics.Rect
 import android.graphics.drawable.ColorDrawable
+import android.net.Uri
 import android.os.Bundle
 import android.os.Handler
 import android.os.Looper
 import android.os.ResultReceiver
+import android.text.Html
 import android.text.InputType
 import android.view.View
 import android.view.ViewGroup
 import android.view.KeyEvent
 import android.view.inputmethod.EditorInfo
+import android.view.inputmethod.InputConnection
 import android.view.inputmethod.InlineSuggestionsRequest
 import android.view.inputmethod.InlineSuggestionsResponse
-import android.view.inputmethod.InputConnection
 import android.view.inputmethod.InputMethodManager
 import android.widget.HorizontalScrollView
 import android.widget.LinearLayout
@@ -26,7 +29,13 @@ import android.widget.inline.InlinePresentationSpec
 import android.util.Size
 import android.widget.Toast
 import android.os.Build
+import androidx.core.content.FileProvider
+import androidx.core.view.inputmethod.EditorInfoCompat
+import androidx.core.view.inputmethod.InputConnectionCompat
+import androidx.core.view.inputmethod.InputContentInfoCompat
 import java.util.Locale
+import vn.kai.board.input.ClipboardEntryKind
+import vn.kai.board.input.ClipboardHistoryStore
 import vn.kai.board.input.KeyAction
 import vn.kai.board.input.TelexInputPolicy
 import vn.kai.board.input.EditorActionPolicy
@@ -514,7 +523,7 @@ class KaiBoardImeService : InputMethodService() {
             }
             is KeyAction.CommitClipboard -> {
                 finishComposing()
-                connection.commitText(action.value, 1)
+                pasteClipboardEntry(connection, action)
                 updateSuggestions()
             }
             is KeyAction.SelectSuggestion -> {
@@ -740,6 +749,7 @@ class KaiBoardImeService : InputMethodService() {
             is KeyAction.EmojiSearchCharacter -> Unit
             is KeyAction.SelectEmojiGroup -> Unit
             is KeyAction.SelectClipboardTab -> Unit
+            KeyAction.ClearClipboardUnpinned -> Unit
             KeyAction.HideKeyboard -> requestHideSelf(0)
             KeyAction.OpenClipboardManager -> {
                 startActivity(Intent(this, ClipboardManagerActivity::class.java).addFlags(Intent.FLAG_ACTIVITY_NEW_TASK))
@@ -755,6 +765,129 @@ class KaiBoardImeService : InputMethodService() {
             KeyAction.CapsLock -> toggleCapsLock()
             KeyAction.NoOp -> Unit
         }
+    }
+
+    /** Paste text/HTML/image from clipboard history. Images only via commitContent when field allows. */
+    private fun pasteClipboardEntry(connection: InputConnection, action: KeyAction.CommitClipboard) {
+        val kind = ClipboardEntryKind.fromStorage(action.contentKind)
+        if (kind == ClipboardEntryKind.IMAGE) {
+            pasteClipboardImage(connection, action)
+            return
+        }
+        // URL / search / password: always plain text (no Spanned HTML).
+        val plainOnly = fieldPrefersPlainText(currentInputEditorInfo)
+        val html = action.html?.takeIf { it.isNotBlank() && !plainOnly }
+        if (kind == ClipboardEntryKind.HTML && html != null) {
+            val spanned = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.N) {
+                Html.fromHtml(html, Html.FROM_HTML_MODE_COMPACT)
+            } else {
+                @Suppress("DEPRECATION")
+                Html.fromHtml(html)
+            }
+            if (spanned.isNotEmpty()) {
+                connection.commitText(spanned, 1)
+                return
+            }
+        }
+        val text = action.value.ifBlank { action.sourceText }
+        if (text.isNotEmpty()) connection.commitText(text, 1)
+    }
+
+    private fun pasteClipboardImage(connection: InputConnection, action: KeyAction.CommitClipboard) {
+        val editorInfo = currentInputEditorInfo
+        // URL, Google search, password, number… never accept images. Soft notice only — no system copy.
+        if (!fieldAcceptsImages(editorInfo)) {
+            Toast.makeText(this, R.string.clipboard_image_unsupported, Toast.LENGTH_SHORT).show()
+            return
+        }
+        val entry = action.entryId.takeIf { it.isNotBlank() }?.let { ClipboardHistoryStore.get(this, it) }
+            ?: action.imageFileName?.let { name ->
+                ClipboardHistoryStore.readEntries(this).firstOrNull { it.imageFileName == name }
+            }
+        val file = entry?.imageFile(this)
+        if (file == null || !file.isFile) {
+            Toast.makeText(this, R.string.clipboard_image_missing, Toast.LENGTH_SHORT).show()
+            return
+        }
+        val mime = entry.mimeType?.takeIf { it.startsWith("image/") } ?: "image/jpeg"
+        val uri = runCatching {
+            FileProvider.getUriForFile(this, "$packageName.files", file)
+        }.getOrElse {
+            Toast.makeText(this, R.string.clipboard_image_paste_failed, Toast.LENGTH_SHORT).show()
+            return
+        }
+        if (commitImageContent(connection, editorInfo!!, uri, mime)) return
+        // No setPrimaryClip fallback — FileProvider URI often throws "lỗi sao chép" on URL/search.
+        Toast.makeText(this, R.string.clipboard_image_unsupported, Toast.LENGTH_SHORT).show()
+    }
+
+    /** True only when the focused editor declared image/* (or */*) content MIME types. */
+    private fun fieldAcceptsImages(editorInfo: EditorInfo?): Boolean {
+        if (editorInfo == null) return false
+        if (fieldPrefersPlainText(editorInfo)) return false
+        val accepted = EditorInfoCompat.getContentMimeTypes(editorInfo).orEmpty()
+        if (accepted.isEmpty()) return false
+        return accepted.any { mime ->
+            mime == "*/*" ||
+                mime == "image/*" ||
+                mime.startsWith("image/")
+        }
+    }
+
+    /**
+     * Fields that should never receive rich content (image/HTML spans):
+     * URL bar, Google search, email, password, phone, number…
+     */
+    private fun fieldPrefersPlainText(editorInfo: EditorInfo?): Boolean {
+        if (editorInfo == null) return false
+        val inputType = editorInfo.inputType
+        val cls = inputType and InputType.TYPE_MASK_CLASS
+        val variation = inputType and InputType.TYPE_MASK_VARIATION
+        if (cls == InputType.TYPE_CLASS_NUMBER || cls == InputType.TYPE_CLASS_PHONE) return true
+        if (cls == InputType.TYPE_CLASS_TEXT || cls == InputType.TYPE_CLASS_DATETIME) {
+            return when (variation) {
+                InputType.TYPE_TEXT_VARIATION_URI,
+                InputType.TYPE_TEXT_VARIATION_EMAIL_ADDRESS,
+                InputType.TYPE_TEXT_VARIATION_WEB_EMAIL_ADDRESS,
+                InputType.TYPE_TEXT_VARIATION_PASSWORD,
+                InputType.TYPE_TEXT_VARIATION_VISIBLE_PASSWORD,
+                InputType.TYPE_TEXT_VARIATION_WEB_PASSWORD,
+                InputType.TYPE_TEXT_VARIATION_FILTER,
+                InputType.TYPE_TEXT_VARIATION_PHONETIC,
+                -> true
+                else -> false
+            }
+        }
+        return false
+    }
+
+    private fun commitImageContent(
+        connection: InputConnection,
+        editorInfo: EditorInfo,
+        uri: Uri,
+        mime: String,
+    ): Boolean {
+        val accepted = EditorInfoCompat.getContentMimeTypes(editorInfo).orEmpty()
+        if (accepted.isEmpty()) return false
+        val mimeOk = accepted.any { acceptedMime ->
+            acceptedMime == "*/*" ||
+                acceptedMime == "image/*" ||
+                acceptedMime.equals(mime, ignoreCase = true) ||
+                (acceptedMime.endsWith("/*") && mime.startsWith(acceptedMime.removeSuffix("*")))
+        }
+        if (!mimeOk) return false
+        val targetPackage = editorInfo.packageName
+        if (!targetPackage.isNullOrBlank()) {
+            runCatching {
+                grantUriPermission(targetPackage, uri, Intent.FLAG_GRANT_READ_URI_PERMISSION)
+            }
+        }
+        val description = ClipDescription("kai-clipboard-image", arrayOf(mime, "image/*"))
+        val contentInfo = InputContentInfoCompat(uri, description, null)
+        val flags = InputConnectionCompat.INPUT_CONTENT_GRANT_READ_URI_PERMISSION
+        return runCatching {
+            InputConnectionCompat.commitContent(connection, editorInfo, contentInfo, flags, null)
+        }.getOrDefault(false)
     }
 
     private fun finishComposing() {

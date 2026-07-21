@@ -3,7 +3,20 @@ package vn.kai.board.input
 sealed interface KeyAction {
     data class Character(val value: Char) : KeyAction
     data class CommitText(val value: String) : KeyAction
-    data class CommitClipboard(val value: String, val sourceText: String, val kindLabel: String) : KeyAction
+    /**
+     * Paste a clipboard history entry.
+     * [value] is plain text (TEXT/HTML). For IMAGE, [entryId] drives commitContent.
+     */
+    data class CommitClipboard(
+        val value: String,
+        val sourceText: String,
+        val kindLabel: String,
+        val entryId: String = "",
+        val contentKind: String = "TEXT",
+        val imageFileName: String? = null,
+        val mimeType: String? = null,
+        val html: String? = null,
+    ) : KeyAction
     data class SelectSuggestion(val value: String) : KeyAction
     data class SelectAiSuggestion(val value: String) : KeyAction
     data class ForgetSuggestion(val value: String) : KeyAction
@@ -36,6 +49,8 @@ sealed interface KeyAction {
     data object EmojiSearchBackspace : KeyAction
     data class SelectClipboardTab(val index: Int) : KeyAction
     data object OpenClipboardManager : KeyAction
+    /** Clear clipboard history except pinned items. */
+    data object ClearClipboardUnpinned : KeyAction
     data object HideKeyboard : KeyAction
     data object ToggleSymbols : KeyAction
     data object ToggleSymbolPage : KeyAction

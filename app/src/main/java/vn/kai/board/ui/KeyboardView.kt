@@ -18,6 +18,7 @@ import android.os.Vibrator
 import android.media.AudioManager
 import android.view.MotionEvent
 import android.view.View
+import android.widget.Toast
 import kotlin.math.cos
 import kotlin.math.sin
 import vn.kai.board.input.KeyAction
@@ -27,8 +28,12 @@ import vn.kai.board.input.SpaceCursorGesturePolicy
 import vn.kai.board.input.LongPressSymbolMap
 import vn.kai.board.input.EmojiCatalog
 import vn.kai.board.input.ClipboardHistoryStore
+import vn.kai.board.input.ClipboardEntry
+import vn.kai.board.input.ClipboardEntryKind
 import vn.kai.board.input.SmartClipboardClassifier
 import vn.kai.board.input.NoteStore
+import android.graphics.Bitmap
+import android.util.LruCache
 import vn.kai.board.input.EmojiRecentStore
 import vn.kai.board.settings.KeyboardPreferences
 import vn.kai.board.settings.ThemeMode
@@ -46,14 +51,30 @@ class KeyboardView(context: Context) : View(context) {
     private enum class ResizeDrag { MOVE, LEFT, RIGHT, TOP, BOTTOM, TOP_LEFT, TOP_RIGHT, BOTTOM_LEFT, BOTTOM_RIGHT, RESET, DONE }
     private enum class Panel { NONE, EMOJI, CLIPBOARD }
 
+    private data class ClipboardItemPopup(
+        val entryId: String,
+        val pinned: Boolean,
+        val bar: RectF,
+        val pinBtn: RectF,
+        val deleteBtn: RectF,
+    )
+
+    private data class ClipboardClearPopup(
+        val bar: RectF,
+        val cancelBtn: RectF,
+        val confirmBtn: RectF,
+        val unpinnedCount: Int,
+    )
+
     private val density = resources.displayMetrics.density
     private val toolbarHeight = 44f * density
     private val translationInputHeight = 54f * density
     private val suggestionMenuTimeoutMs = 2_200L
     private val keyPaint = Paint(Paint.ANTI_ALIAS_FLAG)
+    private val keyLabelTextSize = 22f * density
     private val textPaint = Paint(Paint.ANTI_ALIAS_FLAG).apply {
         textAlign = Paint.Align.CENTER
-        textSize = 22f * density
+        textSize = keyLabelTextSize
     }
     private val popupTextPaint = Paint(Paint.ANTI_ALIAS_FLAG).apply {
         textAlign = Paint.Align.CENTER
@@ -79,6 +100,21 @@ class KeyboardView(context: Context) : View(context) {
     private var emojiSearchQuery = ""
     private var clipboardTab = 0
     private val clipboardListener = ClipboardManager.OnPrimaryClipChangedListener { capturePrimaryClipboard() }
+    private val clipboardThumbCache = object : LruCache<String, Bitmap>(8) {
+        override fun sizeOf(key: String, value: Bitmap): Int = value.byteCount / 1024
+        override fun entryRemoved(evicted: Boolean, key: String, oldValue: Bitmap, newValue: Bitmap?) {
+            if (evicted && !oldValue.isRecycled) oldValue.recycle()
+        }
+    }
+    /** Gboard-style compact floating bar for one clipboard item (pin / delete). */
+    private var clipboardItemPopup: ClipboardItemPopup? = null
+    /** Compact confirm bar for clear-all-unpinned. */
+    private var clipboardClearPopup: ClipboardClearPopup? = null
+    /**
+     * Long-press opens the popup while the finger is still down; the following ACTION_UP
+     * must not dismiss it (Gboard keeps the bar until a real tap).
+     */
+    private var suppressClipboardPopupUp = false
     private var symbolPage = 0
     private var previewKey: KeyGeometry? = null
     private var hapticIntensity = -1
@@ -452,6 +488,9 @@ class KeyboardView(context: Context) : View(context) {
 
     override fun onDraw(canvas: Canvas) {
         super.onDraw(canvas)
+        // Always reset label metrics — clipboard/voice helpers temporarily shrink textPaint.
+        textPaint.textSize = keyLabelTextSize
+        textPaint.textAlign = Paint.Align.CENTER
         textPaint.color = themePalette.text
         popupTextPaint.color = textPaint.color
         hintPaint.color = themePalette.hint
@@ -536,6 +575,7 @@ class KeyboardView(context: Context) : View(context) {
                 key.id == "clipboard-empty" -> drawClipboardEmptyState(canvas, key)
                 key.id.startsWith("clipboard-tab-") -> drawClipboardPanelTab(canvas, key)
                 key.id == "clipboard-manage" -> drawClipboardManageButton(canvas, key)
+                key.id == "clipboard-clear-unpinned" -> drawClipboardClearButton(canvas, key)
                 key.id == "toolbar-back" -> drawBackIcon(canvas, key)
                 key.id == "toolbar-privacy-banner" -> drawPrivateSessionBanner(canvas, key)
                 key.id == "toolbar-privacy-lock" -> drawPrivacyLockIcon(canvas, key)
@@ -564,6 +604,9 @@ class KeyboardView(context: Context) : View(context) {
             }
         }
         previewKey?.takeIf { popupEnabled && it.action is KeyAction.Character }?.let { drawPreview(canvas, it) }
+        // Gboard-style compact popups (keyboard space, same transform as keys).
+        clipboardItemPopup?.let { drawClipboardItemPopup(canvas, it) }
+        clipboardClearPopup?.let { drawClipboardClearPopup(canvas, it) }
         canvas.restore()
         textPaint.textScaleX = 1f
         popupTextPaint.textScaleX = 1f
@@ -753,8 +796,13 @@ class KeyboardView(context: Context) : View(context) {
     private fun drawClipboardItem(canvas: Canvas, key: KeyGeometry) {
         drawClipboardCard(canvas, key)
         val action = key.action as? KeyAction.CommitClipboard
-        val content = (action?.value ?: (key.action as? KeyAction.CommitText)?.value).orEmpty().replace(Regex("\\s+"), " ").trim()
         val pinned = key.id.contains("-pinned-")
+        val isImage = action?.contentKind == ClipboardEntryKind.IMAGE.name
+        if (isImage && action != null) {
+            drawClipboardImageItem(canvas, key, action, pinned)
+            return
+        }
+        val content = (action?.value ?: (key.action as? KeyAction.CommitText)?.value).orEmpty().replace(Regex("\\s+"), " ").trim()
         val lineLimit = ((key.right - key.left) / (7.5f * density)).toInt().coerceAtLeast(10)
         val first = content.take(lineLimit)
         val remainder = content.drop(first.length).trimStart()
@@ -762,44 +810,132 @@ class KeyboardView(context: Context) : View(context) {
         val oldAlign = textPaint.textAlign
         val oldSize = textPaint.textSize
         val oldColor = textPaint.color
-        textPaint.textAlign = Paint.Align.LEFT
-        textPaint.textSize = 14f * density
-        textPaint.color = if (dark) Color.rgb(248, 250, 252) else Color.rgb(17, 24, 39)
-        val left = key.left + 13f * density
-        val hasKind = !action?.kindLabel.isNullOrEmpty()
-        if (hasKind) {
-            textPaint.textSize = 10f * density
-            textPaint.color = clipboardAccentColor()
-            canvas.drawText(action!!.kindLabel, left, key.top + 14f * density, textPaint)
+        try {
+            textPaint.textAlign = Paint.Align.LEFT
             textPaint.textSize = 14f * density
             textPaint.color = if (dark) Color.rgb(248, 250, 252) else Color.rgb(17, 24, 39)
+            val left = key.left + 13f * density
+            val hasKind = !action?.kindLabel.isNullOrEmpty()
+            if (hasKind) {
+                textPaint.textSize = 10f * density
+                textPaint.color = clipboardAccentColor()
+                canvas.drawText(action!!.kindLabel, left, key.top + 14f * density, textPaint)
+                textPaint.textSize = 14f * density
+                textPaint.color = if (dark) Color.rgb(248, 250, 252) else Color.rgb(17, 24, 39)
+            }
+            val firstY = if (hasKind) {
+                key.centerY + 4f * density
+            } else if (second.isEmpty()) {
+                key.centerY - (textPaint.ascent() + textPaint.descent()) / 2f
+            } else {
+                key.centerY - 3f * density
+            }
+            canvas.drawText(first, left, firstY, textPaint)
+            if (second.isNotEmpty()) canvas.drawText(second, left, firstY + 18f * density, textPaint)
+            if (pinned) drawClipboardPin(canvas, key)
+        } finally {
+            textPaint.textAlign = oldAlign
+            textPaint.textSize = oldSize
+            textPaint.color = oldColor
         }
-        val firstY = if (hasKind) key.centerY + 4f * density else if (second.isEmpty()) key.centerY - (textPaint.ascent() + textPaint.descent()) / 2f else key.centerY - 3f * density
-        canvas.drawText(first, left, firstY, textPaint)
-        if (second.isNotEmpty()) canvas.drawText(second, left, firstY + 18f * density, textPaint)
-        if (pinned) {
-            keyPaint.color = clipboardAccentColor()
-            canvas.drawCircle(key.right - 12f * density, key.top + 12f * density, 3f * density, keyPaint)
-            keyPaint.strokeWidth = 1.5f * density
-            canvas.drawLine(key.right - 12f * density, key.top + 14f * density, key.right - 12f * density, key.top + 18f * density, keyPaint)
+    }
+
+    private fun drawClipboardImageItem(
+        canvas: Canvas,
+        key: KeyGeometry,
+        action: KeyAction.CommitClipboard,
+        pinned: Boolean,
+    ) {
+        val oldAlign = textPaint.textAlign
+        val oldSize = textPaint.textSize
+        val oldColor = textPaint.color
+        try {
+            val pad = 8f * density
+            val thumbLeft = key.left + pad
+            val thumbTop = key.top + pad
+            val thumbSize = (key.bottom - key.top - pad * 2).coerceAtMost((key.right - key.left) * 0.42f)
+            val thumbRect = RectF(thumbLeft, thumbTop, thumbLeft + thumbSize, thumbTop + thumbSize)
+            val bitmap = clipboardThumbFor(action)
+            if (bitmap != null && !bitmap.isRecycled) {
+                val src = android.graphics.Rect(0, 0, bitmap.width, bitmap.height)
+                val scale = maxOf(thumbSize / bitmap.width, thumbSize / bitmap.height)
+                val dw = bitmap.width * scale
+                val dh = bitmap.height * scale
+                val dx = thumbRect.centerX() - dw / 2f
+                val dy = thumbRect.centerY() - dh / 2f
+                canvas.save()
+                canvas.clipRect(thumbRect)
+                canvas.drawBitmap(bitmap, src, RectF(dx, dy, dx + dw, dy + dh), keyPaint)
+                canvas.restore()
+                keyPaint.style = Paint.Style.STROKE
+                keyPaint.strokeWidth = 1f * density
+                keyPaint.color = clipboardOutlineColor()
+                canvas.drawRoundRect(thumbRect, 6f * density, 6f * density, keyPaint)
+                keyPaint.style = Paint.Style.FILL
+            } else {
+                keyPaint.color = clipboardOutlineColor()
+                canvas.drawRoundRect(thumbRect, 6f * density, 6f * density, keyPaint)
+                textPaint.textAlign = Paint.Align.CENTER
+                textPaint.color = themePalette.text
+                textPaint.textSize = 11f * density
+                canvas.drawText(
+                    "🖼",
+                    thumbRect.centerX(),
+                    thumbRect.centerY() - (textPaint.ascent() + textPaint.descent()) / 2f,
+                    textPaint,
+                )
+            }
+            textPaint.textAlign = Paint.Align.LEFT
+            textPaint.textSize = 10f * density
+            textPaint.color = clipboardAccentColor()
+            val labelLeft = thumbRect.right + 8f * density
+            canvas.drawText(action.kindLabel.ifBlank { "ẢNH" }, labelLeft, key.top + 16f * density, textPaint)
+            textPaint.textSize = 13f * density
+            textPaint.color = if (dark) Color.rgb(248, 250, 252) else Color.rgb(17, 24, 39)
+            canvas.drawText("Chạm để dán", labelLeft, key.centerY + 6f * density, textPaint)
+            if (pinned) drawClipboardPin(canvas, key)
+        } finally {
+            textPaint.textAlign = oldAlign
+            textPaint.textSize = oldSize
+            textPaint.color = oldColor
         }
-        textPaint.textAlign = oldAlign
-        textPaint.textSize = oldSize
-        textPaint.color = oldColor
+    }
+
+    private fun drawClipboardPin(canvas: Canvas, key: KeyGeometry) {
+        keyPaint.color = clipboardAccentColor()
+        canvas.drawCircle(key.right - 12f * density, key.top + 12f * density, 3f * density, keyPaint)
+        keyPaint.strokeWidth = 1.5f * density
+        canvas.drawLine(key.right - 12f * density, key.top + 14f * density, key.right - 12f * density, key.top + 18f * density, keyPaint)
+    }
+
+    private fun clipboardThumbFor(action: KeyAction.CommitClipboard): Bitmap? {
+        val id = action.entryId.ifBlank { return null }
+        clipboardThumbCache.get(id)?.let { return it }
+        val entry = ClipboardHistoryStore.get(context, id) ?: return null
+        val maxPx = (96 * density).toInt().coerceAtLeast(64)
+        val bmp = ClipboardHistoryStore.decodeThumbnail(context, entry, maxPx) ?: return null
+        clipboardThumbCache.put(id, bmp)
+        return bmp
     }
 
     private fun drawClipboardEmptyState(canvas: Canvas, key: KeyGeometry) {
         drawClipboardCard(canvas, key)
         val oldSize = textPaint.textSize
         val oldColor = textPaint.color
-        textPaint.textSize = 15f * density
-        canvas.drawText(key.label, key.centerX, key.centerY - 4f * density, textPaint)
-        textPaint.textSize = 12f * density
-        textPaint.color = if (dark) Color.rgb(148, 163, 184) else Color.rgb(100, 116, 139)
-        val helper = if (clipboardTab == 0) "Sao chép văn bản để hiển thị tại đây" else "Thêm nội dung thường dùng trong Quản lý"
-        canvas.drawText(helper, key.centerX, key.centerY + 17f * density, textPaint)
-        textPaint.textSize = oldSize
-        textPaint.color = oldColor
+        val oldAlign = textPaint.textAlign
+        try {
+            textPaint.textAlign = Paint.Align.CENTER
+            textPaint.textSize = 15f * density
+            canvas.drawText(key.label, key.centerX, key.centerY - 4f * density, textPaint)
+            textPaint.textSize = 12f * density
+            textPaint.color = if (dark) Color.rgb(148, 163, 184) else Color.rgb(100, 116, 139)
+            val helper = if (clipboardTab == 0) "Sao chép chữ, HTML hoặc ảnh" else "Thêm nội dung thường dùng trong Quản lý"
+            canvas.drawText(helper, key.centerX, key.centerY + 17f * density, textPaint)
+        } finally {
+            textPaint.textSize = oldSize
+            textPaint.color = oldColor
+            textPaint.textAlign = oldAlign
+        }
     }
 
     private fun drawClipboardPanelTab(canvas: Canvas, key: KeyGeometry) {
@@ -826,6 +962,255 @@ class KeyboardView(context: Context) : View(context) {
 
     private fun drawClipboardManageButton(canvas: Canvas, key: KeyGeometry) {
         drawSettingsIcon(canvas, key)
+    }
+
+    private fun drawClipboardClearButton(canvas: Canvas, key: KeyGeometry) {
+        drawClipboardCard(canvas, key)
+        val cx = key.centerX
+        val cy = key.centerY
+        prepareMonoIconPaint()
+        keyPaint.strokeWidth = 1.7f * density
+        // Trash can: lid + body + handle
+        canvas.drawLine(cx - 7f * density, cy - 5f * density, cx + 7f * density, cy - 5f * density, keyPaint)
+        canvas.drawLine(cx - 3f * density, cy - 8f * density, cx + 3f * density, cy - 8f * density, keyPaint)
+        canvas.drawLine(cx - 5.5f * density, cy - 5f * density, cx - 4f * density, cy + 7f * density, keyPaint)
+        canvas.drawLine(cx + 5.5f * density, cy - 5f * density, cx + 4f * density, cy + 7f * density, keyPaint)
+        canvas.drawLine(cx - 4f * density, cy + 7f * density, cx + 4f * density, cy + 7f * density, keyPaint)
+        canvas.drawLine(cx, cy - 3f * density, cx, cy + 4f * density, keyPaint)
+        keyPaint.style = Paint.Style.FILL
+    }
+
+    private fun confirmClearClipboardUnpinned() {
+        val unpinned = ClipboardHistoryStore.readEntries(context).count { !it.pinned }
+        if (unpinned <= 0) {
+            Toast.makeText(context, R.string.clipboard_clear_unpinned_empty, Toast.LENGTH_SHORT).show()
+            return
+        }
+        clipboardItemPopup = null
+        val barW = 220f * density
+        val barH = 44f * density
+        val pad = 8f * density
+        val cx = width / 2f
+        val top = keyboardTop + 10f * density
+        val bar = RectF(cx - barW / 2f, top, cx + barW / 2f, top + barH)
+        val btnH = barH - pad * 2
+        val cancelW = 72f * density
+        val confirmW = 72f * density
+        val confirm = RectF(bar.right - pad - confirmW, bar.top + pad, bar.right - pad, bar.top + pad + btnH)
+        val cancel = RectF(confirm.left - 6f * density - cancelW, bar.top + pad, confirm.left - 6f * density, bar.top + pad + btnH)
+        clipboardClearPopup = ClipboardClearPopup(bar, cancel, confirm, unpinned)
+        // Clear is opened on finger-up already; no suppress needed.
+        suppressClipboardPopupUp = false
+        invalidate()
+    }
+
+    /** Gboard-style compact bar above the long-pressed clipboard card. */
+    private fun showClipboardItemActions(action: KeyAction.CommitClipboard, anchorKey: KeyGeometry) {
+        val entryId = action.entryId.ifBlank {
+            ClipboardHistoryStore.readEntries(context)
+                .firstOrNull { it.text == action.sourceText || it.text == action.value }
+                ?.id
+                .orEmpty()
+        }
+        if (entryId.isBlank()) return
+        val entry = ClipboardHistoryStore.get(context, entryId) ?: return
+        clipboardClearPopup = null
+        val btnW = 76f * density
+        val btnH = 36f * density
+        val gap = 8f * density
+        val barPad = 6f * density
+        val barW = btnW * 2 + gap + barPad * 2
+        val barH = btnH + barPad * 2
+        // Prefer above the card; flip below if near the toolbar.
+        var top = anchorKey.top - barH - 6f * density
+        if (top < keyboardTop + 2f * density) {
+            top = anchorKey.bottom + 6f * density
+        }
+        var left = anchorKey.centerX - barW / 2f
+        left = left.coerceIn(6f * density, (width - barW - 6f * density).coerceAtLeast(6f * density))
+        val bar = RectF(left, top, left + barW, top + barH)
+        val pinBtn = RectF(bar.left + barPad, bar.top + barPad, bar.left + barPad + btnW, bar.top + barPad + btnH)
+        val deleteBtn = RectF(pinBtn.right + gap, pinBtn.top, pinBtn.right + gap + btnW, pinBtn.bottom)
+        clipboardItemPopup = ClipboardItemPopup(entryId, entry.pinned, bar, pinBtn, deleteBtn)
+        // Finger is still down from the long-press — ignore the upcoming UP so the bar stays.
+        suppressClipboardPopupUp = true
+        invalidate()
+    }
+
+    private fun dismissClipboardPopups() {
+        if (clipboardItemPopup == null && clipboardClearPopup == null) return
+        clipboardItemPopup = null
+        clipboardClearPopup = null
+        suppressClipboardPopupUp = false
+        invalidate()
+    }
+
+    private fun drawClipboardItemPopup(canvas: Canvas, popup: ClipboardItemPopup) {
+        // Soft dim behind the bar only over the panel area (light, Gboard-like).
+        keyPaint.color = Color.argb(40, 0, 0, 0)
+        canvas.drawRect(0f, keyboardTop, width.toFloat(), height.toFloat(), keyPaint)
+        // Elevated pill bar
+        keyPaint.color = if (dark) Color.rgb(60, 64, 67) else Color.WHITE
+        canvas.drawRoundRect(popup.bar, 22f * density, 22f * density, keyPaint)
+        keyPaint.style = Paint.Style.STROKE
+        keyPaint.strokeWidth = 1f * density
+        keyPaint.color = if (dark) Color.rgb(95, 99, 104) else Color.rgb(218, 220, 224)
+        canvas.drawRoundRect(popup.bar, 22f * density, 22f * density, keyPaint)
+        keyPaint.style = Paint.Style.FILL
+        drawClipboardPopupChip(
+            canvas,
+            popup.pinBtn,
+            if (popup.pinned) "★ ${context.getString(R.string.clipboard_item_unpin)}"
+            else "☆ ${context.getString(R.string.clipboard_item_pin)}",
+            filled = false,
+        )
+        drawClipboardPopupChip(
+            canvas,
+            popup.deleteBtn,
+            context.getString(R.string.clipboard_item_delete),
+            filled = true,
+        )
+    }
+
+    private fun drawClipboardClearPopup(canvas: Canvas, popup: ClipboardClearPopup) {
+        keyPaint.color = Color.argb(40, 0, 0, 0)
+        canvas.drawRect(0f, keyboardTop, width.toFloat(), height.toFloat(), keyPaint)
+        keyPaint.color = if (dark) Color.rgb(60, 64, 67) else Color.WHITE
+        canvas.drawRoundRect(popup.bar, 22f * density, 22f * density, keyPaint)
+        keyPaint.style = Paint.Style.STROKE
+        keyPaint.strokeWidth = 1f * density
+        keyPaint.color = if (dark) Color.rgb(95, 99, 104) else Color.rgb(218, 220, 224)
+        canvas.drawRoundRect(popup.bar, 22f * density, 22f * density, keyPaint)
+        keyPaint.style = Paint.Style.FILL
+        val oldSize = textPaint.textSize
+        val oldAlign = textPaint.textAlign
+        val oldColor = textPaint.color
+        try {
+            textPaint.textAlign = Paint.Align.LEFT
+            textPaint.textSize = 12.5f * density
+            textPaint.color = themePalette.text
+            val label = context.getString(R.string.clipboard_clear_popup_label, popup.unpinnedCount)
+            canvas.drawText(label, popup.bar.left + 12f * density, popup.bar.centerY() - (textPaint.ascent() + textPaint.descent()) / 2f, textPaint)
+        } finally {
+            textPaint.textSize = oldSize
+            textPaint.textAlign = oldAlign
+            textPaint.color = oldColor
+        }
+        drawClipboardPopupChip(canvas, popup.cancelBtn, context.getString(R.string.cancel), filled = false)
+        drawClipboardPopupChip(canvas, popup.confirmBtn, context.getString(R.string.clipboard_clear_unpinned_confirm), filled = true)
+    }
+
+    private fun drawClipboardPopupChip(canvas: Canvas, rect: RectF, label: String, filled: Boolean) {
+        keyPaint.style = Paint.Style.FILL
+        if (filled) {
+            keyPaint.color = themePalette.accent
+        } else {
+            keyPaint.color = if (dark) Color.rgb(48, 49, 52) else Color.rgb(241, 243, 244)
+        }
+        canvas.drawRoundRect(rect, 18f * density, 18f * density, keyPaint)
+        val oldSize = textPaint.textSize
+        val oldAlign = textPaint.textAlign
+        val oldColor = textPaint.color
+        try {
+            textPaint.textAlign = Paint.Align.CENTER
+            textPaint.textSize = 12f * density
+            textPaint.color = if (filled) {
+                if (dark) Color.rgb(32, 33, 36) else Color.WHITE
+            } else {
+                themePalette.text
+            }
+            canvas.drawText(
+                label,
+                rect.centerX(),
+                rect.centerY() - (textPaint.ascent() + textPaint.descent()) / 2f,
+                textPaint,
+            )
+        } finally {
+            textPaint.textSize = oldSize
+            textPaint.textAlign = oldAlign
+            textPaint.color = oldColor
+        }
+    }
+
+    private fun handleClipboardPopupTouch(event: MotionEvent): Boolean {
+        val x = toKeyboardX(event.x)
+        val y = event.y
+        when (event.actionMasked) {
+            MotionEvent.ACTION_DOWN, MotionEvent.ACTION_POINTER_DOWN -> {
+                // Tap outside the bar dismisses immediately (Gboard-like).
+                val item = clipboardItemPopup
+                if (item != null && !item.bar.contains(x, y)) {
+                    dismissClipboardPopups()
+                    return true
+                }
+                val clear = clipboardClearPopup
+                if (clear != null && !clear.bar.contains(x, y)) {
+                    dismissClipboardPopups()
+                    return true
+                }
+                return true
+            }
+            MotionEvent.ACTION_MOVE -> return true
+            MotionEvent.ACTION_UP, MotionEvent.ACTION_POINTER_UP -> {
+                // Release after long-press that opened the item popup — keep bar visible.
+                if (suppressClipboardPopupUp) {
+                    suppressClipboardPopupUp = false
+                    // Also clear any lingering pointer state from the long-press gesture.
+                    cancelActiveGesture()
+                    return true
+                }
+                val item = clipboardItemPopup
+                if (item != null) {
+                    when {
+                        item.pinBtn.contains(x, y) -> {
+                            ClipboardHistoryStore.togglePinned(context, item.entryId)
+                            dismissClipboardPopups()
+                            rebuildKeys(width.toFloat(), height.toFloat())
+                            invalidate()
+                        }
+                        item.deleteBtn.contains(x, y) -> {
+                            ClipboardHistoryStore.delete(context, item.entryId)
+                            Toast.makeText(context, R.string.clipboard_item_deleted, Toast.LENGTH_SHORT).show()
+                            dismissClipboardPopups()
+                            rebuildKeys(width.toFloat(), height.toFloat())
+                            invalidate()
+                        }
+                        item.bar.contains(x, y) -> Unit // absorb taps on padding
+                        else -> dismissClipboardPopups()
+                    }
+                    return true
+                }
+                val clear = clipboardClearPopup
+                if (clear != null) {
+                    when {
+                        clear.confirmBtn.contains(x, y) -> {
+                            val removed = ClipboardHistoryStore.clearUnpinned(context)
+                            Toast.makeText(
+                                context,
+                                context.getString(R.string.clipboard_clear_unpinned_done, removed),
+                                Toast.LENGTH_SHORT,
+                            ).show()
+                            dismissClipboardPopups()
+                            rebuildKeys(width.toFloat(), height.toFloat())
+                            invalidate()
+                        }
+                        clear.cancelBtn.contains(x, y) -> dismissClipboardPopups()
+                        else -> dismissClipboardPopups()
+                    }
+                    return true
+                }
+            }
+            MotionEvent.ACTION_CANCEL -> {
+                if (suppressClipboardPopupUp) {
+                    // Cancel of the open gesture should still keep the popup.
+                    suppressClipboardPopupUp = false
+                    cancelActiveGesture()
+                } else {
+                    dismissClipboardPopups()
+                }
+            }
+        }
+        return true
     }
 
     /** Monochrome translation mark using overlapping language cards. */
@@ -1170,6 +1555,9 @@ class KeyboardView(context: Context) : View(context) {
 
     override fun onTouchEvent(event: MotionEvent): Boolean {
         if (adjustmentMode) return handleResizeTouch(event)
+        if (clipboardItemPopup != null || clipboardClearPopup != null) {
+            return handleClipboardPopupTouch(event)
+        }
         when (event.actionMasked) {
             MotionEvent.ACTION_DOWN, MotionEvent.ACTION_POINTER_DOWN -> startPointer(event, event.actionIndex)
             MotionEvent.ACTION_MOVE -> updatePointers(event)
@@ -1260,6 +1648,7 @@ class KeyboardView(context: Context) : View(context) {
             emojiSearchQuery = emojiSearchQuery.dropLast(1)
             rebuildKeys(width.toFloat(), height.toFloat())
         } else if (action == KeyAction.ToggleClipboard) {
+            dismissClipboardPopups()
             panel = if (panel == Panel.CLIPBOARD) Panel.NONE else Panel.CLIPBOARD
             if (panel == Panel.CLIPBOARD) clipboardTab = 0
             symbols = false
@@ -1268,8 +1657,11 @@ class KeyboardView(context: Context) : View(context) {
             emojiGroup = action.index.coerceIn(0, EmojiCatalog.groups.size)
             rebuildKeys(width.toFloat(), height.toFloat())
         } else if (action is KeyAction.SelectClipboardTab) {
+            dismissClipboardPopups()
             clipboardTab = action.index.coerceIn(0, 1)
             rebuildKeys(width.toFloat(), height.toFloat())
+        } else if (action == KeyAction.ClearClipboardUnpinned) {
+            confirmClearClipboardUnpinned()
         } else if (action == KeyAction.HideKeyboard) {
             when {
                 panel != Panel.NONE -> panel = Panel.NONE
@@ -1296,7 +1688,7 @@ class KeyboardView(context: Context) : View(context) {
                 EmojiRecentStore.add(context, action.value)
             }
             onKeyAction(action)
-            if (action is KeyAction.CommitText && panel != Panel.NONE) {
+            if ((action is KeyAction.CommitText || action is KeyAction.CommitClipboard) && panel != Panel.NONE) {
                 panel = Panel.NONE
                 rebuildKeys(width.toFloat(), height.toFloat())
             }
@@ -1315,6 +1707,7 @@ class KeyboardView(context: Context) : View(context) {
 
     fun closeMediaPanel() {
         if (panel == Panel.NONE) return
+        dismissClipboardPopups()
         panel = Panel.NONE
         rebuildKeys(width.toFloat(), height.toFloat())
         invalidate()
@@ -1356,18 +1749,16 @@ class KeyboardView(context: Context) : View(context) {
             postDelayed(runnable, 420L)
             return
         }
-        val clipboardText = if (panel == Panel.CLIPBOARD && clipboardTab == 0) {
-            (key.action as? KeyAction.CommitClipboard)?.sourceText ?: (key.action as? KeyAction.CommitText)?.value
+        val clipboardAction = if (panel == Panel.CLIPBOARD && clipboardTab == 0) {
+            key.action as? KeyAction.CommitClipboard
         } else null
-        if (clipboardText != null) {
+        if (clipboardAction != null) {
             val runnable = Runnable {
                 val state = pointers[pointerId]
                 if (state?.key == key && !state.longPressed) {
                     state.longPressed = true
-                    ClipboardHistoryStore.togglePinned(context, clipboardText)
                     vibrate()
-                    rebuildKeys(width.toFloat(), height.toFloat())
-                    invalidate()
+                    showClipboardItemActions(clipboardAction, key)
                 }
                 longPressRunnables.remove(pointerId)
             }
@@ -1802,7 +2193,7 @@ class KeyboardView(context: Context) : View(context) {
         textPaint.textSize = 13f * density
         textPaint.color = themePalette.accent
         canvas.drawText(if (voicePaused) "Nhấn để tiếp tục" else "Nhấn để tạm dừng", centerX, bottom - 66f * density, textPaint)
-        textPaint.textSize = 22f * density
+        textPaint.textSize = keyLabelTextSize
         textPaint.color = themePalette.text
     }
 
@@ -1948,32 +2339,66 @@ class KeyboardView(context: Context) : View(context) {
     }
 
     private fun addClipboardPanel(totalWidth: Float, rowCount: Int, rowHeight: Float, margin: Float, gap: Float) {
-        capturePrimaryClipboard()
+        // Do NOT re-capture primary clip here — that resurrected the newest item after delete/clear.
+        // Capture only via clip-changed listener + onAttachedToWindow.
         val clipboardEntries = ClipboardHistoryStore.readEntries(context)
-        val history = if (clipboardTab == 0) clipboardEntries.map { it.text } else NoteStore.read(context)
+        val notes = NoteStore.read(context)
         val columns = 2
         val contentRows = rowCount - 1
-        val values = history.take(columns * contentRows)
-        if (values.isEmpty()) {
-            val top = keyboardTop + margin
-            val bottom = keyboardTop + margin + contentRows * (rowHeight + gap) - gap
-            val label = if (clipboardTab == 0) "Clipboard trống" else "Chưa có ghi chú"
-            addKey("clipboard-empty", label, KeyAction.ToggleClipboard, margin, top, totalWidth - margin, bottom)
-        } else {
-            val keyWidth = (totalWidth - margin * 2 - gap) / columns
-            values.chunked(columns).forEachIndexed { row, items ->
-                val top = keyboardTop + margin + row * (rowHeight + gap)
-                items.forEachIndexed { column, value ->
-                    val pinned = clipboardTab == 0 && clipboardEntries.firstOrNull { it.text == value }?.pinned == true
-                    val left = margin + column * (keyWidth + gap)
-                    val state = if (pinned) "pinned" else "normal"
-                    val smart = if (clipboardTab == 0) SmartClipboardClassifier.classify(value) else null
-                    val action = smart?.let { KeyAction.CommitClipboard(it.pasteText, it.sourceText, it.kind.label) } ?: KeyAction.CommitText(value)
-                    addKey("clipboard-item-$state-$row-$column", "", action, left, top, left + keyWidth, top + rowHeight)
+        val capacity = columns * contentRows
+        if (clipboardTab == 0) {
+            val values = clipboardEntries.take(capacity)
+            if (values.isEmpty()) {
+                val top = keyboardTop + margin
+                val bottom = keyboardTop + margin + contentRows * (rowHeight + gap) - gap
+                addKey("clipboard-empty", "Clipboard trống", KeyAction.ToggleClipboard, margin, top, totalWidth - margin, bottom)
+            } else {
+                val keyWidth = (totalWidth - margin * 2 - gap) / columns
+                values.chunked(columns).forEachIndexed { row, items ->
+                    val top = keyboardTop + margin + row * (rowHeight + gap)
+                    items.forEachIndexed { column, entry ->
+                        val left = margin + column * (keyWidth + gap)
+                        val state = if (entry.pinned) "pinned" else "normal"
+                        addKey(
+                            "clipboard-item-$state-$row-$column",
+                            "",
+                            commitActionForClipboardEntry(entry),
+                            left, top, left + keyWidth, top + rowHeight,
+                        )
+                    }
                 }
             }
-        }
-        if (clipboardTab == 1) {
+            // Clear unpinned — top-right on clipboard history tab.
+            val clearSize = 40f * density
+            val clearRight = totalWidth - margin - 6f * density
+            val clearTop = keyboardTop + margin + 6f * density
+            addKey(
+                "clipboard-clear-unpinned",
+                context.getString(R.string.clipboard_clear_unpinned),
+                KeyAction.ClearClipboardUnpinned,
+                clearRight - clearSize, clearTop, clearRight, clearTop + clearSize,
+            )
+        } else {
+            val values = notes.take(capacity)
+            if (values.isEmpty()) {
+                val top = keyboardTop + margin
+                val bottom = keyboardTop + margin + contentRows * (rowHeight + gap) - gap
+                addKey("clipboard-empty", "Chưa có ghi chú", KeyAction.ToggleClipboard, margin, top, totalWidth - margin, bottom)
+            } else {
+                val keyWidth = (totalWidth - margin * 2 - gap) / columns
+                values.chunked(columns).forEachIndexed { row, items ->
+                    val top = keyboardTop + margin + row * (rowHeight + gap)
+                    items.forEachIndexed { column, value ->
+                        val left = margin + column * (keyWidth + gap)
+                        addKey(
+                            "clipboard-item-normal-$row-$column",
+                            "",
+                            KeyAction.CommitText(value),
+                            left, top, left + keyWidth, top + rowHeight,
+                        )
+                    }
+                }
+            }
             val manageSize = 40f * density
             val manageRight = totalWidth - margin - 6f * density
             val manageTop = keyboardTop + margin + 6f * density
@@ -1993,6 +2418,28 @@ class KeyboardView(context: Context) : View(context) {
             val id = "clipboard-tab-${(action as KeyAction.SelectClipboardTab).index}"
             addKey(id, "", action, left, tabTop, left + tabWidth, tabTop + rowHeight)
         }
+    }
+
+    private fun commitActionForClipboardEntry(entry: ClipboardEntry): KeyAction.CommitClipboard {
+        val smart = if (entry.kind == ClipboardEntryKind.TEXT) {
+            SmartClipboardClassifier.classify(entry.text)
+        } else null
+        val kindLabel = when {
+            entry.kind == ClipboardEntryKind.IMAGE -> "ẢNH"
+            entry.kind == ClipboardEntryKind.HTML -> "HTML"
+            smart != null && smart.kind.label.isNotEmpty() -> smart.kind.label
+            else -> entry.kindLabel
+        }
+        return KeyAction.CommitClipboard(
+            value = smart?.pasteText ?: entry.text,
+            sourceText = entry.text,
+            kindLabel = kindLabel,
+            entryId = entry.id,
+            contentKind = entry.kind.name,
+            imageFileName = entry.imageFileName,
+            mimeType = entry.mimeType,
+            html = entry.html,
+        )
     }
 
     private fun addEmojiRow(values: List<String>, row: Int, rowHeight: Float, margin: Float, gap: Float) {
@@ -2018,7 +2465,7 @@ class KeyboardView(context: Context) : View(context) {
         if (privateSession) return
         val clip = context.getSystemService(ClipboardManager::class.java)?.primaryClip ?: return
         if (clip.itemCount == 0) return
-        ClipboardHistoryStore.add(context, clip.getItemAt(0).coerceToText(context).toString())
+        ClipboardHistoryStore.captureClip(context, clip)
     }
 
 
@@ -2094,7 +2541,7 @@ class KeyboardView(context: Context) : View(context) {
         val top = frame.top
         val right = frame.right
         val bottom = frame.bottom
-        val green = Color.rgb(34, 197, 94)
+        val green = themePalette.accent
         // Dim only outside the keyboard content (Gboard-style floating frame).
         keyPaint.color = Color.argb(90, 0, 0, 0)
         if (top > 0f) canvas.drawRect(0f, 0f, width.toFloat(), top, keyPaint)

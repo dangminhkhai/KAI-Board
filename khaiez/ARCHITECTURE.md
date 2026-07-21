@@ -86,7 +86,8 @@ Tùy chọn: SharedPreferences. API key: AES-GCM + Android Keystore; UI chỉ hi
 | `AiCommandSuggestionStore` | Học lệnh AI đã gửi; gợi ý AI → cá nhân → offline |
 | `SpaceCursorGesturePolicy` / `ShiftGesturePolicy` / `RepeatKeyState` | Cử chỉ thuần, unit test |
 | `SmartClipboardClassifier` | Regex offline; OTP có ngữ cảnh |
-| `ClipboardHistoryStore` | TTL khi đọc/thêm; ghim không xóa |
+| `ClipboardHistoryStore` | TEXT/HTML/IMAGE; TTL; ghim; clearUnpinned; suppress re-import sau xóa; ảnh `filesDir/clipboard_images/` |
+| `RichClipboardTestEditText` | Ô thử settings: `EditorInfoCompat` + `commitContent` image/* |
 | `UnicodeDeletionPolicy` | Xóa emoji/grapheme đúng số code unit |
 | `ThemeExtensionStore` | JSON ≤ 64 KB, validate, `filesDir/theme_extensions` |
 | `SecureApiKeyStore` / `AiKeyStatsStore` | Thứ tự fallback = thứ tự card; `400` không nhảy key |

@@ -188,6 +188,11 @@ Chạy trước khi cài bản debug lên máy chính.
 | 7.5 | Ghim + TTL 1 giờ / 1 ngày / không xóa | [ ] |
 | 7.6 | Gợi ý: AI → cá nhân → offline; decay | [ ] |
 | 7.7 | Tải / xóa gói từ điển mở rộng | [ ] |
+| 7.8 | Clipboard HTML: badge + dán plain/Spanned; URL bar chỉ plain | [ ] |
+| 7.9 | Clipboard ảnh: thumbnail; dán ô thử OK; URL/Google → toast, không crash/copy lỗi | [ ] |
+| 7.10 | Giữ mục → popup Ghim/Xóa; nhả tay popup còn; xóa 1 mục không xóa hết | [ ] |
+| 7.11 | Thùng rác → xác nhận → xóa chưa ghim, giữ ★; mục không tự hiện lại | [ ] |
+| 7.12 | Ô thử sticky settings: text + ảnh; Xóa ô thử | [ ] |
 
 ---
 
@@ -214,7 +219,7 @@ Chạy trước khi cài bản debug lên máy chính.
 | 9.1 | Theme sáng / tối / theo hệ thống | [ ] |
 | 9.2 | Gallery theme 2 cột, preview, áp dụng / xuất / xóa | [ ] |
 | 9.3 | Import theme file / HTTPS | [ ] |
-| 9.4 | Sticky ô thử — không tự bật IME khi mở app | [ ] |
+| 9.4 | Sticky ô thử — nhận text/HTML/ảnh; palette neutral (không mint) | [ ] |
 | 9.5 | Backup/restore: theme + Smartbar; **không** key/clipboard/notes | [ ] |
 | 9.6 | `assembleDebug` + `dev-install.cmd` | [ ] |
 | 9.7 | Package/version/ABI trên thiết bị (`0.1.0-debug`) | [ ] |

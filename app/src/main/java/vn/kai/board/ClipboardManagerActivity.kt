@@ -14,12 +14,14 @@ import android.widget.TextView
 import com.google.android.material.button.MaterialButton
 import com.google.android.material.card.MaterialCardView
 import com.google.android.material.dialog.MaterialAlertDialogBuilder
+import vn.kai.board.input.ClipboardHistoryStore
 import vn.kai.board.input.NoteStore
 import vn.kai.board.settings.KeyboardColorStyle
 import vn.kai.board.settings.KeyboardPreferences
 import vn.kai.board.settings.ThemeMode
 import vn.kai.board.settings.KeyboardThemePalette
 import vn.kai.board.settings.ClipboardExpiry
+import android.widget.Toast
 
 class ClipboardManagerActivity : Activity() {
     private val density get() = resources.displayMetrics.density
@@ -94,6 +96,33 @@ class ClipboardManagerActivity : Activity() {
                 }
             })
         }), LinearLayout.LayoutParams(-1, -2).apply { bottomMargin = dp(12) })
+        root.addView(MaterialButton(this).apply {
+            text = getString(R.string.clipboard_clear_unpinned)
+            setTextColor(selectedColor)
+            backgroundTintList = ColorStateList.valueOf(cardColor)
+            strokeColor = ColorStateList.valueOf(selectedColor)
+            strokeWidth = dp(1)
+            setOnClickListener {
+                val unpinned = ClipboardHistoryStore.readEntries(this@ClipboardManagerActivity).count { !it.pinned }
+                if (unpinned <= 0) {
+                    Toast.makeText(this@ClipboardManagerActivity, R.string.clipboard_clear_unpinned_empty, Toast.LENGTH_SHORT).show()
+                    return@setOnClickListener
+                }
+                MaterialAlertDialogBuilder(this@ClipboardManagerActivity)
+                    .setTitle(R.string.clipboard_clear_unpinned_title)
+                    .setMessage(getString(R.string.clipboard_clear_unpinned_message, unpinned))
+                    .setNegativeButton(R.string.cancel, null)
+                    .setPositiveButton(R.string.clipboard_clear_unpinned_confirm) { _, _ ->
+                        val removed = ClipboardHistoryStore.clearUnpinned(this@ClipboardManagerActivity)
+                        Toast.makeText(
+                            this@ClipboardManagerActivity,
+                            getString(R.string.clipboard_clear_unpinned_done, removed),
+                            Toast.LENGTH_SHORT,
+                        ).show()
+                    }
+                    .show()
+            }
+        }, LinearLayout.LayoutParams(-1, -2).apply { bottomMargin = dp(12) })
         root.addView(MaterialButton(this).apply {
             text = getString(R.string.add_note)
             setTextColor(Color.WHITE); backgroundTintList = ColorStateList.valueOf(selectedColor)

@@ -2,7 +2,7 @@
 
 **Repo:** https://github.com/dangminhkhai/KAI-Board  
 **Nhánh:** `main`  
-**Cập nhật:** 2026-07-21 — PhrasePack full (~720k), không seed APK, debug-only  
+**Cập nhật:** 2026-07-21 — clipboard rich (text/HTML/ảnh), popup Gboard-style, ô thử settings  
 
 ```powershell
 git pull origin main
@@ -11,6 +11,22 @@ git pull origin main
 ```
 
 **Trạng thái:** debug-only `0.1.0-debug` (`versionCode 1`). Không pipeline release/signing.
+
+---
+
+## Clipboard (mới nhất)
+
+| Khả năng | Chi tiết |
+| --- | --- |
+| Lưu | Text, HTML (plain+html), ảnh local JPEG |
+| Panel | Tab lịch sử + ghi chú; badge OTP/email/URL/SĐT/HTML/ẢNH |
+| Giữ mục | Popup pill **Ghim / Xóa** (không dialog hệ thống) |
+| Thùng rác | Xóa hết chưa ghim + xác nhận pill; ★ giữ |
+| Dán ảnh | `commitContent` nếu `image/*`; URL/search → toast, không setPrimaryClip |
+| Ô thử | Sticky **Ô thử (thay Messages)** — nhận ảnh |
+| Privacy | Private session ẩn clipboard; backup **không** clipboard/notes |
+
+**Files:** `ClipboardHistoryStore.kt`, `KeyboardView` (popup/draw), `KaiBoardImeService` (paste), `RichClipboardTestEditText.kt`
 
 ---
 
@@ -59,7 +75,9 @@ py -3 tools\build_phrase_pack.py
 
 - [x] Checklist **auto** 2026-07-21: 331 unit tests OK; Telex regression unit OK; SM-N986N IME enabled  
 - [x] Smoke **tay** 1–2–3 (user): Safe/Cafe/case BS; P2 tab Cụm; Zalo/Chrome Telex+BS  
-- [ ] (Tùy) ma trận app rộng / AI-mic-dịch / `Mí`+BS
+- [x] Clipboard rich + popup Gboard + clear/pin/delete + ô thử settings (user OK)  
+- [ ] (Tùy) ma trận app rộng / AI-mic-dịch / `Mí`+BS  
+- [ ] (Tùy) unit test `ClipboardHistoryStore` suppress-fingerprint / TTL + ghim  
 
 ---
 
@@ -68,7 +86,10 @@ py -3 tools\build_phrase_pack.py
 ```text
 app/.../input/PhraseLearningStore.kt
 app/.../input/PhrasePack.kt
-app/.../ime/KaiBoardImeService.kt   # warmUpAsync
+app/.../input/ClipboardHistoryStore.kt   # text/HTML/image + suppress re-import
+app/.../ui/KeyboardView.kt               # clipboard panel + Gboard popups
+app/.../ui/RichClipboardTestEditText.kt  # settings test field (image/*)
+app/.../ime/KaiBoardImeService.kt        # warmUpAsync + paste rich
 tools/build_phrase_pack.py
 phrase-packs/collocations_vi.txt
 phrase-packs/vi_social.tsv

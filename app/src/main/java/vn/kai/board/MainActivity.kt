@@ -9,6 +9,7 @@ import android.graphics.Typeface
 import android.graphics.drawable.GradientDrawable
 import android.os.Bundle
 import android.provider.Settings
+import android.text.InputType
 import android.view.ViewGroup
 import android.view.Gravity
 import android.view.WindowManager
@@ -22,7 +23,6 @@ import android.widget.SeekBar
 import com.google.android.material.button.MaterialButton
 import com.google.android.material.card.MaterialCardView
 import com.google.android.material.materialswitch.MaterialSwitch
-import com.google.android.material.textfield.TextInputEditText
 import com.google.android.material.textfield.TextInputLayout
 import com.google.android.material.dialog.MaterialAlertDialogBuilder
 import vn.kai.board.settings.KeyboardPreferences
@@ -40,8 +40,10 @@ import vn.kai.board.input.WordDictionaryPack
 import vn.kai.board.input.DictionaryLanguagePack
 import vn.kai.board.translation.TranslationModelsActivity
 import android.widget.Toast
+import android.widget.ImageView
 import vn.kai.board.ai.AiPreferences
 import vn.kai.board.ai.AiTone
+import vn.kai.board.ui.RichClipboardTestEditText
 import androidx.core.view.ViewCompat
 import androidx.core.view.WindowCompat
 import androidx.core.view.WindowInsetsCompat
@@ -187,14 +189,44 @@ class MainActivity : Activity() {
                 }
             })
         }, LinearLayout.LayoutParams(-1, dp(36)).apply { bottomMargin = dp(8) })
-        val typingTest = TextInputEditText(this).apply {
+        val typingImagePreview = ImageView(this).apply {
+            adjustViewBounds = true
+            maxHeight = dp(120)
+            scaleType = ImageView.ScaleType.CENTER_CROP
+            visibility = android.view.View.GONE
+            setBackgroundColor(if (isDark) Color.rgb(48, 49, 52) else Color.rgb(241, 243, 244))
+            contentDescription = getString(R.string.typing_image_received)
+        }
+        val typingImageStatus = textView("", 12f, secondaryText).apply {
+            visibility = android.view.View.GONE
+            setPadding(0, dp(4), 0, 0)
+        }
+        val typingTest = RichClipboardTestEditText(this).apply {
             textSize = 16f
             hint = getString(R.string.typing_test_hint)
             setSingleLine(false)
-            minHeight = dp(48)
-            setPadding(dp(12), 0, dp(12), 0)
+            minLines = 2
+            maxLines = 4
+            minHeight = dp(56)
+            setPadding(dp(12), dp(10), dp(12), dp(10))
             setTextColor(primaryText)
             setHintTextColor(if (isDark) Color.rgb(148, 163, 184) else Color.rgb(107, 114, 128))
+            inputType = InputType.TYPE_CLASS_TEXT or
+                InputType.TYPE_TEXT_FLAG_MULTI_LINE or
+                InputType.TYPE_TEXT_FLAG_CAP_SENTENCES
+            onImageReceived = { uri ->
+                runCatching {
+                    contentResolver.openInputStream(uri)?.use { stream ->
+                        val bmp = android.graphics.BitmapFactory.decodeStream(stream)
+                        typingImagePreview.setImageBitmap(bmp)
+                        typingImagePreview.visibility = android.view.View.VISIBLE
+                        typingImageStatus.text = getString(R.string.typing_image_received)
+                        typingImageStatus.visibility = android.view.View.VISIBLE
+                    }
+                }.onFailure {
+                    Toast.makeText(this@MainActivity, "Không mở được ảnh dán", Toast.LENGTH_SHORT).show()
+                }
+            }
         }
         val typingField = TextInputLayout(this).apply {
             boxBackgroundMode = TextInputLayout.BOX_BACKGROUND_OUTLINE
@@ -205,8 +237,37 @@ class MainActivity : Activity() {
         }
         val typingCardContent = LinearLayout(this).apply {
             orientation = LinearLayout.VERTICAL
-            setPadding(dp(8), dp(4), dp(8), dp(4))
+            setPadding(dp(10), dp(8), dp(10), dp(8))
+            addView(textView(getString(R.string.typing_card_title), 14f, primaryText).apply {
+                setTypeface(typeface, Typeface.BOLD)
+            })
+            addView(textView(getString(R.string.typing_card_subtitle), 12f, secondaryText).apply {
+                setPadding(0, dp(2), 0, dp(6))
+            })
             addView(typingField, LinearLayout.LayoutParams(-1, -2))
+            addView(typingImagePreview, LinearLayout.LayoutParams(-1, dp(100)).apply {
+                topMargin = dp(6)
+            })
+            addView(typingImageStatus)
+            addView(MaterialButton(this@MainActivity).apply {
+                text = getString(R.string.typing_clear)
+                textSize = 12f
+                minHeight = 0
+                minimumHeight = 0
+                insetTop = 0
+                insetBottom = 0
+                setTextColor(selectedColor)
+                backgroundTintList = ColorStateList.valueOf(cardColor)
+                strokeColor = ColorStateList.valueOf(selectedColor)
+                strokeWidth = dp(1)
+                setOnClickListener {
+                    typingTest.setText("")
+                    typingImagePreview.setImageDrawable(null)
+                    typingImagePreview.visibility = android.view.View.GONE
+                    typingImageStatus.visibility = android.view.View.GONE
+                    typingTest.requestFocus()
+                }
+            }, LinearLayout.LayoutParams(-2, dp(36)).apply { topMargin = dp(4) })
         }
         val stickyTypingCard = MaterialCardView(this).apply {
             radius = dp(16).toFloat()
@@ -789,7 +850,7 @@ class MainActivity : Activity() {
                 } else {
                     0f
                 }
-                settingsScroll.setPadding(0, 0, 0, maxOf(systemBars.bottom, ime.bottom) + dp(76))
+                settingsScroll.setPadding(0, 0, 0, maxOf(systemBars.bottom, ime.bottom) + dp(168))
                 insets
             }
         }
@@ -801,8 +862,12 @@ class MainActivity : Activity() {
                     settingsScroll.scrollTo(0, (target.top - dp(12)).coerceAtLeast(0))
                 }
             }
+        } else {
+            // Open ready to type so clipboard / Telex can be tested without another app.
+            typingTest.post {
+                typingTest.requestFocus()
+            }
         }
-
     }
 
     override fun onResume() {

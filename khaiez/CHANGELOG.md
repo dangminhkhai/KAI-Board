@@ -4,6 +4,18 @@ Lịch sử mốc phát triển nội bộ (không còn pipeline ship).
 
 ## Debug / đang phát triển
 
+### Clipboard rich + UI Gboard-style (2026-07-21)
+
+- Lịch sử **text / HTML / ảnh** local (`ClipboardHistoryStore`); ảnh JPEG trong `filesDir/clipboard_images/` (FileProvider).
+- Smart paste OTP/email/URL/SĐT giữ nguyên; badge **HTML** / **ẢNH** + thumbnail.
+- Dán ảnh qua `commitContent` chỉ khi ô khai báo `image/*`; URL/tìm kiếm/mật khẩu → toast nhẹ, **không** copy hệ thống (tránh lỗi sao chép).
+- HTML: Spanned khi ô text thường; plain text trên URI/search/password.
+- **Giữ** mục: popup pill **Ghim · Xóa** (không AlertDialog); nhả tay sau long-press **không** đóng popup.
+- Thùng rác: xóa hết **chưa ghim** (popup xác nhận gọn); mục ★ được giữ; suppress re-import clip hệ thống sau xóa.
+- Ô thử sticky trong Cài đặt (`RichClipboardTestEditText`) nhận text/HTML/ảnh — không cần Messages.
+- Palette mặc định **neutral grayscale** (bỏ accent mint xanh); theme System/Sáng/Tối giữ nguyên.
+- Resize: viewport max + preview 60fps; sửa text phím bị nhỏ sau clipboard (reset `textPaint`).
+
 ### UI chế độ mật khẩu / riêng tư
 
 - Smartbar private: banner **«Riêng tư · mật khẩu»** + icon khóa; ẩn AI/clipboard/gợi ý; Telex tắt (logic cũ).
