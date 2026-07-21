@@ -60,4 +60,30 @@ class PhraseLearningStoreTest {
         )
         assertEquals(listOf("personal", "pack"), merged)
     }
+
+    @Test
+    fun removeExactDropsOnlyMatchingPhrase() {
+        val entries = listOf(
+            PhraseEntry(listOf("xin", "chào"), count = 2, recentScoreMilli = 2000, lastUsedEpochDay = 10),
+            PhraseEntry(listOf("cảm", "ơn"), count = 1, recentScoreMilli = 1000, lastUsedEpochDay = 10),
+            PhraseEntry(listOf("xin", "chào", "bạn"), count = 1, recentScoreMilli = 1000, lastUsedEpochDay = 10),
+        )
+        val key = listOf("xin", "chào")
+        val remaining = entries.filterNot { it.words == key }
+        assertEquals(2, remaining.size)
+        assertTrue(remaining.none { it.words == key })
+        assertTrue(remaining.any { it.words == listOf("xin", "chào", "bạn") })
+    }
+
+    @Test
+    fun phraseListItemLabelJoinsWithArrow() {
+        val item = PhraseListItem(
+            words = listOf("xin", "chào"),
+            count = 1,
+            decayScoreMilli = 1000,
+            lastUsedEpochDay = 1,
+            daysSinceLastUse = 0,
+        )
+        assertEquals("xin → chào", item.label())
+    }
 }

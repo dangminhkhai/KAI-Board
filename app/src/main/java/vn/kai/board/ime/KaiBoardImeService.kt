@@ -38,6 +38,7 @@ import vn.kai.board.input.UserLexiconStore
 import vn.kai.board.input.LearnSource
 import vn.kai.board.input.PhraseLearningStore
 import vn.kai.board.input.PhrasePack
+import vn.kai.board.input.PhraseStats
 import vn.kai.board.input.WordDictionaryPack
 import vn.kai.board.input.SuggestionPriority
 import vn.kai.board.input.AutoCorrectionStatsStore
@@ -98,6 +99,9 @@ class KaiBoardImeService : InputMethodService() {
         ComposingEditorSync.manufacturersPreferDirectCommit(Build.MANUFACTURER, Build.BRAND)
     }
     private var selectionActive = false
+    /** Last next-word / phrase-prefix candidates by source (lowercase). No full text stored. */
+    private var lastPhrasePersonal = emptySet<String>()
+    private var lastPhrasePack = emptySet<String>()
     private var privateSession = false
     private var lastAutoCorrection: AutoCorrection? = null
     private var translationMode = false
@@ -492,6 +496,7 @@ class KaiBoardImeService : InputMethodService() {
                     rawComposing = chosen
                     literalTelexLockLength = 0
                     applyComposingText(connection, previousComposing, chosen)
+                    notePhraseSuggestionAccepted(chosen)
                     if (learningAllowed()) {
                         UserLexiconStore.record(this, chosen, LearnSource.SUGGESTION, 3)
                         PhraseLearningStore.record(this, history, chosen)
@@ -512,6 +517,7 @@ class KaiBoardImeService : InputMethodService() {
                     } else {
                         connection.commitText("${action.value} ", 1)
                     }
+                    notePhraseSuggestionAccepted(action.value)
                     if (learningAllowed()) {
                         UserLexiconStore.record(this, action.value, LearnSource.SUGGESTION, 3)
                         PhraseLearningStore.record(this, history, action.value)
@@ -764,7 +770,7 @@ class KaiBoardImeService : InputMethodService() {
             }
             info?.let { TelexInputPolicy.isEnabled(it.inputType) } == true ->
                 if (composing.isEmpty()) {
-                    PhraseLearningStore.suggest(this, previousWords())
+                    phraseSuggestionsForHistory(previousWords())
                 } else {
                     val history = previousWords()
                     val phraseSeedOn = KeyboardPreferences.phraseSeedEnabled(this)
@@ -774,6 +780,11 @@ class KaiBoardImeService : InputMethodService() {
                         previousWord = previousWord(),
                         allowBuiltInPhrases = phraseSeedOn,
                     )
+                    val personalHits = PhraseLearningStore.suggestPersonal(this, history, 6)
+                        .filter { it.startsWith(composing, ignoreCase = true) }
+                    val packHits = PhraseLearningStore.suggestPack(this, history, 6)
+                        .filter { it.startsWith(composing, ignoreCase = true) }
+                    trackPhraseCandidates(personalHits.take(3), packHits.take(3))
                     val phraseHits = PhraseLearningStore.suggestMatchingPrefix(
                         this,
                         history,
@@ -792,8 +803,29 @@ class KaiBoardImeService : InputMethodService() {
             updateSuggestions()
             return
         }
-        val next = PhraseLearningStore.suggest(this, history)
+        val next = phraseSuggestionsForHistory(history)
         if (next.isEmpty()) updateSuggestions() else keyboardView?.setSuggestions(next)
+    }
+
+    private fun phraseSuggestionsForHistory(history: List<String>): List<String> {
+        val personal = PhraseLearningStore.suggestPersonal(this, history, 3)
+        val pack = PhraseLearningStore.suggestPack(this, history, 3)
+        trackPhraseCandidates(personal, pack)
+        return SuggestionPriority.merge(emptyList(), personal, pack, 3)
+    }
+
+    private fun trackPhraseCandidates(personal: List<String>, pack: List<String>) {
+        lastPhrasePersonal = personal.map { it.lowercase(Locale.ROOT) }.toSet()
+        lastPhrasePack = pack.map { it.lowercase(Locale.ROOT) }.toSet() - lastPhrasePersonal
+        PhraseStats.recordShown(this, lastPhrasePersonal.size, lastPhrasePack.size)
+    }
+
+    private fun notePhraseSuggestionAccepted(value: String) {
+        val key = value.lowercase(Locale.ROOT)
+        when {
+            key in lastPhrasePersonal -> PhraseStats.recordAccepted(this, PhraseStats.Source.PERSONAL)
+            key in lastPhrasePack -> PhraseStats.recordAccepted(this, PhraseStats.Source.PACK)
+        }
     }
 
     private fun suggestionsAllowed(info: EditorInfo?): Boolean =

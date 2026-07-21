@@ -77,7 +77,8 @@ Tùy chọn: SharedPreferences. API key: AES-GCM + Android Keystore; UI chỉ hi
 | Thành phần | Ghi chú |
 | --- | --- |
 | `SentenceAutomationPolicy` | Hoa đầu ô/dòng; không Space/Shift sau dấu câu |
-| `PhraseLearningStore` | Bigram/trigram cá nhân (decay 21 ngày, max 512); **rank #1** |
+| `PhraseLearningStore` | Bigram/trigram cá nhân (decay 21 ngày, max 512); **rank #1**; UI list/removeExact |
+| `PhraseStats` | Counters shown/accepted personal|pack — không lưu text |
 | `PhrasePack` | Gói ~720k offline (collocation + Viet74K + OpenSubtitles); `warmUpAsync`; gõ chỉ lookup RAM; không seed APK |
 | `SuggestionPriority.mergePhraseAndCompletions` | Mid-word: phrase-prefix rồi dictionary |
 | `WordDictionaryPack` | Gói VI/EN offline trong `filesDir` |

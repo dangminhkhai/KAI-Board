@@ -49,10 +49,15 @@ py -3 tools\build_phrase_pack.py
 
 ---
 
+## P2 cụm personal (đã code)
+
+- Tab **Từ | Cụm** trong `LearnedWordsActivity`
+- `listEntries` / `removeExact` / xóa hết cụm
+- `PhraseStats`: shown/accepted personal|pack — **không** lưu text; long-press dòng stats để xóa số liệu
+
 ## Next
 
-- [ ] Smoke máy pack ~720k: `tiêu`/`hoàng`/`xin` + Space; personal vẫn thắng  
-- [ ] P2: UI xem/xóa từng cụm personal  
+- [ ] Smoke P2 UI + pack ~720k trên máy  
 - AI/mic/dịch Samsung/Vivo; full checklist TESTING.md  
 
 ---

@@ -16,7 +16,7 @@
 ## Gần nhất
 
 - [x] Smoke máy: P1 seed + PhrasePack + clear học không đụng pack (user, 2026-07-21).
-- [ ] (P2 cụm từ) UI quản lý/xóa cụm đã học; accept-rate nội bộ không thu text.
+- [x] (P2 cụm từ) UI tab Cụm đã học + xóa từng/hết cụm; accept-rate counters không thu text.
 - [ ] Hoàn thiện lỗi AI, micro và dịch còn lại trên Samsung/Vivo (ngoài Telex).
 - [ ] Đo cold/warm IME show và key-down-to-commit (kịch bản lặp).
 - [ ] Chạy full checklist [TESTING.md](TESTING.md) trên Notes / Chrome / Zalo / Messenger / email / password.

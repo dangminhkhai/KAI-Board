@@ -4,6 +4,11 @@ Lịch sử mốc phát triển nội bộ (không còn pipeline ship).
 
 ## Debug / đang phát triển
 
+### P2 quản lý cụm cá nhân
+
+- Tab **Cụm** trong Quản lý từ & cụm: list/tìm/xóa từng cụm (`removeExact`), xóa hết cụm personal.
+- `PhraseStats`: đếm hiện/chọn gợi ý theo nguồn personal/pack, không lưu nội dung gõ; hiện trên màn quản lý (long-press để xóa số liệu).
+
 ### Gói cụm từ mở rộng
 
 - Thêm `PhrasePack` lớn ~720k bigram (~8 MB, cap 5–20 MB): collocation + Viet74K (~99%) + OpenSubtitles; lookup chỉ RAM sau preload (không parse trên hot path).

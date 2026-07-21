@@ -30,6 +30,7 @@ KAI Board không được âm thầm gửi clipboard, lịch sử gõ, từ đã
 - Chỉ tải khi người dùng bấm tải (từ điển: HTTPS; gói cụm: HTTPS hoặc asset bundled).
 - Từ điển: tối đa 40.000 từ Việt và 15.000 từ Anh từ FrequencyWords/OpenSubtitles.
 - Gói cụm (`PhrasePack`): ~720 000 bigram offline (~8 MB; collocation + Viet74K + OpenSubtitles); preload 1 lần trên worker; **không** backup; **không** xóa khi clear học. Không seed cụm trong APK. Cụm cá nhân (decay 21 ngày) vẫn #1.
+- Thống kê chọn gợi ý cụm (`PhraseStats`): chỉ đếm số lần hiện/chọn theo nguồn (personal/pack), **không** lưu nội dung gõ hay cặp từ.
 - Sau khi cài, gợi ý chạy cục bộ; nội dung người dùng gõ không được gửi khi tải gói.
 - Từ điển cá nhân dùng điểm gần đây với chu kỳ bán rã 14 ngày; không có tác vụ mạng hoặc decay chạy nền.
 

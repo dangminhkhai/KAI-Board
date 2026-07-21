@@ -10,6 +10,17 @@ data class PhraseEntry(
     val lastUsedEpochDay: Long = 0L,
 )
 
+/** UI-facing phrase row with decay applied for sorting/display. */
+data class PhraseListItem(
+    val words: List<String>,
+    val count: Int,
+    val decayScoreMilli: Int,
+    val lastUsedEpochDay: Long,
+    val daysSinceLastUse: Long,
+) {
+    fun label(): String = words.joinToString(" → ")
+}
+
 object PhraseLearningStore {
     private const val FILE = "phrase_learning"
     private const val LEGACY_KEY = "pairs"
@@ -94,6 +105,27 @@ object PhraseLearningStore {
 
     fun count(context: Context): Int = entries(context).size
 
+    /**
+     * Personal phrases for management UI, sorted by current decay score.
+     * [query] matches any word in the phrase (case-insensitive).
+     */
+    fun listEntries(context: Context, query: String = ""): List<PhraseListItem> {
+        val today = epochDay()
+        val needle = query.trim().lowercase(Locale.ROOT)
+        return entries(context).map { entry ->
+            PhraseListItem(
+                words = entry.words,
+                count = entry.count,
+                decayScoreMilli = decayedScoreMilli(entry.recentScoreMilli, entry.lastUsedEpochDay, today),
+                lastUsedEpochDay = entry.lastUsedEpochDay,
+                daysSinceLastUse = if (entry.lastUsedEpochDay <= 0L) 0L
+                else (today - entry.lastUsedEpochDay).coerceAtLeast(0L),
+            )
+        }.filter { item ->
+            needle.isEmpty() || item.words.any { it.contains(needle) }
+        }.sortedByDescending { it.decayScoreMilli }
+    }
+
     fun clear(context: Context) {
         cachedEntries = emptyList()
         context.getSharedPreferences(FILE, Context.MODE_PRIVATE).edit().clear().apply()
@@ -106,6 +138,13 @@ object PhraseLearningStore {
             entry.words.any { it.equals(target, ignoreCase = true) }
         }
         write(context, remaining)
+    }
+
+    /** Removes one exact bigram/trigram (words already cleaned or raw). */
+    fun removeExact(context: Context, words: List<String>) {
+        val key = words.mapNotNull(::clean)
+        if (key.size !in 2..3) return
+        write(context, entries(context).filterNot { it.words == key })
     }
 
     fun invalidateCache() {
