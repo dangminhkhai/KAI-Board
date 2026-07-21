@@ -1,0 +1,3 @@
+# Phrase pack integrity depends on exact UTF-8 LF bytes (SHA-256 in PhrasePack.kt).
+*.tsv text eol=lf
+phrase-packs/** text eol=lf

@@ -37,6 +37,7 @@ import vn.kai.board.input.HashtagSuggestionStore
 import vn.kai.board.input.UserLexiconStore
 import vn.kai.board.input.LearnSource
 import vn.kai.board.input.PhraseLearningStore
+import vn.kai.board.input.PhrasePack
 import vn.kai.board.input.WordDictionaryPack
 import vn.kai.board.input.SuggestionPriority
 import vn.kai.board.input.AutoCorrectionStatsStore
@@ -127,6 +128,8 @@ class KaiBoardImeService : InputMethodService() {
         Thread({
             runCatching { WordDictionaryPack.load(this) }
         }, "kai-dictionary-loader").start()
+        // Phrase pack: one-shot background parse into RAM (no periodic work / wake lock).
+        PhrasePack.warmUpAsync(this)
     }
 
     override fun onCreateInputView(): View {

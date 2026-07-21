@@ -10,10 +10,12 @@
 - [x] Gợi ý từ: thay prefix khi chọn suggestion (không `Ttôi` trên direct-commit OEM).
 - [x] **P0 gợi ý cụm từ** — smoke user: tạm ổn, chưa thấy lỗi (2026-07-21).
 - [x] **P1 gợi ý cụm từ** — mid-word blend, decay 21 ngày, seed ~100 cặp + setting.
+- [x] **Gói cụm full** — ~720k (~8 MB) collocation+Viet74K+OpenSubtitles; warmUp; không parse khi gõ; xóa seed APK; personal+decay #1.
 - [x] Gỡ pipeline release / signing; dự án debug-only (`0.1.0-debug`).
 
 ## Gần nhất
 
+- [x] Smoke máy: P1 seed + PhrasePack + clear học không đụng pack (user, 2026-07-21).
 - [ ] (P2 cụm từ) UI quản lý/xóa cụm đã học; accept-rate nội bộ không thu text.
 - [ ] Hoàn thiện lỗi AI, micro và dịch còn lại trên Samsung/Vivo (ngoài Telex).
 - [ ] Đo cold/warm IME show và key-down-to-commit (kịch bản lặp).

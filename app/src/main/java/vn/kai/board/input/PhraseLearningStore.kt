@@ -45,10 +45,10 @@ object PhraseLearningStore {
         suggest(context, listOfNotNull(previous), limit)
 
     fun suggest(context: Context, history: List<String>, limit: Int = 3): List<String> {
+        // Rank: personal (decay) → optional downloaded PhrasePack. No APK seed catalog.
         val personal = suggestPersonal(context, history, limit)
-        if (!KeyboardPreferencesBridge.phraseSeedEnabled(context)) return personal
-        val seed = suggestSeed(history, limit)
-        return SuggestionPriority.merge(emptyList(), personal, seed, limit)
+        val pack = suggestPack(context, history, limit)
+        return SuggestionPriority.merge(emptyList(), personal, pack, limit)
     }
 
     fun suggestPersonal(context: Context, history: List<String>, limit: Int = 3): List<String> {
@@ -59,11 +59,12 @@ object PhraseLearningStore {
         return rankCandidates(ranked, history, limit)
     }
 
+    /** Offline next-word from PhrasePack only (personal is separate). */
     fun suggestOffline(context: Context, history: List<String>, limit: Int = 3): List<String> =
-        if (KeyboardPreferencesBridge.phraseSeedEnabled(context)) suggestSeed(history, limit) else emptyList()
+        suggestPack(context, history, limit)
 
     /**
-     * Next-word candidates from personal + seed that continue [history] and match [prefix]
+     * Next-word candidates from personal + pack that continue [history] and match [prefix]
      * (mid-word blend). Display case follows [prefix].
      */
     fun suggestMatchingPrefix(
@@ -75,12 +76,8 @@ object PhraseLearningStore {
         val needle = prefix.trim()
         if (needle.isEmpty() || limit <= 0) return emptyList()
         val personal = suggestPersonal(context, history, limit * 3)
-        val seed = if (KeyboardPreferencesBridge.phraseSeedEnabled(context)) {
-            suggestSeed(history, limit * 3)
-        } else {
-            emptyList()
-        }
-        return (personal + seed)
+        val pack = suggestPack(context, history, limit * 3)
+        return (personal + pack)
             .asSequence()
             .filter { it.startsWith(needle, ignoreCase = true) }
             .distinctBy { it.lowercase(Locale.ROOT) }
@@ -89,10 +86,10 @@ object PhraseLearningStore {
             .toList()
     }
 
-    fun suggestSeed(history: List<String>, limit: Int = 3): List<String> {
+    fun suggestPack(context: Context, history: List<String>, limit: Int = 3): List<String> {
         if (limit <= 0) return emptyList()
         val last = history.mapNotNull(::clean).lastOrNull() ?: return emptyList()
-        return PhraseSeedCatalog.continuations(last).take(limit)
+        return PhrasePack.continuations(context, last, limit)
     }
 
     fun count(context: Context): Int = entries(context).size
@@ -223,19 +220,4 @@ object PhraseLearningStore {
     private fun epochDay(): Long = System.currentTimeMillis() / 86_400_000L
 }
 
-/**
- * Tiny bridge so [PhraseLearningStore] can read a preference without a hard cycle on settings
- * package in unit tests (override via test double not required — real prefs used on device).
- */
-internal object KeyboardPreferencesBridge {
-    @Volatile var phraseSeedOverride: Boolean? = null
 
-    fun phraseSeedEnabled(context: Context): Boolean {
-        phraseSeedOverride?.let { return it }
-        return try {
-            vn.kai.board.settings.KeyboardPreferences.phraseSeedEnabled(context)
-        } catch (_: Throwable) {
-            true
-        }
-    }
-}

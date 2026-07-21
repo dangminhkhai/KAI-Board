@@ -27,3 +27,6 @@ work/
 *.aab
 *.apks
 Res/
+
+# Large phrase-pack source downloads (rebuild with tools/build_phrase_pack.py)
+phrase-packs/raw/

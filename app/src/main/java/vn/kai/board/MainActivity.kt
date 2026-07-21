@@ -35,6 +35,7 @@ import vn.kai.board.input.UserLexiconStore
 import vn.kai.board.input.EmailSuggestionStore
 import vn.kai.board.input.HashtagSuggestionStore
 import vn.kai.board.input.PhraseLearningStore
+import vn.kai.board.input.PhrasePack
 import vn.kai.board.input.WordDictionaryPack
 import vn.kai.board.input.DictionaryLanguagePack
 import vn.kai.board.translation.TranslationModelsActivity
@@ -410,6 +411,101 @@ class MainActivity : Activity() {
                     bindAction(viAction, DictionaryLanguagePack.VIETNAMESE)
                     bindAction(enAction, DictionaryLanguagePack.ENGLISH)
                     refreshPack()
+                })
+            }, LinearLayout.LayoutParams(-1, -2).apply {
+                topMargin = dp(10)
+                bottomMargin = dp(4)
+            })
+            section.addView(MaterialCardView(this).apply {
+                radius = dp(14).toFloat()
+                cardElevation = 0f
+                strokeWidth = dp(1)
+                strokeColor = selectedColor
+                setCardBackgroundColor(cardColor)
+                setContentPadding(dp(14), dp(12), dp(14), dp(12))
+                addView(LinearLayout(this@MainActivity).apply {
+                    orientation = LinearLayout.VERTICAL
+                    addView(textView(getString(R.string.phrase_pack_title), 16f, primaryText).apply {
+                        setTypeface(typeface, Typeface.BOLD)
+                    })
+                    val phraseStatus = textView("", 13f, secondaryText).apply { setPadding(0, dp(4), 0, dp(4)) }
+                    fun phraseSecondaryButton() = MaterialButton(this@MainActivity).apply {
+                        minWidth = 0
+                        minimumHeight = dp(36)
+                        textSize = 12f
+                        insetTop = 0
+                        insetBottom = 0
+                        setTextColor(selectedColor)
+                        backgroundTintList = ColorStateList.valueOf(Color.TRANSPARENT)
+                        strokeColor = ColorStateList.valueOf(selectedColor)
+                        strokeWidth = dp(1)
+                    }
+                    val phraseAction = phraseSecondaryButton()
+                    fun refreshPhrasePack() {
+                        val ready = PhrasePack.isInstalled(this@MainActivity)
+                        phraseStatus.text = if (ready) {
+                            getString(
+                                R.string.phrase_pack_installed,
+                                PhrasePack.pairCount(this@MainActivity),
+                                (PhrasePack.sizeBytes(this@MainActivity) / 1024L).toInt().coerceAtLeast(1),
+                            )
+                        } else {
+                            getString(R.string.phrase_pack_not_installed)
+                        }
+                        phraseAction.text = getString(
+                            if (ready) R.string.phrase_pack_delete else R.string.phrase_pack_download,
+                        )
+                        phraseAction.isEnabled = true
+                    }
+                    phraseAction.setOnClickListener {
+                        if (PhrasePack.isInstalled(this@MainActivity)) {
+                            MaterialAlertDialogBuilder(this@MainActivity)
+                                .setTitle(R.string.phrase_pack_delete_title)
+                                .setMessage(R.string.phrase_pack_delete_message)
+                                .setNegativeButton(R.string.cancel, null)
+                                .setPositiveButton(R.string.phrase_pack_delete) { _, _ ->
+                                    Thread({
+                                        PhrasePack.delete(this@MainActivity)
+                                        runOnUiThread { if (!isDestroyed) refreshPhrasePack() }
+                                    }, "kai-phrase-pack-delete").start()
+                                }.show()
+                        } else {
+                            phraseAction.isEnabled = false
+                            phraseStatus.text = getString(R.string.phrase_pack_downloading)
+                            val offline = KeyboardPreferences.offlineMode(this@MainActivity)
+                            Thread({
+                                // Offline: install bundled asset only (no network).
+                                // Online: HTTPS first, asset fallback if host unavailable.
+                                val result = runCatching {
+                                    if (offline) PhrasePack.installFromAssets(this@MainActivity)
+                                    else PhrasePack.download(this@MainActivity, allowAssetFallback = true)
+                                }
+                                // Install already parses into cache; keep async warm-up for safety.
+                                result.onSuccess { PhrasePack.warmUpAsync(this@MainActivity) }
+                                runOnUiThread {
+                                    if (isDestroyed) return@runOnUiThread
+                                    result.onSuccess {
+                                        refreshPhrasePack()
+                                        Toast.makeText(
+                                            this@MainActivity,
+                                            R.string.phrase_pack_ready,
+                                            Toast.LENGTH_SHORT,
+                                        ).show()
+                                    }.onFailure {
+                                        phraseStatus.text = it.message
+                                            ?: getString(R.string.phrase_pack_download_error)
+                                        phraseAction.isEnabled = true
+                                    }
+                                }
+                            }, "kai-phrase-pack-download").start()
+                        }
+                    }
+                    addView(phraseStatus)
+                    addView(phraseAction, LinearLayout.LayoutParams(-1, dp(40)))
+                    addView(textView(getString(R.string.phrase_pack_attribution), 11f, secondaryText).apply {
+                        setPadding(0, dp(4), 0, 0)
+                    })
+                    refreshPhrasePack()
                 })
             }, LinearLayout.LayoutParams(-1, -2).apply {
                 topMargin = dp(10)

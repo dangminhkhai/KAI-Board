@@ -20,7 +20,8 @@ Liên quan: [ARCHITECTURE.md](ARCHITECTURE.md) (ghi editor), [CONTRIBUTING.md](C
 - [x] Gõ `T` → chọn gợi ý `tôi` → ra `tôi ` (không `Ttôi`) — pass (user, ~2026-07-21)
 - [x] `Safe` → BS → `Saf` (không `Saff` / `Sà`) — pass Vivo
 - [x] Gợi ý cụm (P0): học bigram sau Space/chọn gợi ý; privacy tắt học; chưa thấy lỗi — smoke pass (user)
-- [ ] Gợi ý cụm (P1): sau `xin`+Space thấy seed `chào`; gõ `xin ` rồi `c` thấy `chào` ưu tiên; tắt “Gợi ý cụm cơ bản” thì mất seed
+- [x] Gợi ý cụm (P1): `xin`+Space / mid-word; personal+pack — smoke pass (user, 2026-07-21); seed APK đã gỡ
+- [x] PhrasePack: Tải gói; mid-word OK; clear học **không** xóa pack; personal+decay #1 — smoke pass (user); gói full ~720k + warmUp (không parse trên hot path)
 - [ ] `Cafe` → BS → `Caf`
 - [ ] `case` → BS → `cas`
 - [ ] `care` → BS → `car`
@@ -210,6 +211,8 @@ Chạy trước khi cài bản debug lên máy chính.
 | --- | --- | --- | --- | --- |
 | 2026-07-20 | Vivo V2366GA / OriginOS 6 | debug 1.2.0 (Telex BS fix) | | Telex modifier + Safe→Saf: **pass** |
 | 2026-07-21 | Vivo (cùng máy) | debug (gợi ý + Telex) | | Chọn gợi ý `T`→`tôi` OK; **P0 cụm từ** smoke: tạm ổn, chưa thấy lỗi |
+| 2026-07-21 | R3CN80C8Y7L (debug cài) | 0.1.0-debug + PhrasePack | user | Checklist nhanh cụm từ **pass**: xin→chào, mid-word, personal, clear không xóa pack |
+| 2026-07-21 | R3CN80C8Y7L | pack full ~720k / ~8 MB | | OpenSubtitles+Viet74K+collocation; warmUp; tiêu đề / hoàng hôn trong pack |
 | | | | | |
 
 ---

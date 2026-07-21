@@ -4,6 +4,14 @@ Lịch sử mốc phát triển nội bộ (không còn pipeline ship).
 
 ## Debug / đang phát triển
 
+### Gói cụm từ mở rộng
+
+- Thêm `PhrasePack` lớn ~720k bigram (~8 MB, cap 5–20 MB): collocation + Viet74K (~99%) + OpenSubtitles; lookup chỉ RAM sau preload (không parse trên hot path).
+- **Xóa** `PhraseSeedCatalog` (~100 bigram trong APK). Rank: **personal (decay 21 ngày) → pack**.
+- `PhrasePack.warmUpAsync`: preload 1 lần trên worker (IME start / sau cài gói); gõ khi cold không block UI.
+- UI card Tải/Xóa gói; meta count; không backup; không xóa khi clear học.
+- Build: `tools/build_phrase_pack.py`; raw corpus gitignored trong `phrase-packs/raw/`.
+
 ### Sửa
 
 - «Xóa từ đã học» / xóa từng từ / giữ gợi ý trên smartbar: xóa luôn cặp cụm trong `PhraseLearningStore` (trước chỉ xóa lexicon → cụm vẫn hiện).
@@ -24,7 +32,7 @@ Lịch sử mốc phát triển nội bộ (không còn pipeline ship).
 ### Gợi ý cụm từ (P1)
 
 - Mid-word blend: cụm theo ngữ cảnh (personal + seed) khớp prefix đang gõ, ưu tiên trước completion từ điển.
-- Seed offline ~100 bigram xã giao (`PhraseSeedCatalog`), bật/tắt cài đặt **Gợi ý cụm có sẵn**.
+
 - Khi tắt setting: ẩn seed **và** cụm nhiều từ hard-code trong từ điển (`xin chào`, `cảm ơn`…) + boost contextPairs; vẫn giữ cụm user đã học.
 - Phrase store v2: recency + decay nửa đời 21 ngày; migrate từ `pairs` cũ; personal luôn xếp trên seed.
 

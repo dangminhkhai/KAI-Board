@@ -1,186 +1,71 @@
-# Handoff — làm việc tiếp trên máy khác
+# Handoff — làm việc tiếp
 
 **Repo:** https://github.com/dangminhkhai/KAI-Board  
 **Nhánh:** `main`  
-**Cập nhật handoff:** 2026-07-21  
+**Cập nhật:** 2026-07-21 — PhrasePack full (~720k), không seed APK, debug-only  
 
 ```powershell
-git clone https://github.com/dangminhkhai/KAI-Board.git
-cd KAI-Board
 git pull origin main
 .\gradlew.bat testDebugUnitTest assembleDebug
-# Cài máy: JDK 17 + Android SDK; ADB
 .\dev-install.cmd
-# hoặc
-.\dev-install.cmd -Serial <serial>
 ```
 
-`dev-install.ps1` dò JDK: `JAVA_HOME` → Microsoft JDK 17 → Eclipse Temurin.  
-ADB: `%LOCALAPPDATA%\Android\Sdk\platform-tools\adb.exe`.
+**Trạng thái:** debug-only `0.1.0-debug` (`versionCode 1`). Không pipeline release/signing.
 
 ---
 
-## 1. Đã xong gần đây (theo chủ đề)
-
-### 1.1 Telex / Backspace OEM (Vivo OriginOS)
-
-| Vấn đề | Sửa |
-| --- | --- |
-| `Safe` + BS → `Saff` (4→4) | **Prefix-shrink:** chỉ xóa đuôi trên `InputConnection`, không xóa cả từ rồi `commitText("Saf")` (OEM nhân đôi tone Latin) |
-| Escape shape `aaa→aa` BS no-op | `TelexWordComposer.backspace` xóa 1 ký tự **hiển thị**, đồng bộ raw dài hơn display |
-| Modifier | Tone `s f r x j` + shape `aa ee oo aw ow uw dd` — ma trận unit test |
-
-**File chính:**
-
-- `ime/KaiBoardImeService.kt` — `applyComposingText`, `applyPrefixShrink`, `commitTextAvoidingToneDouble`, `preferDirectTelexCommit` (Vivo/iQOO/BBK)
-- `input/TelexWordComposer.kt` — display / raw / lock / backspace
-- `input/ComposingEditorSync.kt`, `ComposingRewritePolicy.kt`, `ComposingCursorPolicy.kt`
-- Tests: `TelexModifierBackspaceMatrixTest`, `ComposingEditorSyncTest`, `SafeTraceTest`, `TelexWordComposerTest`
-
-**Xác nhận máy:** Vivo V2366GA — Telex BS + modifier **pass** (xem `TESTING.md` nhật ký).
-
-### 1.2 Gợi ý từ — chọn suggestion
-
-| Vấn đề | Sửa |
-| --- | --- |
-| Gõ `T` + chọn `tôi` → `Ttôi` | Direct-commit OEM: prefix đã plain text; chọn gợi ý dùng `applyComposingText(prefix, suggestion)` thay `setComposingText` đơn |
-
-### 1.3 Gợi ý cụm từ — P0 + P1
+## Gợi ý cụm từ
 
 | Tầng | Nguồn | Ghi chú |
 | --- | --- | --- |
-| **Personal** | `PhraseLearningStore` (bigram/trigram) | Decay **21 ngày**, migrate `pairs` → `pairs_v2`, max 512 |
-| **Seed APK** | `PhraseSeedCatalog` (~100 bigram) | Setting `phrase_seed` |
-| **Từ điển gọn** | Multi-word trong `VietnameseSuggestionEngine.fallbackWords` + `contextPairs` | Cũng gắn với **cùng setting** seed |
+| **1 Personal** | `PhraseLearningStore` (`pairs_v2`) | Decay **21 ngày**, max 512 — **luôn #1** |
+| **2 Pack** | `PhrasePack` / `vi_social.tsv` | ~**720k** cặp (~**8 MB**); 5–20 MB OK |
+| ~~Seed APK~~ | **đã xóa** | Không còn `PhraseSeedCatalog` |
 
-**Hành vi:**
+**Rank:** personal → pack.
 
-- `composing` rỗng → next-word: personal → seed (nếu bật)
-- `composing` có chữ → mid-word blend: `suggestMatchingPrefix` rồi dictionary completion (`SuggestionPriority.mergePhraseAndCompletions`)
-- Tắt **Gợi ý cụm có sẵn:** không seed, không multi-word dictionary, không `contextPairs`; **vẫn** personal đã học
+**Nguồn build pack (full):**
 
-**Xóa dữ liệu học (đã sửa bug):**
-
-| Trước | Sau |
-| --- | --- |
-| «Xóa từ đã học» chỉ clear lexicon/email/hashtag | + `PhraseLearningStore.clear()` |
-| Xóa từng từ / ForgetSuggestion trên smartbar | + `PhraseLearningStore.removeInvolving(word)` |
-
-Seed APK **không** bị xóa khi clear học (tắt setting nếu muốn ẩn).
-
-### 1.4 Docs đã refresh
-
-| File | Nội dung |
-| --- | --- |
-| `khaiez/ARCHITECTURE.md` | Telex path, OEM editor, phrase layers |
-| `khaiez/TESTING.md` | Checklist tick + nhật ký thiết bị |
-| `khaiez/CHANGELOG.md` | Unreleased: Telex OEM, phrase P1, clear phrases |
-| `khaiez/ROADMAP.md` | Done / P2 phrase / beta |
-| `khaiez/CONTRIBUTING.md` | Guardrail Telex/BS |
-| `khaiez/README.md` | Chỉ mục docs |
-| `README.md` (root) | Telex BS OEM, cấu trúc, bảng tài liệu |
-| **`khaiez/HANDOFF.md`** | File này |
-
----
-
-## 2. Cài đặt liên quan suggestions
-
-| Preference key | UI | Mặc định |
-| --- | --- | --- |
-| `word_suggestions` | Hiện gợi ý từ | true |
-| `phrase_seed` | Gợi ý cụm có sẵn (seed + cụm từ điển) | true |
-
-Prefs file: `keyboard_preferences`.  
-Phrase personal: SharedPreferences `phrase_learning` (`pairs_v2`).  
-Lexicon: `user_lexicon`.
-
----
-
-## 3. Chưa làm (next)
-
-### 3.1 Gói cụm từ tải tùy chọn (đã chốt hướng, **chưa code**)
-
-Spec đầy đủ đã thảo luận:
-
-- Mirror `WordDictionaryPack`: tải HTTPS → `filesDir/phrase_packs/vi_social.tsv`
-- Quy mô phase 1: **~2 000–3 000** bigram VI (~50–100 KB)
-- Rank: **personal → pack đã tải → seed APK**
-- UI card dưới từ điển mở rộng: Tải / Xóa gói
-- Offline mode chặn tải; privacy không suggest
-- Pack **không** vào backup; **không** xóa khi clear học (nút xóa gói riêng)
-- Host file versioned + SHA-256
-
-PR gợi ý: `PhrasePack` API → file TSV + URL → UI → docs.
-
-### 3.2 P2 cụm từ
-
-- UI xem/xóa từng cụm đã học  
-- Accept-rate nội bộ **không** thu text  
-- (Tùy) gói EN / pack lớn hơn  
-
-### 3.3 Khác (roadmap)
-
-- AI/mic/dịch còn sót trên Samsung/Vivo  
-- Latency IME measure  
-- Full checklist app: Zalo, Chrome, Notes, password  
-- Release tag sau khi gom unreleased  
-
----
-
-## 4. File quan trọng (map nhanh)
-
-```text
-app/src/main/java/vn/kai/board/
-  ime/KaiBoardImeService.kt     # IME, suggestions, Telex apply, clear/forget
-  input/TelexWordComposer.kt
-  input/telex/TelexEngine.kt    # (package telex/)
-  input/ComposingEditorSync.kt
-  input/ComposingRewritePolicy.kt
-  input/PhraseLearningStore.kt  # personal + seed gate + clear/removeInvolving
-  input/PhraseSeedCatalog.kt    # ~100 bigrams
-  input/SuggestionPriority.kt
-  input/VietnameseSuggestionEngine.kt  # allowBuiltInPhrases
-  input/WordDictionaryPack.kt   # mẫu cho PhrasePack tương lai
-  settings/KeyboardPreferences.kt
-  MainActivity.kt / LearnedWordsActivity.kt
-```
-
----
-
-## 5. Kiểm thử nhanh trên máy mới
+1. `phrase-packs/collocations_vi.txt` (tiêu đề, hoàng hôn, …)  
+2. Viet74K multi-token (duyet/vietnamese-wordlist)  
+3. OPUS OpenSubtitles VI mono (bigram tần suất)  
 
 ```powershell
-.\gradlew.bat testDebugUnitTest assembleDebug
-.\dev-install.cmd -WithTests
+# raw (gitignored): phrase-packs/raw/vi_opensub.txt.gz, Viet74K.txt
+py -3 tools\build_phrase_pack.py
+# → cập nhật PhrasePack.EXPECTED_SHA256
 ```
 
-| Case | Kỳ vọng |
-| --- | --- |
-| `Safe` + BS | `Saf` không `Saff` |
-| `T` + chọn gợi ý `tôi` | `tôi ` không `Ttôi` |
-| `xin` + Space (seed bật) | có `chào` |
-| Tắt cụm có sẵn + clear học | không personal phrase; không `xin chào` multi-word dict |
-| Xóa từ đã học | xóa cả `phrase_learning` |
+**Hiệu năng / RAM**
 
-Chi tiết: [TESTING.md](TESTING.md).
+- Gõ: **chỉ lookup RAM** — không parse file trên hot path.  
+- Cache trống: `warmUpAsync` nền, frame đó pack rỗng (personal vẫn chạy).  
+- Preload: IME `onCreate` + sau cài gói.  
+- RAM sau warm: ~**30–40 MB** (máy 16 GB không vấn đề).  
 
----
-
-## 6. Commit / remote
-
-Trước handoff này, `origin/main` có ít nhất:
-
-- `a399cdc` — Fix Vivo Telex backspace + docs refresh  
-
-Các thay đổi phrase P1, suggestion replace, clear phrases, seed gate dictionary **cần commit + push** cùng commit chứa `HANDOFF.md` (xem lịch sử `git log` sau khi pull).
+**Cài trên máy:** Settings → Gói cụm từ → Xóa gói cũ → Tải lại.  
+**Setting `phrase_seed`:** chỉ bật/tắt cụm nhiều từ trong **từ điển word** (không phải seed APK).  
+**FrequencyWords:** gợi ý **từ** (card tải VI/EN), không nằm trong gói cụm.
 
 ---
 
-## 7. Lưu ý vận hành
+## Next
 
-- Không commit `local.properties`, keystore, API key.  
-- Không log nội dung gõ / secret.  
-- Telex/IME: unit **không** thay cho test Vivo.  
-- Workspace Codex cũ:  
-  `Documents\Codex\2026-07-18\dangminhkhai-kai-board-https-github-com\work\KAI-Board`  
-  Trên máy mới: clone repo GitHub là đủ.
+- [ ] Smoke máy pack ~720k: `tiêu`/`hoàng`/`xin` + Space; personal vẫn thắng  
+- [ ] P2: UI xem/xóa từng cụm personal  
+- AI/mic/dịch Samsung/Vivo; full checklist TESTING.md  
+
+---
+
+## Files chính
+
+```text
+app/.../input/PhraseLearningStore.kt
+app/.../input/PhrasePack.kt
+app/.../ime/KaiBoardImeService.kt   # warmUpAsync
+tools/build_phrase_pack.py
+phrase-packs/collocations_vi.txt
+phrase-packs/vi_social.tsv
+phrase-packs/README.md
+app/src/main/assets/phrase_packs/vi_social.tsv
+```

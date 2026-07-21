@@ -23,7 +23,7 @@ object KeyboardPreferences {
     const val AUTO_CORRECT = "auto_correct"
     const val AUTO_CAPITALIZATION = "auto_capitalization"
     const val WORD_SUGGESTIONS = "word_suggestions"
-    /** Offline bigram seed (~100 pairs) for cold-start phrase / next-word hints. */
+    /** Allow multi-word entries from the built-in word dictionary (not the downloadable PhrasePack). */
     const val PHRASE_SEED = "phrase_seed"
     const val OFFLINE_MODE = "offline_mode"
     const val KEY_RADIUS_DP = "key_radius_dp"

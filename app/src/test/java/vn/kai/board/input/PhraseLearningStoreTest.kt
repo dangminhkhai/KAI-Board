@@ -30,13 +30,6 @@ class PhraseLearningStoreTest {
     }
 
     @Test
-    fun seedContinuesCommonLeftWords() {
-        val afterXin = PhraseLearningStore.suggestSeed(listOf("xin"), 3)
-        assertTrue(afterXin.contains("chào"))
-        assertEquals(listOf("ơn", "thấy"), PhraseLearningStore.suggestSeed(listOf("cảm"), 2))
-    }
-
-    @Test
     fun decayReducesOlderScores() {
         val today = 10_000L
         val fresh = PhraseLearningStore.decayedScoreMilli(10_000, today, today)
@@ -47,15 +40,7 @@ class PhraseLearningStoreTest {
     }
 
     @Test
-    fun seedCatalogIsSmallAndStable() {
-        val n = PhraseSeedCatalog.size()
-        assertTrue("expected ~80–150 pairs, was $n", n in 80..150)
-        assertTrue(PhraseSeedCatalog.continuations("xin").contains("chào"))
-    }
-
-    @Test
     fun removeInvolvingDropsPairsWithThatWord() {
-        // Pure ranking unit: simulate filter used by removeInvolving
         val entries = listOf(
             listOf("xin", "chào") to 3,
             listOf("cảm", "ơn") to 2,
@@ -63,5 +48,16 @@ class PhraseLearningStoreTest {
         )
         val remaining = entries.filterNot { (words, _) -> words.any { it == "chào" } }
         assertEquals(listOf(listOf("cảm", "ơn") to 2), remaining)
+    }
+
+    @Test
+    fun mergePersonalBeforePack() {
+        val merged = SuggestionPriority.merge(
+            emptyList(),
+            listOf("personal"),
+            listOf("pack"),
+            limit = 3,
+        )
+        assertEquals(listOf("personal", "pack"), merged)
     }
 }
