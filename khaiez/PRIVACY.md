@@ -1,6 +1,6 @@
 # Quyền riêng tư
 
-Tóm tắt người dùng cũng nằm trong [README gốc](../README.md#quyền-riêng-tư). Tài liệu này là bản chi tiết cho phát hành và review.
+Tóm tắt người dùng cũng nằm trong [README gốc](../README.md#quyền-riêng-tư). Tài liệu này là bản chi tiết cho review nội bộ.
 
 ## Dữ liệu cục bộ
 

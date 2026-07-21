@@ -1,6 +1,6 @@
 # Bảo mật
 
-Liên quan: [PRIVACY.md](PRIVACY.md), [RELEASE.md](RELEASE.md) (ký bản phát hành).
+Liên quan: [PRIVACY.md](PRIVACY.md).
 
 ## Báo cáo lỗ hổng
 
