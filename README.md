@@ -121,11 +121,13 @@ Các bảo vệ cho tiếng Anh và tên riêng:
 
 ### KAI AI
 
-- Nhập yêu cầu trực tiếp trên bàn phím, gửi thủ công hoặc tự gửi sau khoảng dừng có thể cấu hình.
+- Nhập yêu cầu trực tiếp trên bàn phím (ô có caret, chạm/kéo đặt con trỏ, vuốt Space dịch cursor), gửi thủ công hoặc tự gửi sau khoảng dừng có thể cấu hình.
+- Gợi ý lệnh offline **từng từ tiếp theo** (học từ prompt đã gửi): ví dụ gõ \Tiêu\ → \đề\, chọn xong mới gợi ý từ sau — không gộp cụm \đề ngắn\ trên một chip.
 - Các giọng văn: Hầm hố giật gân, Hài hước, Tò mò bí ẩn, Thời sự tin tức, Truyền động lực, Tối giản tinh tế và Tự động ngẫu nhiên.
 - Hỗ trợ nhiều API key, quét model, lưu trạng thái/model theo từng key và tự chuyển khi gặp quota, timeout hoặc lỗi máy chủ phù hợp.
 - Chạm giữ và kéo card API key để đặt thứ tự ưu tiên; thứ tự chỉ được lưu sau khi thả.
 - API key được mã hóa bằng Android Keystore và không được ghi vào source, log hoặc file sao lưu.
+- Lỗi **HTTP 413** từ provider = payload quá lớn (không phải do prompt một dòng ngắn); kiểm tra key/model/mạng.
 
 Nhà cung cấp hiện hỗ trợ:
 
