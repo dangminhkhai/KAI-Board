@@ -251,19 +251,28 @@ object AiProviderClient {
         throw lastError ?: IllegalStateException("Không provider nào xử lý được yêu cầu")
     }
 
+    /** Shared system rules for all chat-style providers. */
+    internal fun systemInstruction(tone: AiTone): String =
+        "Bạn là trợ lý viết tiếng Việt. ${tone.instruction} " +
+            "Chỉ trả về nội dung hoàn chỉnh, không giải thích, không mở đầu/kết thúc bằng lời dẫn. " +
+            "Không bọc tiêu đề, slogan hay câu trả lời ngắn trong dấu ngoặc kép (\" \" “ ” ' '), " +
+            "không bọc cả đoạn trong markdown code fence trừ khi người dùng yêu cầu code."
+
     private fun generateChat(url: String, key: String, model: String, tone: AiTone, prompt: String, cancellation: AiRequestCancellation): String {
         val payload = JSONObject().put("model", model).put("messages", org.json.JSONArray()
-            .put(JSONObject().put("role", "system").put("content", "Bạn là trợ lý viết tiếng Việt. ${tone.instruction} Chỉ trả về nội dung hoàn chỉnh, không giải thích."))
+            .put(JSONObject().put("role", "system").put("content", systemInstruction(tone)))
             .put(JSONObject().put("role", "user").put("content", prompt)))
         val json = post(url, key, payload, cancellation)
-        return json.getJSONArray("choices").getJSONObject(0).getJSONObject("message").getString("content").trim()
+        val content = json.getJSONArray("choices").getJSONObject(0).getJSONObject("message").getString("content")
+        return AiOutputSanitizer.sanitize(content)
     }
 
     private fun generateGemini(key: String, model: String, tone: AiTone, prompt: String, cancellation: AiRequestCancellation): String {
-        val text = "${tone.instruction}\nChỉ trả về nội dung hoàn chỉnh, không giải thích.\n\n$prompt"
+        val text = "${systemInstruction(tone)}\n\n$prompt"
         val payload = JSONObject().put("contents", org.json.JSONArray().put(JSONObject().put("parts", org.json.JSONArray().put(JSONObject().put("text", text)))))
         val json = post("https://generativelanguage.googleapis.com/v1beta/models/$model:generateContent?key=$key", null, payload, cancellation)
-        return json.getJSONArray("candidates").getJSONObject(0).getJSONObject("content").getJSONArray("parts").getJSONObject(0).getString("text").trim()
+        val content = json.getJSONArray("candidates").getJSONObject(0).getJSONObject("content").getJSONArray("parts").getJSONObject(0).getString("text")
+        return AiOutputSanitizer.sanitize(content)
     }
 
     private fun post(url: String, bearer: String?, payload: JSONObject, cancellation: AiRequestCancellation): JSONObject {

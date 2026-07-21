@@ -4,6 +4,21 @@ Lịch sử mốc phát triển nội bộ (không còn pipeline ship).
 
 ## Debug / đang phát triển
 
+### Clipboard panel UI — scroll + card cao + không tràn chữ (2026-07-21)
+
+- Card clipboard cao **gấp đôi** hàng phím cũ (span 2 row); text wrap/ellipsis theo **measure** (`ClipboardTextLayout`), không cắt theo số ký tự → hết tràn bo góc.
+- Hiển thị **toàn bộ** lịch sử (≤12) / ghi chú: **vuốt dọc** trong vùng card; tab + nút xóa/Quản lý cố định; thanh scroll mỏng khi còn nội dung.
+- Phân biệt chạm: vuốt dọc ≥ slop → **scroll** (không dán, không mở pin/xóa); chỉ tap sạch cùng card mới paste.
+- Scroll chỉ đổi offset + `invalidate` — **không** `rebuildKeys` mỗi frame (tránh bàn phím bị mờ/nháy).
+- Unit: `ClipboardTextLayoutTest`.
+
+### AI output — gỡ ngoặc kép tiêu đề + tone (2026-07-21)
+
+- System prompt: không bọc tiêu đề/câu ngắn trong `""` / `“”`; không code fence nếu không cần code.
+- `AiOutputSanitizer` trước khi dán: strip quote bọc cả chuỗi / từng dòng list; giữ quote giữa câu; gỡ fence wrapper.
+- Tone: user chọn trong Cài đặt → mỗi request dùng đúng tone; **RANDOM** = model tự chọn giọng (app **không** round-robin).
+- Unit: `AiOutputSanitizerTest`.
+
 ### AI providers Groq / NVIDIA (413 / 410)
 
 - **Không phải prompt ô AI quá dài:** body chỉ system (giọng văn) + `aiPrompt`; 413/410 chủ yếu do **model sai**.
@@ -37,6 +52,7 @@ Lịch sử mốc phát triển nội bộ (không còn pipeline ship).
 - Palette mặc định **neutral grayscale** (bỏ accent mint xanh); theme System/Sáng/Tối giữ nguyên.
 - Resize: viewport max + preview 60fps; sửa text phím bị nhỏ sau clipboard (reset `textPaint`).
 - **Debug keystore dùng chung:** `keystore/android-debug.keystore` + Gradle `sharedDebug` — mọi máy ký cùng cert (`adb install -r` không mismatch).
+- *(Scroll / card 2× / measure-wrap: xem mục “Clipboard panel UI” phía trên.)*
 
 ### UI chế độ mật khẩu / riêng tư
 

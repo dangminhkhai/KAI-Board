@@ -19,6 +19,7 @@ import android.media.AudioManager
 import android.view.MotionEvent
 import android.view.View
 import android.widget.Toast
+import kotlin.math.abs
 import kotlin.math.cos
 import kotlin.math.sin
 import vn.kai.board.input.KeyAction
@@ -115,6 +116,16 @@ class KeyboardView(context: Context) : View(context) {
      * must not dismiss it (Gboard keeps the bar until a real tap).
      */
     private var suppressClipboardPopupUp = false
+    /** Vertical scroll offset (px) for the clipboard / notes card list. */
+    private var clipboardScrollY = 0f
+    private var clipboardScrollMax = 0f
+    private var clipboardContentTop = 0f
+    private var clipboardContentBottom = 0f
+    /** Scroll position captured at ACTION_DOWN so drag maps 1:1. */
+    private var clipboardScrollAtDown = 0f
+    /** True once finger moved enough vertically — paste / long-press are suppressed. */
+    private var clipboardGestureScrolling = false
+    private val clipboardScrollSlop = 14f * density
     private var symbolPage = 0
     private var previewKey: KeyGeometry? = null
     private var hapticIntensity = -1
@@ -613,7 +624,20 @@ class KeyboardView(context: Context) : View(context) {
             }
             val baseline = key.centerY - (textPaint.ascent() + textPaint.descent()) / 2f
             when {
-                key.id.startsWith("clipboard-item-") -> drawClipboardItem(canvas, key)
+                key.id.startsWith("clipboard-item-") -> {
+                    val drawn = clipboardVisibleKey(key)
+                    if (drawn.bottom > clipboardContentTop && drawn.top < clipboardContentBottom) {
+                        canvas.save()
+                        canvas.clipRect(
+                            0f,
+                            clipboardContentTop,
+                            width.toFloat(),
+                            clipboardContentBottom,
+                        )
+                        drawClipboardItem(canvas, drawn)
+                        canvas.restore()
+                    }
+                }
                 key.id == "clipboard-empty" -> drawClipboardEmptyState(canvas, key)
                 key.id.startsWith("clipboard-tab-") -> drawClipboardPanelTab(canvas, key)
                 key.id == "clipboard-manage" -> drawClipboardManageButton(canvas, key)
@@ -666,6 +690,7 @@ class KeyboardView(context: Context) : View(context) {
         }
         previewKey?.takeIf { popupEnabled && it.action is KeyAction.Character }?.let { drawPreview(canvas, it) }
         // Gboard-style compact popups (keyboard space, same transform as keys).
+        if (panel == Panel.CLIPBOARD) drawClipboardScrollIndicator(canvas)
         clipboardItemPopup?.let { drawClipboardItemPopup(canvas, it) }
         clipboardClearPopup?.let { drawClipboardClearPopup(canvas, it) }
         canvas.restore()
@@ -864,10 +889,6 @@ class KeyboardView(context: Context) : View(context) {
             return
         }
         val content = (action?.value ?: (key.action as? KeyAction.CommitText)?.value).orEmpty().replace(Regex("\\s+"), " ").trim()
-        val lineLimit = ((key.right - key.left) / (7.5f * density)).toInt().coerceAtLeast(10)
-        val first = content.take(lineLimit)
-        val remainder = content.drop(first.length).trimStart()
-        val second = remainder.take(lineLimit - 1) + if (remainder.length >= lineLimit) "…" else ""
         val oldAlign = textPaint.textAlign
         val oldSize = textPaint.textSize
         val oldColor = textPaint.color
@@ -875,24 +896,47 @@ class KeyboardView(context: Context) : View(context) {
             textPaint.textAlign = Paint.Align.LEFT
             textPaint.textSize = 14f * density
             textPaint.color = if (dark) Color.rgb(248, 250, 252) else Color.rgb(17, 24, 39)
-            val left = key.left + 13f * density
+            val padL = 13f * density
+            // Reserve space for the pin badge so long lines never paint under/through it.
+            val padR = if (pinned) 22f * density else 13f * density
+            val left = key.left + padL
+            val maxWidth = (key.right - key.left - padL - padR).coerceAtLeast(1f)
             val hasKind = !action?.kindLabel.isNullOrEmpty()
+            // Clip to card interior so nothing can spill past the rounded rect.
+            canvas.save()
+            canvas.clipRect(
+                key.left + 6f * density,
+                key.top + 4f * density,
+                key.right - 6f * density,
+                key.bottom - 4f * density,
+            )
+            val kindTop = key.top + 14f * density
+            val bodyTop = if (hasKind) key.top + 22f * density else key.top + 12f * density
+            val bodyBottom = key.bottom - 10f * density
+            val lineStep = 17f * density
+            val maxLines = ((bodyBottom - bodyTop) / lineStep).toInt().coerceIn(2, 5)
             if (hasKind) {
                 textPaint.textSize = 10f * density
                 textPaint.color = clipboardAccentColor()
-                canvas.drawText(action!!.kindLabel, left, key.top + 14f * density, textPaint)
+                val kind = ClipboardTextLayout.ellipsize(textPaint, action!!.kindLabel, maxWidth)
+                canvas.drawText(kind, left, kindTop, textPaint)
                 textPaint.textSize = 14f * density
                 textPaint.color = if (dark) Color.rgb(248, 250, 252) else Color.rgb(17, 24, 39)
             }
-            val firstY = if (hasKind) {
-                key.centerY + 4f * density
-            } else if (second.isEmpty()) {
-                key.centerY - (textPaint.ascent() + textPaint.descent()) / 2f
-            } else {
-                key.centerY - 3f * density
+            val lines = ClipboardTextLayout.wrapLines(textPaint, content, maxWidth, maxLines = maxLines)
+            if (lines.isNotEmpty()) {
+                val blockHeight = (lines.size - 1) * lineStep - textPaint.ascent()
+                val firstBaseline = if (lines.size == 1 && !hasKind) {
+                    key.centerY - (textPaint.ascent() + textPaint.descent()) / 2f
+                } else {
+                    val topPad = ((bodyBottom - bodyTop) - blockHeight).coerceAtLeast(0f) / 2f
+                    bodyTop + topPad - textPaint.ascent()
+                }
+                lines.forEachIndexed { i, line ->
+                    canvas.drawText(line, left, firstBaseline + i * lineStep, textPaint)
+                }
             }
-            canvas.drawText(first, left, firstY, textPaint)
-            if (second.isNotEmpty()) canvas.drawText(second, left, firstY + 18f * density, textPaint)
+            canvas.restore()
             if (pinned) drawClipboardPin(canvas, key)
         } finally {
             textPaint.textAlign = oldAlign
@@ -950,10 +994,30 @@ class KeyboardView(context: Context) : View(context) {
             textPaint.textSize = 10f * density
             textPaint.color = clipboardAccentColor()
             val labelLeft = thumbRect.right + 8f * density
-            canvas.drawText(action.kindLabel.ifBlank { "ẢNH" }, labelLeft, key.top + 16f * density, textPaint)
+            val padR = if (pinned) 22f * density else 10f * density
+            val labelMax = (key.right - labelLeft - padR).coerceAtLeast(1f)
+            canvas.save()
+            canvas.clipRect(
+                key.left + 4f * density,
+                key.top + 4f * density,
+                key.right - 4f * density,
+                key.bottom - 4f * density,
+            )
+            val kind = ClipboardTextLayout.ellipsize(
+                textPaint,
+                action.kindLabel.ifBlank { "ẢNH" },
+                labelMax,
+            )
+            canvas.drawText(kind, labelLeft, key.top + 16f * density, textPaint)
             textPaint.textSize = 13f * density
             textPaint.color = if (dark) Color.rgb(248, 250, 252) else Color.rgb(17, 24, 39)
-            canvas.drawText("Chạm để dán", labelLeft, key.centerY + 6f * density, textPaint)
+            canvas.drawText(
+                ClipboardTextLayout.ellipsize(textPaint, "Chạm để dán", labelMax),
+                labelLeft,
+                key.centerY + 6f * density,
+                textPaint,
+            )
+            canvas.restore()
             if (pinned) drawClipboardPin(canvas, key)
         } finally {
             textPaint.textAlign = oldAlign
@@ -1699,12 +1763,20 @@ class KeyboardView(context: Context) : View(context) {
         val id = event.getPointerId(index)
         val x = toKeyboardX(event.getX(index))
         val y = event.getY(index)
-        val key = policy.resolve(keys, x, y)
+        val key = resolveKey(x, y)
+        clipboardGestureScrolling = false
+        clipboardScrollAtDown = clipboardScrollY
         pointers.down(id, key, x, y)
         previewKey = key
         if (key != null) {
-            vibrate()
-            playKeySound(key.action)
+            // Soft feedback only — scrolling will cancel commit; avoid sounding like a firm press.
+            if (!isClipboardScrollSurface(key, y)) {
+                vibrate()
+                playKeySound(key.action)
+            } else {
+                // Light press preview for cards; full action still requires a clean tap.
+                vibrate()
+            }
             if (key.action == KeyAction.Backspace && repeatState.start(id)) {
                 postDelayed(repeatRunnable, 400L)
             }
@@ -1738,8 +1810,46 @@ class KeyboardView(context: Context) : View(context) {
                 }
                 continue
             }
+            // Clipboard list: vertical drag scrolls; once scrolling, never paste / open pin bar.
+            if (isClipboardScrollSurface(state.downKey, state.downY)) {
+                val dx = x - state.downX
+                val dy = y - state.downY
+                if (!clipboardGestureScrolling &&
+                    abs(dy) >= clipboardScrollSlop &&
+                    abs(dy) > abs(dx) * 1.15f
+                ) {
+                    clipboardGestureScrolling = true
+                    // Dismiss pin/clear dim overlay if long-press raced the scroll.
+                    dismissClipboardPopups()
+                    cancelLongPress(id)
+                    state.longPressed = true
+                    state.key = null
+                    previewKey = null
+                }
+                if (clipboardGestureScrolling) {
+                    // Offset-only scroll — never rebuildKeys (that was flashing/dimming the IME).
+                    val next = (clipboardScrollAtDown - dy).coerceIn(0f, clipboardScrollMax)
+                    if (next != clipboardScrollY) {
+                        clipboardScrollY = next
+                    }
+                    continue
+                }
+                // Finger still pressing a card — no retarget to neighbor cards.
+                // Leave the card or move far without vertical scroll intent → drop selection.
+                if (pointers.crossedSlideThreshold(id, x, y)) {
+                    val stillOnDown = state.downKey?.let { down ->
+                        clipboardVisibleKey(down).contains(x, y, 8f * density)
+                    } == true
+                    if (!stillOnDown) {
+                        cancelLongPress(id)
+                        state.key = null
+                        previewKey = null
+                    }
+                }
+                continue
+            }
             if (pointers.crossedSlideThreshold(id, x, y)) {
-                val target = policy.resolve(keys, x, y)
+                val target = resolveKey(x, y)
                 if (target != state.key) {
                     if (repeatState.isActive(id)) stopRepeat()
                     cancelLongPress(id)
@@ -1755,9 +1865,18 @@ class KeyboardView(context: Context) : View(context) {
     private fun releasePointer(event: MotionEvent, index: Int) {
         val id = event.getPointerId(index)
         val state = pointers.remove(id) ?: return
-        val releasedOver = policy.resolve(keys, toKeyboardX(event.getX(index)), event.getY(index))
-        val action = if (state.downKey?.action == KeyAction.Space && state.cursorSteps != 0) null
-            else state.key?.takeIf { it == releasedOver }?.action
+        val releasedOver = resolveKey(toKeyboardX(event.getX(index)), event.getY(index))
+        val scrolledAway = clipboardGestureScrolling
+        clipboardGestureScrolling = false
+        // Scroll gesture never selects a clipboard card. Letter keys still allow slide-retarget.
+        val action = when {
+            scrolledAway -> null
+            state.downKey?.action == KeyAction.Space && state.cursorSteps != 0 -> null
+            isClipboardScrollSurface(state.downKey, state.downY) ->
+                // Strict tap: finger must stay on the same card (down == up, no retarget).
+                state.downKey?.takeIf { it == releasedOver && it == state.key }?.action
+            else -> state.key?.takeIf { it == releasedOver }?.action
+        }
         cancelLongPress(id)
         if (repeatState.isActive(id)) stopRepeat()
         previewKey = pointers.values.lastOrNull()?.key
@@ -1787,7 +1906,10 @@ class KeyboardView(context: Context) : View(context) {
         } else if (action == KeyAction.ToggleClipboard) {
             dismissClipboardPopups()
             panel = if (panel == Panel.CLIPBOARD) Panel.NONE else Panel.CLIPBOARD
-            if (panel == Panel.CLIPBOARD) clipboardTab = 0
+            if (panel == Panel.CLIPBOARD) {
+                clipboardTab = 0
+                clipboardScrollY = 0f
+            }
             symbols = false
             rebuildKeys(width.toFloat(), height.toFloat())
         } else if (action is KeyAction.SelectEmojiGroup) {
@@ -1796,6 +1918,7 @@ class KeyboardView(context: Context) : View(context) {
         } else if (action is KeyAction.SelectClipboardTab) {
             dismissClipboardPopups()
             clipboardTab = action.index.coerceIn(0, 1)
+            clipboardScrollY = 0f
             rebuildKeys(width.toFloat(), height.toFloat())
         } else if (action == KeyAction.ClearClipboardUnpinned) {
             confirmClearClipboardUnpinned()
@@ -1941,10 +2064,10 @@ class KeyboardView(context: Context) : View(context) {
         if (clipboardAction != null) {
             val runnable = Runnable {
                 val state = pointers[pointerId]
-                if (state?.key == key && !state.longPressed) {
+                if (state?.key == key && !state.longPressed && !clipboardGestureScrolling) {
                     state.longPressed = true
                     vibrate()
-                    showClipboardItemActions(clipboardAction, key)
+                    showClipboardItemActions(clipboardAction, clipboardVisibleKey(key))
                 }
                 longPressRunnables.remove(pointerId)
             }
@@ -2533,17 +2656,37 @@ class KeyboardView(context: Context) : View(context) {
         val notes = NoteStore.read(context)
         val columns = 2
         val contentRows = rowCount - 1
-        val capacity = columns * contentRows
+        // Cards are up to 2 keyboard-row slots tall (2× previous card height).
+        val cardRowSpan = 2
+        val cardHeight = rowHeight * cardRowSpan + gap * (cardRowSpan - 1)
+        val contentTop = keyboardTop + margin
+        val contentBottom = keyboardTop + margin + contentRows * (rowHeight + gap) - gap
+        val viewportH = (contentBottom - contentTop).coerceAtLeast(1f)
+        clipboardContentTop = contentTop
+        clipboardContentBottom = contentBottom
         if (clipboardTab == 0) {
-            val values = clipboardEntries.take(capacity)
+            val values = clipboardEntries
             if (values.isEmpty()) {
-                val top = keyboardTop + margin
-                val bottom = keyboardTop + margin + contentRows * (rowHeight + gap) - gap
-                addKey("clipboard-empty", "Clipboard trống", KeyAction.ToggleClipboard, margin, top, totalWidth - margin, bottom)
+                clipboardScrollY = 0f
+                clipboardScrollMax = 0f
+                addKey(
+                    "clipboard-empty",
+                    "Clipboard trống",
+                    KeyAction.ToggleClipboard,
+                    margin,
+                    contentTop,
+                    totalWidth - margin,
+                    contentBottom,
+                )
             } else {
+                val totalRows = (values.size + columns - 1) / columns
+                val contentH = totalRows * cardHeight + (totalRows - 1).coerceAtLeast(0) * gap
+                clipboardScrollMax = (contentH - viewportH).coerceAtLeast(0f)
+                clipboardScrollY = clipboardScrollY.coerceIn(0f, clipboardScrollMax)
+                // Layout in content-space (no scroll baked in). Scroll is applied at draw/hit.
                 val keyWidth = (totalWidth - margin * 2 - gap) / columns
                 values.chunked(columns).forEachIndexed { row, items ->
-                    val top = keyboardTop + margin + row * (rowHeight + gap)
+                    val top = contentTop + row * (cardHeight + gap)
                     items.forEachIndexed { column, entry ->
                         val left = margin + column * (keyWidth + gap)
                         val state = if (entry.pinned) "pinned" else "normal"
@@ -2551,15 +2694,15 @@ class KeyboardView(context: Context) : View(context) {
                             "clipboard-item-$state-$row-$column",
                             "",
                             commitActionForClipboardEntry(entry),
-                            left, top, left + keyWidth, top + rowHeight,
+                            left, top, left + keyWidth, top + cardHeight,
                         )
                     }
                 }
             }
-            // Clear unpinned — top-right on clipboard history tab.
+            // Clear unpinned — top-right on clipboard history tab (fixed, not scrolled).
             val clearSize = 40f * density
             val clearRight = totalWidth - margin - 6f * density
-            val clearTop = keyboardTop + margin + 6f * density
+            val clearTop = contentTop + 6f * density
             addKey(
                 "clipboard-clear-unpinned",
                 context.getString(R.string.clipboard_clear_unpinned),
@@ -2567,29 +2710,41 @@ class KeyboardView(context: Context) : View(context) {
                 clearRight - clearSize, clearTop, clearRight, clearTop + clearSize,
             )
         } else {
-            val values = notes.take(capacity)
+            val values = notes
             if (values.isEmpty()) {
-                val top = keyboardTop + margin
-                val bottom = keyboardTop + margin + contentRows * (rowHeight + gap) - gap
-                addKey("clipboard-empty", "Chưa có ghi chú", KeyAction.ToggleClipboard, margin, top, totalWidth - margin, bottom)
+                clipboardScrollY = 0f
+                clipboardScrollMax = 0f
+                addKey(
+                    "clipboard-empty",
+                    "Chưa có ghi chú",
+                    KeyAction.ToggleClipboard,
+                    margin,
+                    contentTop,
+                    totalWidth - margin,
+                    contentBottom,
+                )
             } else {
+                val totalRows = (values.size + columns - 1) / columns
+                val contentH = totalRows * cardHeight + (totalRows - 1).coerceAtLeast(0) * gap
+                clipboardScrollMax = (contentH - viewportH).coerceAtLeast(0f)
+                clipboardScrollY = clipboardScrollY.coerceIn(0f, clipboardScrollMax)
                 val keyWidth = (totalWidth - margin * 2 - gap) / columns
                 values.chunked(columns).forEachIndexed { row, items ->
-                    val top = keyboardTop + margin + row * (rowHeight + gap)
+                    val top = contentTop + row * (cardHeight + gap)
                     items.forEachIndexed { column, value ->
                         val left = margin + column * (keyWidth + gap)
                         addKey(
                             "clipboard-item-normal-$row-$column",
                             "",
                             KeyAction.CommitText(value),
-                            left, top, left + keyWidth, top + rowHeight,
+                            left, top, left + keyWidth, top + cardHeight,
                         )
                     }
                 }
             }
             val manageSize = 40f * density
             val manageRight = totalWidth - margin - 6f * density
-            val manageTop = keyboardTop + margin + 6f * density
+            val manageTop = contentTop + 6f * density
             addKey(
                 "clipboard-manage", "", KeyAction.OpenClipboardManager,
                 manageRight - manageSize, manageTop, manageRight, manageTop + manageSize,
@@ -2606,6 +2761,79 @@ class KeyboardView(context: Context) : View(context) {
             val id = "clipboard-tab-${(action as KeyAction.SelectClipboardTab).index}"
             addKey(id, "", action, left, tabTop, left + tabWidth, tabTop + rowHeight)
         }
+    }
+
+    private fun drawClipboardScrollIndicator(canvas: Canvas) {
+        if (clipboardScrollMax <= 1f) return
+        val trackTop = clipboardContentTop + 8f * density
+        val trackBottom = clipboardContentBottom - 8f * density
+        val trackH = (trackBottom - trackTop).coerceAtLeast(1f)
+        val viewportH = (clipboardContentBottom - clipboardContentTop).coerceAtLeast(1f)
+        val totalH = viewportH + clipboardScrollMax
+        val thumbH = (trackH * (viewportH / totalH)).coerceIn(24f * density, trackH)
+        val travel = trackH - thumbH
+        val thumbTop = trackTop + travel * (clipboardScrollY / clipboardScrollMax)
+        val right = width - 4f * density
+        val left = right - 3f * density
+        keyPaint.style = Paint.Style.FILL
+        keyPaint.color = Color.argb(if (dark) 90 else 70, 148, 163, 184)
+        canvas.drawRoundRect(RectF(left, trackTop, right, trackBottom), 2f * density, 2f * density, keyPaint)
+        keyPaint.color = Color.argb(
+            if (dark) 200 else 160,
+            Color.red(themePalette.accent),
+            Color.green(themePalette.accent),
+            Color.blue(themePalette.accent),
+        )
+        canvas.drawRoundRect(RectF(left, thumbTop, right, thumbTop + thumbH), 2f * density, 2f * density, keyPaint)
+        // Restore fully-opaque paint so later frames never inherit translucent alpha.
+        keyPaint.color = themePalette.key
+    }
+
+    /**
+     * Clipboard cards are laid out in content-space; subtract [clipboardScrollY] for on-screen rects.
+     */
+    private fun clipboardVisibleKey(key: KeyGeometry): KeyGeometry {
+        if (!key.id.startsWith("clipboard-item-") || clipboardScrollY == 0f) return key
+        return key.copy(
+            top = key.top - clipboardScrollY,
+            bottom = key.bottom - clipboardScrollY,
+        )
+    }
+
+    /** Hit-test that uses scrolled card positions and ignores cards outside the viewport. */
+    private fun resolveKey(x: Float, y: Float): KeyGeometry? {
+        if (panel != Panel.CLIPBOARD) return policy.resolve(keys, x, y)
+        val hitList = ArrayList<KeyGeometry>(keys.size)
+        for (key in keys) {
+            if (key.id.startsWith("clipboard-item-")) {
+                if (y < clipboardContentTop || y > clipboardContentBottom) continue
+                val visible = clipboardVisibleKey(key)
+                if (visible.bottom <= clipboardContentTop || visible.top >= clipboardContentBottom) continue
+                hitList += visible
+            } else {
+                hitList += key
+            }
+        }
+        val hit = policy.resolve(hitList, x, y) ?: return null
+        // Map scrolled geometry back to the stable key entry (same id).
+        return keys.firstOrNull { it.id == hit.id } ?: hit
+    }
+
+    private fun isClipboardChromeKey(key: KeyGeometry?): Boolean {
+        val id = key?.id ?: return false
+        return id.startsWith("clipboard-tab-") ||
+            id == "clipboard-clear-unpinned" ||
+            id == "clipboard-manage" ||
+            id == "clipboard-empty" ||
+            id.startsWith("toolbar-")
+    }
+
+    private fun isClipboardScrollSurface(downKey: KeyGeometry?, downY: Float): Boolean {
+        if (panel != Panel.CLIPBOARD) return false
+        if (downY < clipboardContentTop || downY > clipboardContentBottom) return false
+        if (isClipboardChromeKey(downKey)) return false
+        // Card, gap between cards, or empty drag surface over items.
+        return true
     }
 
     private fun commitActionForClipboardEntry(entry: ClipboardEntry): KeyAction.CommitClipboard {

@@ -48,6 +48,20 @@ Liên quan: [ARCHITECTURE.md](ARCHITECTURE.md) (ghi editor), [CONTRIBUTING.md](C
 | AI next-word unit (`AiCommandSuggestionEngineTest`) | **pass** agent 2026-07-21 |
 | Ma trận app đầy đủ (Messenger/email/password…) | còn mở rộng tùy chọn |
 
+### Clipboard panel UI (smoke — sau 2026-07-21)
+
+- [ ] Card dài: text **không tràn** bo góc; có `…` khi cắt
+- [ ] >4 item: **vuốt dọc** xem thêm; tab/xóa không trôi theo
+- [ ] Vuốt = scroll **không** dán; chạm nhẹ = dán
+- [ ] Scroll **không** làm bàn phím mờ/nháy
+- [ ] Unit: `ClipboardTextLayoutTest`
+
+### AI output + tone (smoke)
+
+- [ ] “Viết tiêu đề …” → dán **không** bọc `""` / `“”`
+- [ ] Tone Cài đặt phản ánh; RANDOM = model tự chọn (app không xoay tone)
+- [ ] Unit: `AiOutputSanitizerTest`
+
 ### AI / Dịch panel (smoke — sau 2026-07-21)
 
 - [ ] Clipboard mở → bấm **AI**: panel AI + phím chữ (không kẹt clipboard, không chỉ ABC)
@@ -199,6 +213,7 @@ Chạy trước khi cài bản debug lên máy chính.
 | 7.7 | Tải / xóa gói từ điển mở rộng | [ ] |
 | 7.8 | Clipboard HTML: badge + dán plain/Spanned; URL bar chỉ plain | [ ] |
 | 7.9 | Clipboard ảnh: thumbnail; dán ô thử OK; URL/Google → toast, không crash/copy lỗi | [ ] |
+| 7.10 | Clipboard scroll nhiều item; tap vs scroll; text dài không tràn | [ ] agent UI 2026-07-21 cài Vivo |
 | 7.10 | Giữ mục → popup Ghim/Xóa; nhả tay popup còn; xóa 1 mục không xóa hết | [ ] |
 | 7.11 | Thùng rác → xác nhận → xóa chưa ghim, giữ ★; mục không tự hiện lại | [ ] |
 | 7.12 | Ô thử sticky settings: text + ảnh; Xóa ô thử | [ ] |
@@ -210,6 +225,7 @@ Chạy trước khi cài bản debug lên máy chính.
 | # | Thử | Pass |
 | --- | --- | --- |
 | 8.1 | AI thành công | [ ] |
+| 8.1b | AI tiêu đề không bọc `""` (sanitize) | [ ] agent 2026-07-21 cài Vivo |
 | 8.2 | AI hủy giữa chừng | [ ] |
 | 8.3 | Timeout / offline | [ ] |
 | 8.4 | 401/403, 429, 5xx — fallback đúng thứ tự key | [ ] |
@@ -248,6 +264,7 @@ Chạy trước khi cài bản debug lên máy chính.
 | 2026-07-21 | SM-N986N | 0.1.0-debug | user | Smoke tay **1–2–3 OK**: Safe/Cafe/case BS; P2 tab Cụm; Zalo/Chrome Telex+BS |
 | 2026-07-21 | Vivo V2366GA WiFi `192.168.10.217:37121` | 0.1.0-debug | agent | Cài adb WiFi OK; vá AI gợi ý next-word + ô input Dịch/AI + clipboard→feature; unit AI engine pass |
 | 2026-07-21 | Vivo V2366GA | 0.1.0-debug | user | Báo gợi ý AI sai (`Đề`/`Tiêu`/`Limo` khi gõ Tiêu) — đã vá agent; cần smoke lại |
+| 2026-07-21 | Vivo V2366GA USB | 0.1.0-debug | agent | Clipboard scroll/card 2×/no overflow/no dim; AI quote sanitize; unit layout+sanitizer pass; adb Success |
 
 | | | | | |
 

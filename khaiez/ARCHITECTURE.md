@@ -87,6 +87,10 @@ Tùy chọn: SharedPreferences. API key: AES-GCM + Android Keystore; UI chỉ hi
 | `SpaceCursorGesturePolicy` / `ShiftGesturePolicy` / `RepeatKeyState` | Cử chỉ thuần, unit test |
 | `SmartClipboardClassifier` | Regex offline; OTP có ngữ cảnh |
 | `ClipboardHistoryStore` | TEXT/HTML/IMAGE; TTL; ghim; clearUnpinned; suppress re-import sau xóa; ảnh `filesDir/clipboard_images/` |
+| `ClipboardTextLayout` | Wrap/ellipsis card clipboard theo `Paint.measureText` / `breakText` (không cắt theo char count) |
+| `KeyboardView` clipboard panel | Card 2× row height; scroll offset (`clipboardScrollY`) lúc draw/hit; tap vs scroll; chrome cố định |
+| `AiOutputSanitizer` | Gỡ quote bọc / code fence trước khi dán output AI |
+| `AiProviderClient` | System tone + no-quote rules; sanitize output; lọc chat model; fallback 410/413 |
 | `RichClipboardTestEditText` | Ô thử settings: `EditorInfoCompat` + `commitContent` image/* |
 | `UnicodeDeletionPolicy` | Xóa emoji/grapheme đúng số code unit |
 | `ThemeExtensionStore` | JSON ≤ 64 KB, validate, `filesDir/theme_extensions` |

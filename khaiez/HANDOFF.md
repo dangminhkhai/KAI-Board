@@ -2,7 +2,7 @@
 
 **Repo:** https://github.com/dangminhkhai/KAI-Board  
 **Nhánh:** `main`  
-**Cập nhật:** 2026-07-21 (AI/Dịch field + gợi ý next-word + clipboard→feature)
+**Cập nhật:** 2026-07-21 (clipboard scroll/UI + AI quote sanitize + model filter)
 
 ```powershell
 git pull origin main
@@ -24,7 +24,24 @@ adb shell am force-stop vn.kai.board
 
 ---
 
-## Session 2026-07-21 (mới) — AI / Dịch / Settings ô thử
+## Session 2026-07-21 (mới) — Clipboard UI + AI sanitize
+
+### 0. Clipboard panel (scroll / card / tràn chữ) — đã vá + cài Vivo
+
+| Vấn đề | Vá |
+| --- | --- |
+| Chữ dài tràn bo góc card | `ClipboardTextLayout` measure + ellipsis + `clipRect`; pad chừa pin |
+| Chỉ hiện ~4 card | Card cao 2× row; **scroll dọc** toàn history; chrome cố định |
+| Vuốt bị dán nhầm | Scroll slop dọc → không paste / không long-press pin |
+| Scroll làm bàn phím mờ | **Không** `rebuildKeys` khi scroll — chỉ `clipboardScrollY` + draw offset |
+
+Files: `ui/ClipboardTextLayout.kt`, `ui/KeyboardView.kt` (clipboard draw/touch), tests `ClipboardTextLayoutTest`.
+
+### 0b. AI tiêu đề có `""` — đã vá + cài Vivo
+
+- Prompt: cấm bọc quote; `AiOutputSanitizer` strip trước `commitText`.
+- Tone: Cài đặt chọn 1 giọng; không round-robin phía app.
+- Files: `ai/AiOutputSanitizer.kt`, `ai/AiProviderClient.kt`, `AiOutputSanitizerTest`.
 
 ### A. Clipboard → AI / Dịch (đã vá)
 
@@ -99,25 +116,24 @@ AI bar: **next-word command** tách khỏi phrase chat (xem mục C).
 ## Next (gợi ý)
 
 - [x] Groq + NVIDIA NIM generate sau quét lại model — **pass** (Vivo 2026-07-21)
-- [ ] Smoke tay AI: `Tiêu` → chip `đề`; chọn → `ngắn`; không `Limo`/`Tiêu`/`đề ngắn`
-- [ ] Smoke: clipboard → AI / Dịch mở đủ chrome + body phím chữ
-- [ ] Smoke: ô Dịch — chạm giữa, gõ/BS tại cursor
-- [ ] Commit/push vá `AiProviderClient` (filter model + 410/413 retry) nếu chưa lên `origin/main`
+- [x] Clipboard scroll + card 2× + no overflow + no dim — **cài Vivo**
+- [x] AI strip outer quotes on title — **cài Vivo**
+- [ ] Smoke tay: scroll clipboard nhiều item; tap vs scroll; AI “viết tiêu đề” không `""`
+- [ ] Smoke: clipboard → AI / Dịch; ô Dịch cursor
 - [ ] Release: keystore riêng, không dùng android-debug
 
 ---
 
-## Files chính (session mới)
+## Files chính (session clipboard/AI UI)
 
 ```text
-app/.../ai/AiCommandSuggestionEngine.kt     # next-word only, no global mix
-app/.../ai/AiCommandSuggestionEngineTest.kt
-app/.../ime/KaiBoardImeService.kt            # openAi/Translator, translationCursor, buildAiSuggestions
-app/.../input/KeyAction.kt                   # SetTranslationCursor
-app/.../ui/KeyboardView.kt                   # feature field draw/touch, panel priority
-app/.../MainActivity.kt                      # compact ô thử
-app/.../res/values/strings.xml
-khaiez/CHANGELOG.md · HANDOFF.md · TESTING.md
+app/.../ui/ClipboardTextLayout.kt            # measure wrap/ellipsis
+app/.../ui/KeyboardView.kt                   # clipboard cards, scroll, touch
+app/.../ai/AiOutputSanitizer.kt              # strip quotes / fences
+app/.../ai/AiProviderClient.kt               # systemInstruction + sanitize + chat filter
+app/.../test/.../ClipboardTextLayoutTest.kt
+app/.../test/.../AiOutputSanitizerTest.kt
+khaiez/CHANGELOG.md · HANDOFF.md · TESTING.md · ARCHITECTURE.md
 ```
 
 ---

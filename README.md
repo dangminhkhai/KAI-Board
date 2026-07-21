@@ -113,6 +113,7 @@ Các bảo vệ cho tiếng Anh và tên riêng:
 - Smartbar có menu, gợi ý từ và thứ tự nút tùy chỉnh.
 - Emoji có tìm kiếm bằng từ khóa tiếng Việt không dấu hoặc tiếng Anh, tab vừa sử dụng và xóa đúng emoji ghép.
 - Clipboard có lịch sử, ghim và thời hạn tự xóa 1 giờ, 1 ngày hoặc không tự xóa; nội dung ghim luôn được giữ.
+- Panel clipboard: card cao (2 hàng phím), vuốt dọc xem thêm mục, text dài wrap/ellipsis theo độ rộng thật (không tràn bo góc); vuốt không dán nhầm.
 - Nhận diện offline OTP, email, URL và số điện thoại để chèn nhanh phần hữu ích.
 - Ghi chú clipboard có quản lý thêm, sửa và xóa riêng.
 - Inline Autofill hỗ trợ OTP và trình quản lý mật khẩu trên Android 11 trở lên khi hệ thống cung cấp dữ liệu.
@@ -123,7 +124,8 @@ Các bảo vệ cho tiếng Anh và tên riêng:
 
 - Nhập yêu cầu trực tiếp trên bàn phím (ô có caret, chạm/kéo đặt con trỏ, vuốt Space dịch cursor), gửi thủ công hoặc tự gửi sau khoảng dừng có thể cấu hình.
 - Gợi ý lệnh offline **từng từ tiếp theo** (học từ prompt đã gửi): ví dụ gõ \Tiêu\ → \đề\, chọn xong mới gợi ý từ sau — không gộp cụm \đề ngắn\ trên một chip.
-- Các giọng văn: Hầm hố giật gân, Hài hước, Tò mò bí ẩn, Thời sự tin tức, Truyền động lực, Tối giản tinh tế và Tự động ngẫu nhiên.
+- Các giọng văn: Hầm hố giật gân, Hài hước, Tò mò bí ẩn, Thời sự tin tức, Truyền động lực, Tối giản tinh tế và Tự động ngẫu nhiên (model tự chọn; app không xoay vòng tone).
+- Làm sạch output: gỡ ngoặc kép bọc tiêu đề/`""` và code fence thừa trước khi dán vào ô nhập.
 - Hỗ trợ nhiều API key, quét model, lưu trạng thái/model theo từng key và tự chuyển khi gặp quota, timeout hoặc lỗi máy chủ phù hợp.
 - Chạm giữ và kéo card API key để đặt thứ tự ưu tiên; thứ tự chỉ được lưu sau khi thả.
 - API key được mã hóa bằng Android Keystore và không được ghi vào source, log hoặc file sao lưu.
