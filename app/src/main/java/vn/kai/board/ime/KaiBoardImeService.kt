@@ -254,6 +254,11 @@ class KaiBoardImeService : InputMethodService() {
         composing = ""
         rawComposing = ""
         literalTelexLockLength = 0
+        // Closing then reopening the IME must land on the letter keyboard, not emoji/AI/etc.
+        cancelInlineVoice()
+        stopTranslation(commit = false)
+        stopAi(commit = false)
+        keyboardView?.resetToLetterKeyboard()
         telexEnabled = info?.let { TelexInputPolicy.isEnabled(it.inputType) } ?: true
         directCommitTelex = info?.let { TelexInputPolicy.requiresDirectCommit(it.inputType, it.imeOptions) } ?: false
         privateSession = InputPrivacyPolicy.isPrivateSession(info)
@@ -294,6 +299,8 @@ class KaiBoardImeService : InputMethodService() {
         cancelInlineVoice()
         stopTranslation(commit = true)
         stopAi(commit = true)
+        // Drop emoji/clipboard/?123 so the next show starts on letters.
+        keyboardView?.resetToLetterKeyboard()
         composing = ""
         rawComposing = ""
         literalTelexLockLength = 0

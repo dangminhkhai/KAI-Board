@@ -1713,6 +1713,51 @@ class KeyboardView(context: Context) : View(context) {
         invalidate()
     }
 
+    /**
+     * Return to the letter keyboard after the IME is hidden or shown again.
+     * Closes emoji / clipboard / AI / translate / voice overlays and ABC symbols.
+     */
+    fun resetToLetterKeyboard() {
+        dismissClipboardPopups()
+        val structureChanged = panel != Panel.NONE ||
+            emojiSearchActive ||
+            symbols ||
+            symbolPage != 0 ||
+            voicePanel ||
+            aiMode ||
+            translationMode
+        panel = Panel.NONE
+        emojiSearchActive = false
+        emojiSearchQuery = ""
+        symbols = false
+        symbolPage = 0
+        voicePanel = false
+        voiceStatus = ""
+        voicePartial = ""
+        voiceLevel = 0f
+        voicePaused = false
+        aiMode = false
+        aiPrompt = ""
+        aiCursor = 0
+        aiStatus = ""
+        aiSuggestions = emptyList()
+        removeCallbacks(hideAiSuggestionsRunnable)
+        removeCallbacks(aiAnimationRunnable)
+        aiAnimationFrame = 0
+        translationMode = false
+        translationInput = ""
+        translationStatus = ""
+        suggestionMenuActive = false
+        removeCallbacks(restoreToolbarRunnable)
+        if (!structureChanged) {
+            invalidate()
+            return
+        }
+        rebuildKeys(width.toFloat(), height.toFloat())
+        requestLayout()
+        invalidate()
+    }
+
     private fun stopRepeat() {
         removeCallbacks(repeatRunnable)
         repeatState.cancel()
