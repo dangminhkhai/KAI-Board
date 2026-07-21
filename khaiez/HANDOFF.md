@@ -2,7 +2,7 @@
 
 **Repo:** https://github.com/dangminhkhai/KAI-Board  
 **Nhánh:** `main`  
-**Cập nhật:** 2026-07-21 — clipboard rich (text/HTML/ảnh), popup Gboard-style, ô thử settings  
+**Cập nhật:** 2026-07-21 — clipboard rich, keystore debug chung, settings **không** tự mở IME  
 
 ```powershell
 git pull origin main
@@ -26,10 +26,11 @@ git pull origin main
 | Giữ mục | Popup pill **Ghim / Xóa** (không dialog hệ thống) |
 | Thùng rác | Xóa hết chưa ghim + xác nhận pill; ★ giữ |
 | Dán ảnh | `commitContent` nếu `image/*`; URL/search → toast, không setPrimaryClip |
-| Ô thử | Sticky **Ô thử (thay Messages)** — nhận ảnh |
+| Ô thử | Sticky **Ô thử (thay Messages)** — nhận ảnh; **không** auto-focus khi mở Settings |
 | Privacy | Private session ẩn clipboard; backup **không** clipboard/notes |
+| Debug sign | `keystore/android-debug.keystore` — cùng chữ ký mọi máy |
 
-**Files:** `ClipboardHistoryStore.kt`, `KeyboardView` (popup/draw), `KaiBoardImeService` (paste), `RichClipboardTestEditText.kt`
+**Files:** `ClipboardHistoryStore.kt`, `KeyboardView` (popup/draw), `KaiBoardImeService` (paste), `RichClipboardTestEditText.kt`, `MainActivity` (no auto IME), `keystore/`
 
 ---
 
@@ -79,6 +80,7 @@ py -3 tools\build_phrase_pack.py
 - [x] Checklist **auto** 2026-07-21: 331 unit tests OK; Telex regression unit OK; SM-N986N IME enabled  
 - [x] Smoke **tay** 1–2–3 (user): Safe/Cafe/case BS; P2 tab Cụm; Zalo/Chrome Telex+BS  
 - [x] Clipboard rich + popup Gboard + clear/pin/delete + ô thử settings (user OK)  
+- [x] Settings **không** tự mở bàn phím; shared debug keystore  
 - [ ] (Tùy) ma trận app rộng / AI-mic-dịch / `Mí`+BS  
 - [ ] (Tùy) unit test `ClipboardHistoryStore` suppress-fingerprint / TTL + ghim  
 

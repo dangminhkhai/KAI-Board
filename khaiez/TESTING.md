@@ -220,9 +220,10 @@ Chạy trước khi cài bản debug lên máy chính.
 | 9.2 | Gallery theme 2 cột, preview, áp dụng / xuất / xóa | [ ] |
 | 9.3 | Import theme file / HTTPS | [ ] |
 | 9.4 | Sticky ô thử — nhận text/HTML/ảnh; palette neutral (không mint) | [ ] |
+| 9.4b | Mở Cài đặt **không** tự bật IME; chỉ khi chạm ô thử / Tùy chỉnh / Xóa ô thử | [ ] |
 | 9.5 | Backup/restore: theme + Smartbar; **không** key/clipboard/notes | [ ] |
-| 9.6 | `assembleDebug` + `dev-install.cmd` | [ ] |
-| 9.7 | Package/version/ABI trên thiết bị (`0.1.0-debug`) | [ ] |
+| 9.6 | `assembleDebug` + `dev-install.cmd`; keystore chung `keystore/android-debug.keystore` | [ ] |
+| 9.7 | Package/version/ABI trên thiết bị (`0.1.0-debug`); máy khác `install -r` cùng cert | [ ] |
 
 ---
 

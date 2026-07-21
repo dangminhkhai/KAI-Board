@@ -856,16 +856,12 @@ class MainActivity : Activity() {
         }
         setContentView(root)
         ViewCompat.requestApplyInsets(root)
+        // Do not auto-focus the test field — keyboard should only open when the user taps it.
         if (restoreAppearance) {
             settingsScroll.post {
                 sectionTargets["appearance"]?.let { target ->
                     settingsScroll.scrollTo(0, (target.top - dp(12)).coerceAtLeast(0))
                 }
-            }
-        } else {
-            // Open ready to type so clipboard / Telex can be tested without another app.
-            typingTest.post {
-                typingTest.requestFocus()
             }
         }
     }

@@ -13,8 +13,10 @@ Lịch sử mốc phát triển nội bộ (không còn pipeline ship).
 - **Giữ** mục: popup pill **Ghim · Xóa** (không AlertDialog); nhả tay sau long-press **không** đóng popup.
 - Thùng rác: xóa hết **chưa ghim** (popup xác nhận gọn); mục ★ được giữ; suppress re-import clip hệ thống sau xóa.
 - Ô thử sticky trong Cài đặt (`RichClipboardTestEditText`) nhận text/HTML/ảnh — không cần Messages.
+- **Không** `requestFocus` ô thử khi mở Cài đặt → bàn phím không tự bật; chỉ mở khi user chạm ô / Tùy chỉnh layout / Xóa ô thử.
 - Palette mặc định **neutral grayscale** (bỏ accent mint xanh); theme System/Sáng/Tối giữ nguyên.
 - Resize: viewport max + preview 60fps; sửa text phím bị nhỏ sau clipboard (reset `textPaint`).
+- **Debug keystore dùng chung:** `keystore/android-debug.keystore` + Gradle `sharedDebug` — mọi máy ký cùng cert (`adb install -r` không mismatch).
 
 ### UI chế độ mật khẩu / riêng tư
 
