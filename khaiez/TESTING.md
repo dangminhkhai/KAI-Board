@@ -35,9 +35,9 @@ Liên quan: [ARCHITECTURE.md](ARCHITECTURE.md) (ghi editor), [CONTRIBUTING.md](C
 
 | Hạng mục | Kết quả |
 | --- | --- |
-| `testDebugUnitTest` | **331 tests, 0 fail** |
+| `testDebugUnitTest` | **331 tests, 0 fail** (sáng); AI engine tests + assemble sau fix gợi ý **OK** |
 | `assembleDebug` | **OK** |
-| Máy | Samsung **SM-N986N** (`R3CN80C8Y7L`), Android 13 |
+| Máy | Samsung **SM-N986N** (`R3CN80C8Y7L`); Vivo **V2366GA** WiFi |
 | Package | `vn.kai.board` `0.1.0-debug` (`versionCode 1`) |
 | IME enabled | `vn.kai.board/.ime.KaiBoardImeService` **có trong ime list**; default IME cũng KAI Board |
 | Telex regression unit (Safe/Cafe/case/care/aaa/ddd/matrix) | **pass** |
@@ -45,7 +45,16 @@ Liên quan: [ARCHITECTURE.md](ARCHITECTURE.md) (ghi editor), [CONTRIBUTING.md](C
 | Smoke tay 1: Safe/Cafe/case + BS (ô thử) | **pass** user 2026-07-21 |
 | Smoke tay 2: P2 UI tab Cụm | **pass** user 2026-07-21 |
 | Smoke tay 3: Zalo/Chrome Telex+BS | **pass** user 2026-07-21 |
+| AI next-word unit (`AiCommandSuggestionEngineTest`) | **pass** agent 2026-07-21 |
 | Ma trận app đầy đủ (Messenger/email/password…) | còn mở rộng tùy chọn |
+
+### AI / Dịch panel (smoke — sau 2026-07-21)
+
+- [ ] Clipboard mở → bấm **AI**: panel AI + phím chữ (không kẹt clipboard, không chỉ ABC)
+- [ ] Clipboard → **Dịch**: tương tự
+- [ ] Ô AI: gõ `Tiêu` → gợi ý **`đề`** (không `đề ngắn` / `Tiêu` / starter `Limo` lạ); chọn → gợi ý từ tiếp (vd. `ngắn`)
+- [ ] Ô AI/Dịch: chạm giữa text, gõ/BS tại cursor; vuốt Space dịch caret
+- [ ] Prompt ngắn + Groq/NIM: **không** 413 do độ dài; 413 = payload server (key/model/mạng)
 
 ---
 
@@ -237,6 +246,9 @@ Chạy trước khi cài bản debug lên máy chính.
 | 2026-07-21 | R3CN80C8Y7L | pack full ~720k / ~8 MB | | OpenSubtitles+Viet74K+collocation; warmUp; tiêu đề / hoàng hôn trong pack |
 | 2026-07-21 | SM-N986N (R3CN80C8Y7L) | 0.1.0-debug | agent | **Checklist auto:** 331 unit tests OK; Telex matrix/Safe/Cafe unit OK; IME enabled |
 | 2026-07-21 | SM-N986N | 0.1.0-debug | user | Smoke tay **1–2–3 OK**: Safe/Cafe/case BS; P2 tab Cụm; Zalo/Chrome Telex+BS |
+| 2026-07-21 | Vivo V2366GA WiFi `192.168.10.217:37121` | 0.1.0-debug | agent | Cài adb WiFi OK; vá AI gợi ý next-word + ô input Dịch/AI + clipboard→feature; unit AI engine pass |
+| 2026-07-21 | Vivo V2366GA | 0.1.0-debug | user | Báo gợi ý AI sai (`Đề`/`Tiêu`/`Limo` khi gõ Tiêu) — đã vá agent; cần smoke lại |
+
 | | | | | |
 
 ---

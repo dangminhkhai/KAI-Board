@@ -132,6 +132,7 @@ class KeyboardView(context: Context) : View(context) {
     private var translationSourceLabel = "Tiếng Việt"
     private var translationTargetLabel = "Tiếng Anh"
     private var translationInput = ""
+    private var translationCursor = 0
     private var translationStatus = ""
     private var aiMode = false
     private var aiPrompt = ""
@@ -433,17 +434,41 @@ class KeyboardView(context: Context) : View(context) {
         invalidate()
     }
 
-    fun setTranslationState(enabled: Boolean, source: String, target: String, input: String, status: String = "") {
+    fun setTranslationState(
+        enabled: Boolean,
+        source: String,
+        target: String,
+        input: String,
+        cursor: Int = input.length,
+        status: String = "",
+    ) {
         val sizeChanged = translationMode != enabled
+        val labelsChanged = translationSourceLabel != source || translationTargetLabel != target
+        var mediaCleared = false
         translationMode = enabled
         translationSourceLabel = source
         translationTargetLabel = target
         translationInput = input
+        translationCursor = cursor.coerceIn(0, input.length)
         translationStatus = status
         suggestionMenuActive = false
         removeCallbacks(restoreToolbarRunnable)
-        rebuildKeys(width.toFloat(), height.toFloat())
-        if (sizeChanged) requestLayout()
+        // Opening Dịch from clipboard/emoji must leave media panels so the body is the letter keys.
+        if (enabled && (panel != Panel.NONE || symbols || voicePanel || emojiSearchActive)) {
+            dismissClipboardPopups()
+            panel = Panel.NONE
+            symbols = false
+            symbolPage = 0
+            emojiSearchActive = false
+            emojiSearchQuery = ""
+            voicePanel = false
+            mediaCleared = true
+        }
+        // Cursor-only updates just repaint the field (smooth drag); rebuild when chrome changes.
+        if (sizeChanged || labelsChanged || mediaCleared) {
+            rebuildKeys(width.toFloat(), height.toFloat())
+            if (sizeChanged) requestLayout()
+        }
         invalidate()
     }
 
@@ -456,11 +481,15 @@ class KeyboardView(context: Context) : View(context) {
         suggestions: List<String> = emptyList(),
     ) {
         val sizeChanged = aiMode != enabled
+        val nextSuggestions = suggestions.filter(String::isNotBlank).distinct().take(3)
+        val suggestionsChanged = aiSuggestions != nextSuggestions
+        val toneChanged = aiToneLabel != toneLabel
+        var mediaCleared = false
         aiMode = enabled
         aiPrompt = prompt
         aiCursor = cursor.coerceIn(0, prompt.length)
         aiStatus = status
-        aiSuggestions = suggestions.filter(String::isNotBlank).distinct().take(3)
+        aiSuggestions = nextSuggestions
         removeCallbacks(hideAiSuggestionsRunnable)
         if (enabled && aiSuggestions.isNotEmpty()) {
             postDelayed(hideAiSuggestionsRunnable, suggestionMenuTimeoutMs)
@@ -470,8 +499,21 @@ class KeyboardView(context: Context) : View(context) {
         if (isAiProcessing()) post(aiAnimationRunnable) else aiAnimationFrame = 0
         suggestionMenuActive = false
         removeCallbacks(restoreToolbarRunnable)
-        rebuildKeys(width.toFloat(), height.toFloat())
-        if (sizeChanged) requestLayout()
+        // Opening AI from clipboard/emoji must leave media panels so the body is the letter keys + AI chrome.
+        if (enabled && (panel != Panel.NONE || symbols || voicePanel || emojiSearchActive)) {
+            dismissClipboardPopups()
+            panel = Panel.NONE
+            symbols = false
+            symbolPage = 0
+            emojiSearchActive = false
+            emojiSearchQuery = ""
+            voicePanel = false
+            mediaCleared = true
+        }
+        if (sizeChanged || suggestionsChanged || toneChanged || mediaCleared) {
+            rebuildKeys(width.toFloat(), height.toFloat())
+            if (sizeChanged) requestLayout()
+        }
         invalidate()
     }
 
@@ -545,7 +587,7 @@ class KeyboardView(context: Context) : View(context) {
                 else -> themePalette.specialKey
             }
             if (!floatingIcon && !privacyChrome) {
-                val keyRadius = if (key.id == "translate-input") 16f * density else radius
+                val keyRadius = if (key.id == "translate-input" || key.id == "ai-input") 16f * density else radius
                 keyPaint.style = Paint.Style.FILL
                 val rect = RectF(key.left, key.top, key.right, key.bottom)
                 canvas.drawRoundRect(rect, keyRadius, keyRadius, keyPaint)
@@ -590,7 +632,26 @@ class KeyboardView(context: Context) : View(context) {
                     drawTranslationControl(canvas, key)
                 key.id == "toolbar-ai" -> drawAiIcon(canvas, key)
                 key.id == "ai-send" || key.id == "enter" && aiMode -> drawAiSendIcon(canvas, key)
-                key.id == "ai-input" -> drawAiInput(canvas, key)
+                key.id == "ai-input" -> drawFeatureInputField(
+                    canvas,
+                    key,
+                    text = aiPrompt,
+                    cursor = aiCursor,
+                    placeholder = "Nhập yêu cầu cho AI",
+                    status = if (aiStatus.isNotEmpty()) {
+                        if (isAiProcessing()) "AI đang xử lý${".".repeat(aiAnimationFrame)}" else aiStatus
+                    } else "",
+                    reserveTrailing = if (isAiProcessing()) 76f * density else 30f * density,
+                )
+                key.id == "translate-input" -> drawFeatureInputField(
+                    canvas,
+                    key,
+                    text = translationInput,
+                    cursor = translationCursor,
+                    placeholder = "Nhập vào đây để dịch",
+                    status = translationStatus,
+                    reserveTrailing = 30f * density,
+                )
                 key.id == "shift" -> drawShiftIcon(canvas, key)
                 key.id == "enter" -> drawEnterIcon(canvas, key)
                 key.id.startsWith("suggestion-") || key.id.startsWith("command-suggestion-") ->
@@ -1366,35 +1427,53 @@ class KeyboardView(context: Context) : View(context) {
         }, keyPaint)
     }
 
-    private data class AiTextWindow(val start: Int, val end: Int)
+    private data class FeatureTextWindow(val start: Int, val end: Int)
 
     private fun isAiProcessing(): Boolean = aiStatus.contains("đang xử lý", ignoreCase = true)
 
-    private fun aiTextWindow(key: KeyGeometry): AiTextWindow {
-        if (aiPrompt.isEmpty()) return AiTextWindow(0, 0)
+    /**
+     * Keep the caret visible by windowing text around [cursor], like a single-line EditText.
+     */
+    private fun featureTextWindow(
+        text: String,
+        cursor: Int,
+        key: KeyGeometry,
+        reserveTrailing: Float,
+    ): FeatureTextWindow {
+        if (text.isEmpty()) return FeatureTextWindow(0, 0)
         val oldSize = textPaint.textSize
         textPaint.textSize = 16f * density
-        val available = (key.right - key.left - if (isAiProcessing()) 76f * density else 30f * density).coerceAtLeast(40f)
-        var start = aiCursor.coerceIn(0, aiPrompt.length)
+        val available = (key.right - key.left - reserveTrailing).coerceAtLeast(40f)
+        val caret = cursor.coerceIn(0, text.length)
+        var start = caret
         var used = 0f
         while (start > 0) {
-            val width = textPaint.measureText(aiPrompt, start - 1, start)
+            val width = textPaint.measureText(text, start - 1, start)
             if (used + width > available * 0.68f) break
             used += width
             start--
         }
-        var end = aiCursor.coerceIn(start, aiPrompt.length)
-        while (end < aiPrompt.length) {
-            val width = textPaint.measureText(aiPrompt, end, end + 1)
+        var end = caret.coerceIn(start, text.length)
+        while (end < text.length) {
+            val width = textPaint.measureText(text, end, end + 1)
             if (used + width > available) break
             used += width
             end++
         }
         textPaint.textSize = oldSize
-        return AiTextWindow(start, end)
+        return FeatureTextWindow(start, end)
     }
 
-    private fun drawAiInput(canvas: Canvas, key: KeyGeometry) {
+    /** Draw AI / Dịch source field with caret — same interaction model as a normal text box. */
+    private fun drawFeatureInputField(
+        canvas: Canvas,
+        key: KeyGeometry,
+        text: String,
+        cursor: Int,
+        placeholder: String,
+        status: String,
+        reserveTrailing: Float,
+    ) {
         val oldAlign = textPaint.textAlign
         val oldSize = textPaint.textSize
         val oldTypeface = textPaint.typeface
@@ -1403,26 +1482,37 @@ class KeyboardView(context: Context) : View(context) {
         textPaint.textSize = 16f * density
         textPaint.typeface = Typeface.DEFAULT
         val left = key.left + 14f * density
-        val baseline = key.centerY - (textPaint.ascent() + textPaint.descent()) / 2f - if (aiStatus.isNotEmpty()) 4f * density else 0f
+        val hasStatus = status.isNotEmpty()
+        val baseline = key.centerY - (textPaint.ascent() + textPaint.descent()) / 2f -
+            if (hasStatus) 4f * density else 0f
         canvas.save()
         canvas.clipRect(key.left + 10f * density, key.top, key.right - 10f * density, key.bottom)
-        if (aiPrompt.isEmpty()) {
+        if (text.isEmpty()) {
             textPaint.color = hintPaint.color
-            canvas.drawText("Nhập yêu cầu cho AI", left, baseline, textPaint)
+            canvas.drawText(placeholder, left, baseline, textPaint)
+            // Empty field still shows a caret at the start (like focused EditText).
+            keyPaint.style = Paint.Style.STROKE
+            keyPaint.color = themePalette.accent
+            keyPaint.strokeWidth = 1.6f * density
+            canvas.drawLine(left, baseline + textPaint.ascent(), left, baseline + textPaint.descent(), keyPaint)
+            keyPaint.style = Paint.Style.FILL
         } else {
-            val window = aiTextWindow(key)
-            val shown = aiPrompt.substring(window.start, window.end)
+            textPaint.color = themePalette.text
+            val window = featureTextWindow(text, cursor, key, reserveTrailing)
+            val shown = text.substring(window.start, window.end)
             canvas.drawText(shown, left, baseline, textPaint)
-            val cursorPrefix = aiPrompt.substring(window.start, aiCursor.coerceIn(window.start, window.end))
+            val caretIndex = cursor.coerceIn(window.start, window.end)
+            val cursorPrefix = text.substring(window.start, caretIndex)
             val cursorX = left + textPaint.measureText(cursorPrefix)
+            keyPaint.style = Paint.Style.STROKE
             keyPaint.color = themePalette.accent
             keyPaint.strokeWidth = 1.6f * density
             canvas.drawLine(cursorX, baseline + textPaint.ascent(), cursorX, baseline + textPaint.descent(), keyPaint)
+            keyPaint.style = Paint.Style.FILL
         }
-        if (aiStatus.isNotEmpty()) {
+        if (hasStatus) {
             textPaint.textSize = 10f * density
             textPaint.color = hintPaint.color
-            val status = if (isAiProcessing()) "AI đang xử lý${".".repeat(aiAnimationFrame)}" else aiStatus
             canvas.drawText(status, left, key.bottom - 5f * density, textPaint)
         }
         canvas.restore()
@@ -1432,22 +1522,60 @@ class KeyboardView(context: Context) : View(context) {
         textPaint.color = oldColor
     }
 
-    private fun aiCursorForX(key: KeyGeometry, touchX: Float): Int {
-        if (aiPrompt.isEmpty()) return 0
+    private fun featureCursorForX(
+        text: String,
+        cursor: Int,
+        key: KeyGeometry,
+        touchX: Float,
+        reserveTrailing: Float,
+    ): Int {
+        if (text.isEmpty()) return 0
         val oldSize = textPaint.textSize
         textPaint.textSize = 16f * density
-        val window = aiTextWindow(key)
+        val window = featureTextWindow(text, cursor, key, reserveTrailing)
         val localX = (touchX - key.left - 14f * density).coerceAtLeast(0f)
         var width = 0f
         var best = window.start
         for (index in window.start until window.end) {
-            val charWidth = textPaint.measureText(aiPrompt, index, index + 1)
+            val charWidth = textPaint.measureText(text, index, index + 1)
             if (localX < width + charWidth / 2f) break
             width += charWidth
             best = index + 1
         }
         textPaint.textSize = oldSize
         return best
+    }
+
+    private fun isFeatureInputKey(key: KeyGeometry?): Boolean =
+        key?.id == "ai-input" || key?.id == "translate-input"
+
+    private fun placeCursorOnFeatureInput(key: KeyGeometry, touchX: Float) {
+        when (key.id) {
+            "ai-input" -> {
+                val index = featureCursorForX(
+                    aiPrompt,
+                    aiCursor,
+                    key,
+                    touchX,
+                    if (isAiProcessing()) 76f * density else 30f * density,
+                )
+                // Optimistic local update so caret follows the finger without waiting a frame.
+                aiCursor = index
+                onKeyAction(KeyAction.SetAiCursor(index))
+            }
+            "translate-input" -> {
+                val index = featureCursorForX(
+                    translationInput,
+                    translationCursor,
+                    key,
+                    touchX,
+                    30f * density,
+                )
+                translationCursor = index
+                onKeyAction(KeyAction.SetTranslationCursor(index))
+            }
+        }
+        invalidate()
     }
 
     private fun drawSmileyIcon(canvas: Canvas, key: KeyGeometry) {
@@ -1591,7 +1719,16 @@ class KeyboardView(context: Context) : View(context) {
             val state = pointers[id] ?: continue
             val x = toKeyboardX(event.getX(index))
             val y = event.getY(index)
-            if (state.downKey?.action == KeyAction.Space && !aiMode && !translationMode) {
+            // Drag on AI / Dịch field: move caret like a normal single-line text box.
+            val downInput = state.downKey
+            if (isFeatureInputKey(downInput)) {
+                cancelLongPress(id)
+                state.longPressed = true
+                placeCursorOnFeatureInput(downInput!!, x)
+                continue
+            }
+            // Space-swipe moves caret in the focused editor — including AI / Dịch fields.
+            if (state.downKey?.action == KeyAction.Space) {
                 val steps = SpaceCursorGesturePolicy.steps(x - state.downX, 12f * density)
                 val change = steps - state.cursorSteps
                 if (change != 0) {
@@ -1671,9 +1808,12 @@ class KeyboardView(context: Context) : View(context) {
             rebuildKeys(width.toFloat(), height.toFloat())
         } else if (handleAdjustmentAction(action)) {
             Unit
-        } else if (state.key?.id == "ai-input" && state.key == releasedOver && !state.longPressed) {
-            val inputKey = state.key ?: return
-            onKeyAction(KeyAction.SetAiCursor(aiCursorForX(inputKey, toKeyboardX(event.getX(index)))))
+        } else if (
+            isFeatureInputKey(state.downKey) &&
+            state.downKey == releasedOver
+        ) {
+            // Tap (or end of drag) places caret under the finger.
+            placeCursorOnFeatureInput(state.downKey!!, toKeyboardX(event.getX(index)))
         } else if (action == KeyAction.Shift && !state.longPressed) {
             val now = android.os.SystemClock.uptimeMillis()
             if (ShiftGesturePolicy.isDoubleTap(lastShiftTapMs, now)) {
@@ -1746,6 +1886,7 @@ class KeyboardView(context: Context) : View(context) {
         aiAnimationFrame = 0
         translationMode = false
         translationInput = ""
+        translationCursor = 0
         translationStatus = ""
         suggestionMenuActive = false
         removeCallbacks(restoreToolbarRunnable)
@@ -1895,9 +2036,12 @@ class KeyboardView(context: Context) : View(context) {
         val usableHeight = totalHeight - keyboardTop - layoutBottomDp * density
         val rowCount = if (numberRowEnabled && !numericMode) 5 else 4
         val rowHeight = (usableHeight - margin * 2 - gap * (rowCount - 1)) / rowCount
-        if (panel == Panel.EMOJI) {
+        // Feature modes (AI / Dịch / voice) always own the body — never leave CLIPBOARD/EMOJI
+        // underneath their chrome (that made taps from clipboard look like "stuck" or wrong UI).
+        val featureBody = aiMode || translationMode
+        if (!featureBody && panel == Panel.EMOJI) {
             addEmojiPanel(totalWidth, rowCount, rowHeight, margin, gap)
-        } else if (panel == Panel.CLIPBOARD) {
+        } else if (!featureBody && panel == Panel.CLIPBOARD) {
             addClipboardPanel(totalWidth, rowCount, rowHeight, margin, gap)
         } else if (voicePanel) {
             addVoicePanel(totalWidth, totalHeight, margin)
@@ -1928,7 +2072,10 @@ class KeyboardView(context: Context) : View(context) {
             addCharacterRow("asdfghjkl", offset + 1, totalWidth * 0.035f, totalWidth * 0.035f, rowHeight, margin, gap)
             addActionCharacterRow("zxcvbnm", offset + 2, totalWidth, rowHeight, margin, gap)
         }
-        if (panel == Panel.NONE && !voicePanel && !numericMode) addBottomRow(totalWidth, rowCount - 1, rowHeight, margin, gap)
+        // Letter bottom row when not in media/voice/numpad (includes AI/Dịch typing body).
+        if ((featureBody || panel == Panel.NONE) && !voicePanel && !numericMode) {
+            addBottomRow(totalWidth, rowCount - 1, rowHeight, margin, gap)
+        }
     }
 
     private fun addNumericPad(totalWidth: Float, rowHeight: Float, margin: Float, gap: Float) {
@@ -2128,14 +2275,10 @@ class KeyboardView(context: Context) : View(context) {
     }
 
     private fun addTranslationPanel(totalWidth: Float, margin: Float) {
-        val display = when {
-            translationInput.isNotEmpty() -> translationInput.takeLast(48)
-            translationStatus.isNotEmpty() -> translationStatus
-            else -> "Nhập vào đây để dịch"
-        }
+        // Label is drawn by drawFeatureInputField (caret + window); keep empty to avoid double-draw.
         addKey(
             "translate-input",
-            display,
+            "",
             KeyAction.OpenTranslator,
             margin,
             5f * density,

@@ -118,6 +118,7 @@ class KaiBoardImeService : InputMethodService() {
     private var lastAutoCorrection: AutoCorrection? = null
     private var translationMode = false
     private var translationSource = ""
+    private var translationCursor = 0
     private var translationResult = ""
     private var translationGeneration = 0
     private val translationHandler = Handler(Looper.getMainLooper())
@@ -748,6 +749,7 @@ class KaiBoardImeService : InputMethodService() {
             KeyAction.CancelVoice,
             KeyAction.ToggleVoicePause -> Unit
             is KeyAction.SetAiCursor,
+            is KeyAction.SetTranslationCursor,
             is KeyAction.SelectAiSuggestion -> Unit
             KeyAction.ToggleEmoji,
             KeyAction.ToggleClipboard -> Unit
@@ -1095,20 +1097,28 @@ class KaiBoardImeService : InputMethodService() {
     }
 
     private fun openTranslator() {
+        // Close AI first so both feature flags are never true (toolbar prefers translation).
+        if (aiMode) stopAi(commit = false)
         finishComposing()
+        // Leave clipboard/emoji before showing Dịch chrome (finishComposing may also clear via selection).
+        keyboardView?.closeMediaPanel()
         translationMode = true
         translationSource = currentInputConnection?.getSelectedText(0)?.toString().orEmpty().take(500)
+        translationCursor = translationSource.length
         translationResult = ""
         updateTranslationUi()
         if (translationSource.isNotEmpty()) scheduleTranslation()
     }
 
     private fun openAi() {
-        finishComposing()
+        // Offline check before finishComposing so we don't close clipboard only to toast-and-bail.
         if (KeyboardPreferences.offlineMode(this)) {
             Toast.makeText(this, "AI bị tắt trong chế độ offline", Toast.LENGTH_SHORT).show()
             return
         }
+        if (translationMode) stopTranslation(commit = false)
+        finishComposing()
+        keyboardView?.closeMediaPanel()
         aiMode = true
         aiPrompt = currentInputConnection?.getSelectedText(0)?.toString().orEmpty().take(2_000)
         aiCursor = aiPrompt.length
@@ -1130,6 +1140,10 @@ class KaiBoardImeService : InputMethodService() {
             KeyAction.ToggleVoicePause -> toggleInlineVoicePause()
             is KeyAction.SetAiCursor -> {
                 aiCursor = action.index.coerceIn(0, aiPrompt.length)
+                updateAiUi()
+            }
+            is KeyAction.MoveCursor -> {
+                aiCursor = (aiCursor + action.characters).coerceIn(0, aiPrompt.length)
                 updateAiUi()
             }
             is KeyAction.SelectAiSuggestion -> {
@@ -1261,6 +1275,25 @@ class KaiBoardImeService : InputMethodService() {
         val ai = AiCommandSuggestionEngine.suggest(
             aiPrompt, cursor, AiCommandSuggestionStore.read(this), limit = 3,
         )
+        fun singleWordOnly(values: List<String>) = values.filter { candidate ->
+            val t = candidate.trim()
+            t.isNotEmpty() && ' ' !in t && '\t' !in t
+        }.filterNot { partial.isNotEmpty() && it.equals(partial, ignoreCase = true) }
+
+        val aiClean = singleWordOnly(ai)
+        // When AI already offers next-words after a finished token (e.g. Tiêu → đề),
+        // do not merge dictionary chips like "Tiêu" / random phrase words.
+        val aiIsPartialCompletion = hasPartial && aiClean.any { candidate ->
+            candidate.startsWith(partial, ignoreCase = true) && !candidate.equals(partial, ignoreCase = true)
+        }
+        if (aiClean.isNotEmpty() && hasPartial && !aiIsPartialCompletion) {
+            return aiClean
+        }
+        if (aiClean.isNotEmpty() && !hasPartial) {
+            // After a space: command next-words only (not general chat phrases).
+            return aiClean
+        }
+
         val personal: List<String>
         val offline: List<String>
         if (partial.isNotEmpty()) {
@@ -1272,10 +1305,10 @@ class KaiBoardImeService : InputMethodService() {
                 allowBuiltInPhrases = KeyboardPreferences.phraseSeedEnabled(this),
             ).filterNot { it.equals(partial, ignoreCase = true) }
         } else {
-            personal = PhraseLearningStore.suggestPersonal(this, history, 3)
-            offline = PhraseLearningStore.suggestOffline(this, history, 3)
+            personal = emptyList()
+            offline = emptyList()
         }
-        return SuggestionPriority.merge(ai, personal, offline)
+        return SuggestionPriority.merge(aiClean, singleWordOnly(personal), singleWordOnly(offline))
     }
 
     private fun stopAi(commit: Boolean) {
@@ -1299,6 +1332,7 @@ class KaiBoardImeService : InputMethodService() {
                 val target = TranslationPreferences.target(this)
                 TranslationPreferences.save(this, target, source, TranslationPreferences.autoDownload(this))
                 translationSource = translationResult.ifEmpty { translationSource }
+                translationCursor = translationSource.length
                 translationResult = ""
                 updateTranslationUi(); scheduleTranslation()
             }
@@ -1309,18 +1343,51 @@ class KaiBoardImeService : InputMethodService() {
             )
             KeyAction.CancelVoice -> cancelInlineVoice()
             KeyAction.ToggleVoicePause -> toggleInlineVoicePause()
+            is KeyAction.SetTranslationCursor -> {
+                translationCursor = action.index.coerceIn(0, translationSource.length)
+                updateTranslationUi()
+            }
+            is KeyAction.MoveCursor -> {
+                translationCursor = (translationCursor + action.characters).coerceIn(0, translationSource.length)
+                updateTranslationUi()
+            }
             is KeyAction.Character -> {
                 val value = if (shifted) action.value.uppercaseChar() else action.value
-                translationSource = appendTranslatedInput(translationSource, value).takeLast(500)
+                val cursor = translationCursor.coerceIn(0, translationSource.length)
+                val before = translationSource.substring(0, cursor)
+                val after = translationSource.substring(cursor)
+                val changed = appendTranslatedInput(before, value)
+                val merged = (changed + after)
+                // Prefer keeping the caret region when over limit (edit around cursor).
+                translationSource = if (merged.length <= 500) merged else {
+                    val head = changed.takeLast(500)
+                    head
+                }
+                translationCursor = if (merged.length <= 500) {
+                    changed.length
+                } else {
+                    translationSource.length
+                }
                 if (shifted && !capsLocked) { shifted = false; keyboardView?.setShifted(false) }
                 updateTranslationUi(); scheduleTranslation()
             }
             KeyAction.Space -> {
-                if (translationSource.isNotEmpty() && !translationSource.endsWith(' ')) translationSource += " "
+                val cursor = translationCursor.coerceIn(0, translationSource.length)
+                if (cursor == 0 || translationSource.getOrNull(cursor - 1) != ' ') {
+                    val merged = translationSource.substring(0, cursor) + " " + translationSource.substring(cursor)
+                    translationSource = merged.take(500)
+                    translationCursor = (cursor + 1).coerceAtMost(translationSource.length)
+                }
                 updateTranslationUi(); scheduleTranslation()
             }
             KeyAction.Backspace -> {
-                translationSource = UnicodeDeletionPolicy.removeLastCluster(translationSource)
+                val cursor = translationCursor.coerceIn(0, translationSource.length)
+                if (cursor > 0) {
+                    val before = translationSource.substring(0, cursor)
+                    val deleteCount = UnicodeDeletionPolicy.charactersToDeleteBeforeCursor(before)
+                    translationSource = translationSource.removeRange(cursor - deleteCount, cursor)
+                    translationCursor = cursor - deleteCount
+                }
                 if (translationSource.isEmpty()) {
                     translationResult = ""
                     currentInputConnection?.setComposingText("", 1)
@@ -1329,7 +1396,10 @@ class KaiBoardImeService : InputMethodService() {
             }
             KeyAction.Enter -> {
                 currentInputConnection?.finishComposingText()
-                translationSource = ""; translationResult = ""; updateTranslationUi()
+                translationSource = ""
+                translationCursor = 0
+                translationResult = ""
+                updateTranslationUi()
             }
             KeyAction.Shift -> handleShiftTap()
             KeyAction.CapsLock -> toggleCapsLock()
@@ -1406,11 +1476,13 @@ class KaiBoardImeService : InputMethodService() {
             ?: TranslationPreferences.source(this).uppercase(Locale.ROOT)
         val target = TranslationLanguages.all.firstOrNull { it.tag == TranslationPreferences.target(this) }?.name
             ?: TranslationPreferences.target(this).uppercase(Locale.ROOT)
+        translationCursor = translationCursor.coerceIn(0, translationSource.length)
         keyboardView?.setTranslationState(
             translationMode,
             source,
             target,
             translationSource,
+            translationCursor,
             status,
         )
     }
@@ -1419,7 +1491,10 @@ class KaiBoardImeService : InputMethodService() {
         translationHandler.removeCallbacks(translationRunnable)
         translationGeneration++
         if (commit) currentInputConnection?.finishComposingText()
-        translationMode = false; translationSource = ""; translationResult = ""
+        translationMode = false
+        translationSource = ""
+        translationCursor = 0
+        translationResult = ""
         updateTranslationUi()
     }
 
@@ -1454,6 +1529,7 @@ class KaiBoardImeService : InputMethodService() {
                         stopAi(commit = false)
                         translationMode = true
                         translationSource = result.text
+                        translationCursor = translationSource.length
                         translationResult = ""
                         updateTranslationUi("Đã nhận giọng nói • đang dịch…")
                         scheduleTranslation()
@@ -1570,6 +1646,7 @@ class KaiBoardImeService : InputMethodService() {
                 stopAi(commit = false)
                 translationMode = true
                 translationSource = text
+                translationCursor = translationSource.length
                 translationResult = ""
                 updateTranslationUi("Đã nhận giọng nói • đang dịch…")
                 scheduleTranslation()
@@ -1644,6 +1721,7 @@ class KaiBoardImeService : InputMethodService() {
                 translationGeneration++
                 translationMode = true
                 translationSource = text.take(VoiceTarget.TRANSLATION.maxCharacters)
+                translationCursor = translationSource.length
                 translationResult = ""
                 updateTranslationUi("Đã tạm dừng • đang dịch…")
                 scheduleTranslation()

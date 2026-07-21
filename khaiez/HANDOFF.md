@@ -2,15 +2,16 @@
 
 **Repo:** https://github.com/dangminhkhai/KAI-Board  
 **Nhánh:** `main`  
-**HEAD (gần nhất):** `b827879` — Settings không tự mở IME  
-**Cập nhật:** 2026-07-21  
+**Cập nhật:** 2026-07-21 (AI/Dịch field + gợi ý next-word + clipboard→feature)
 
 ```powershell
 git pull origin main
 .\gradlew.bat testDebugUnitTest assembleDebug
 .\dev-install.cmd
-# hoặc USB:
+# WiFi (Vivo gần đây):
+adb connect 192.168.10.217:37121
 adb install -r app\build\outputs\apk\debug\app-arm64-v8a-debug.apk
+adb shell am force-stop vn.kai.board
 ```
 
 | | |
@@ -18,97 +19,103 @@ adb install -r app\build\outputs\apk\debug\app-arm64-v8a-debug.apk
 | **Build** | Debug-only `0.1.0-debug` · `versionCode 1` · không release pipeline |
 | **Package** | `vn.kai.board` |
 | **ABI** | splits: `arm64-v8a`, `x86_64` (cài arm64 trên Vivo/Samsung) |
-| **Signing** | **Chung mọi máy:** `keystore/android-debug.keystore` (alias `androiddebugkey` / pass `android`) — xem `keystore/README.md` |
-| **Cài đè** | `adb install -r` OK giữa các PC sau khi pull keystore; mismatch → gỡ app hoặc dùng đúng shared key |
+| **Signing** | **Chung mọi máy:** `keystore/android-debug.keystore` — xem `keystore/README.md` |
+| **Cài đè** | `adb install -r` OK giữa PC sau pull keystore |
 
 ---
 
-## Session 2026-07-21 — đã xong (user OK)
+## Session 2026-07-21 (mới) — AI / Dịch / Settings ô thử
 
-### 1. Private / mật khẩu
-- Smartbar private: banner **«Riêng tư · mật khẩu»** + icon khóa.
-- Ẩn AI / clipboard / mic / emoji / settings; Telex + gợi ý + học tắt.
-- `KeyAction.NoOp` cho chrome không bấm được.
+### A. Clipboard → AI / Dịch (đã vá)
 
-### 2. Resize Gboard-style
-- Adjustment mode: viewport max một lần; kéo = rebuildKeys + invalidate (throttle layout khi cần).
-- Apply geometry khi thả / ✓; không scaleY méo phím.
-- Insets transparent khi resize (app phía trên chạm được).
-
-### 3. Theme màu
-- **System / Sáng / Tối** giữ đủ 3 nút.
-- Bộ màu mặc định **neutral grayscale** (bỏ accent mint xanh) — `KeyboardThemePalette.neutralLight/Dark`.
-
-### 4. Clipboard rich
-| | |
+| Hiện tượng | Vá |
 | --- | --- |
-| Lưu | TEXT / HTML / IMAGE (JPEG local `filesDir/clipboard_images/`) |
-| Smart | OTP, email, URL, SĐT (offline) |
-| Panel | Tab lịch sử + ghi chú; badge + thumbnail ảnh |
-| Giữ mục | Popup pill **Ghim · Xóa** (vẽ trên keyboard, không Material dialog) |
-| Nhả tay | Long-press mở popup → UP **không** đóng (`suppressClipboardPopupUp`) |
-| Thùng rác | Xóa hết **chưa ghim** + popup xác nhận gọn; ★ giữ |
-| Xóa 1 mục | Menu Ghim/Xóa; suppress re-import clip hệ thống |
-| Dán ảnh | `commitContent` chỉ khi field `image/*`; URL/search/password → toast, **không** `setPrimaryClip` |
-| HTML | Spanned trên text thường; plain trên URI/search |
-| Ô thử | Sticky **Ô thử (thay Messages)** — `RichClipboardTestEditText` |
-| Settings IME | **Không** `requestFocus` khi mở app — phím chỉ khi user chạm ô / Tùy chỉnh / Xóa ô thử |
-| Privacy | Private ẩn clipboard; backup **không** clipboard/notes |
+| Đang clipboard, bấm AI/Dịch → về phím chữ / kẹt body clipboard | `openAi`/`openTranslator` gọi `closeMediaPanel`; `setAiState`/`setTranslationState(enabled)` clear panel/symbols/voice; `rebuildKeys` ưu tiên `aiMode`/`translationMode` body |
+| Offline AI đóng clipboard rồi toast | Check offline **trước** `finishComposing` |
+| Mở AI khi đang Dịch (hoặc ngược lại) | `stopAi` / `stopTranslation` trước khi bật mode kia |
 
-### 5. Debug keystore (máy khác)
-- File trong git: `keystore/android-debug.keystore`
-- Gradle: `signingConfigs.sharedDebug` (debug + release debug-only)
-- Máy mới: `git pull` → build → `install -r` cùng cert
+### B. Ô input AI & Dịch (thao tác như text field)
 
-### 6. Thiết bị đã cài gần đây
-| Máy | Serial / model | Ghi chú |
+- Vẽ chung `drawFeatureInputField`: placeholder, caret, window quanh cursor.
+- Chạm / kéo trên ô → `SetAiCursor` / `SetTranslationCursor`.
+- Vuốt **Space** trong AI/Dịch → `MoveCursor` nội bộ (không còn tắt gesture).
+- Dịch: `translationCursor`; Character/Space/Backspace tại cursor (Telex word trước cursor).
+- Cursor-only UI update: `invalidate` không `rebuildKeys` (kéo mượt).
+
+### C. Gợi ý AI command (next-word)
+
+- `AiCommandSuggestionEngine`: candidate size **1**; filter multi-word legacy; không titlecase next-word theo từ trước (`đề` không thành `Đề`).
+- Context depth ≥ 1: **không** trộn empty-context starters (`Limo` từ lệnh khác).
+- `buildAiSuggestions`: nếu AI đã next-word sau token xong → **chỉ** AI chips (không merge lexicon → hết chip `Tiêu` trùng).
+- Unit: `AiCommandSuggestionEngineTest` (Tiêu→đề, no multi-word, no global starter mix).
+
+### D. Ô thử Settings
+
+- Compact sticky: hint `Thử gõ / dán…`, icon X nhỏ, bỏ underline (`setBackgroundResource(0)`), giữ stroke card.
+
+### E. HTTP 413 (ghi chú)
+
+- **413** = Payload Too Large (server). Prompt ngắn *không* gây 413 trên Groq/NIM.
+- App map lỗi: `AI lỗi HTTP $status` (`AiProviderClient.post`).
+
+### F. Thiết bị cài gần đây
+
+| Máy | Kết nối | Ghi chú |
 | --- | --- | --- |
-| Samsung | `R3CN80C8Y7L` (trước) | Checklist auto / smoke Telex |
-| Vivo | `10AE5U24S0000TQ` · **V2366GA** / PD2366 | USB install OK sau gỡ bản versionCode 120 |
+| Vivo **V2366GA** / PD2366 | WiFi `192.168.10.217:37121` (port wireless đổi khi pair lại) | Install OK 2026-07-21 |
+| Samsung SM-N986N | USB `R3CN80C8Y7L` | Smoke Telex trước đó |
 
 ---
 
-## Phrase / gợi ý (ổn định trước session)
+## Session trước — clipboard / private / keystore (vẫn giữ)
 
-| Tầng | Nguồn | Ghi chú |
-| --- | --- | --- |
-| **1 Personal** | `PhraseLearningStore` (`pairs_v2`) | Decay **21 ngày**, max 512 — **luôn #1** |
-| **2 Pack** | `PhrasePack` / `vi_social.tsv` | ~**720k** cặp (~**8 MB**) |
-| ~~Seed APK~~ | **đã xóa** | Không còn `PhraseSeedCatalog` |
+### Private / mật khẩu
+- Banner **«Riêng tư · mật khẩu»** + khóa; ẩn AI/clipboard/mic/emoji; Telex + gợi ý tắt.
 
-- Rank: personal → pack. Preload: `PhrasePack.warmUpAsync` (IME start).  
-- P2: tab **Từ | Cụm** + `PhraseStats` (không lưu text).  
-- Build pack: `py -3 tools\build_phrase_pack.py` → cập nhật `EXPECTED_SHA256`.
+### Clipboard rich
+- TEXT/HTML/IMAGE; popup Ghim·Xóa; clear unpinned; dán ảnh `commitContent`; Settings **không** auto IME.
+
+### Debug keystore
+- `keystore/android-debug.keystore` + `sharedDebug` — mọi máy cùng cert.
+
+### Panel reset (G1)
+- `resetToLetterKeyboard` khi hide/show IME — không kẹt emoji/clipboard/AI.
+
+---
+
+## Phrase / gợi ý (ổn định)
+
+| Tầng | Nguồn |
+| --- | --- |
+| **1 Personal** | `PhraseLearningStore` decay 21 ngày |
+| **2 Pack** | `PhrasePack` ~720k bigram |
+
+AI bar: **next-word command** tách khỏi phrase chat (xem mục C).
 
 ---
 
 ## Next (gợi ý)
 
-- [ ] (Tùy) unit test `ClipboardHistoryStore` (TTL, ghim, suppress fingerprint, clearUnpinned)
-- [ ] (Tùy) ma trận app rộng / AI-mic-dịch / Telex `Mí`+BS
-- [ ] (Tùy) tăng `versionCode` debug khi cần (tránh downgrade trên máy có bản lạ)
-- [ ] Release thật: keystore **riêng**, không dùng `android-debug.keystore`
+- [ ] Smoke tay AI: `Tiêu` → chip `đề`; chọn → `ngắn`; không `Limo`/`Tiêu`/`đề ngắn`
+- [ ] Smoke: clipboard → AI / Dịch mở đủ chrome + body phím chữ
+- [ ] Smoke: ô Dịch — chạm giữa, gõ/BS tại cursor
+- [ ] (Tùy) unit ClipboardHistoryStore
+- [ ] (Tùy) `versionCode` bump nếu máy có bản lạ
+- [ ] Release: keystore riêng, không dùng android-debug
 
 ---
 
-## Files chính (session + phrase)
+## Files chính (session mới)
 
 ```text
-app/.../input/ClipboardHistoryStore.kt   # text/HTML/image + suppress re-import
-app/.../input/KeyAction.kt               # CommitClipboard rich, ClearClipboardUnpinned
-app/.../ui/KeyboardView.kt               # panel, popups Gboard, resize, private chrome
-app/.../ui/RichClipboardTestEditText.kt  # settings test field image/*
-app/.../ime/KaiBoardImeService.kt        # paste rich, insets resize, warmUpAsync
-app/.../MainActivity.kt                  # sticky test field, no auto IME
-app/.../settings/KeyboardThemePalette.kt # neutral light/dark
-app/build.gradle.kts                     # sharedDebug signing
-keystore/android-debug.keystore
-keystore/README.md
-app/.../input/PhraseLearningStore.kt
-app/.../input/PhrasePack.kt
-tools/build_phrase_pack.py
-phrase-packs/vi_social.tsv
-khaiez/CHANGELOG.md · TESTING.md · PRIVACY.md · ARCHITECTURE.md
+app/.../ai/AiCommandSuggestionEngine.kt     # next-word only, no global mix
+app/.../ai/AiCommandSuggestionEngineTest.kt
+app/.../ime/KaiBoardImeService.kt            # openAi/Translator, translationCursor, buildAiSuggestions
+app/.../input/KeyAction.kt                   # SetTranslationCursor
+app/.../ui/KeyboardView.kt                   # feature field draw/touch, panel priority
+app/.../MainActivity.kt                      # compact ô thử
+app/.../res/values/strings.xml
+khaiez/CHANGELOG.md · HANDOFF.md · TESTING.md
 ```
 
 ---
@@ -116,35 +123,22 @@ khaiez/CHANGELOG.md · TESTING.md · PRIVACY.md · ARCHITECTURE.md
 ## Lệnh hay dùng
 
 ```powershell
-# Test + APK
 .\gradlew.bat testDebugUnitTest :app:assembleDebug
-
-# Cài arm64 (Samsung/Vivo)
 adb devices -l
+adb connect <ip>:<port>   # Wireless debugging
 adb install -r app\build\outputs\apk\debug\app-arm64-v8a-debug.apk
 adb shell am force-stop vn.kai.board
-
-# Nếu chữ ký lệch (máy cài bản khác):
-adb uninstall vn.kai.board
-adb install app\build\outputs\apk\debug\app-arm64-v8a-debug.apk
 ```
 
-**Docs chi tiết:** `CHANGELOG.md` (mốc), `TESTING.md` (7.8–7.12 clipboard, 9.4b no-auto-IME), `PRIVACY.md` (ảnh local).
+**Docs:** `CHANGELOG.md` · `TESTING.md` (AI smoke) · `PRIVACY.md` · skill `/kai-board-continue`.
 
 ---
 
-## Skill chống regression (đổi máy vẫn dùng)
-
-Nằm **trong git** (mọi máy `git pull` là có):
+## Skill chống regression
 
 ```text
 .grok/skills/kai-board-continue/SKILL.md
 .grok/skills/kai-board-continue/references/smoke-ime.md
 ```
 
-| Cách gọi | |
-| --- | --- |
-| Slash | `/kai-board-continue` |
-| Chat | “đổi máy”, “tiếp tục KAI Board”, “smoke sau cài”, “đừng để tính năng cũ lỗi” |
-
-Agent sẽ: pull/orient HANDOFF → shared keystore → build/install → **smoke G1–G9** (IME panel reset, Settings no auto-IME, clipboard, Telex tối thiểu).
+Gọi: `/kai-board-continue` · “đổi máy” · “smoke sau cài”.

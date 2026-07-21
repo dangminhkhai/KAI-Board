@@ -191,90 +191,77 @@ class MainActivity : Activity() {
         }, LinearLayout.LayoutParams(-1, dp(36)).apply { bottomMargin = dp(8) })
         val typingImagePreview = ImageView(this).apply {
             adjustViewBounds = true
-            maxHeight = dp(120)
+            maxHeight = dp(56)
             scaleType = ImageView.ScaleType.CENTER_CROP
             visibility = android.view.View.GONE
             setBackgroundColor(if (isDark) Color.rgb(48, 49, 52) else Color.rgb(241, 243, 244))
             contentDescription = getString(R.string.typing_image_received)
         }
-        val typingImageStatus = textView("", 12f, secondaryText).apply {
-            visibility = android.view.View.GONE
-            setPadding(0, dp(4), 0, 0)
-        }
         val typingTest = RichClipboardTestEditText(this).apply {
-            textSize = 16f
+            textSize = 14f
+            // Placeholder only (no floating label / no title above).
             hint = getString(R.string.typing_test_hint)
-            setSingleLine(false)
-            minLines = 2
-            maxLines = 4
-            minHeight = dp(56)
-            setPadding(dp(12), dp(10), dp(12), dp(10))
+            setSingleLine(true)
+            maxLines = 1
+            minHeight = dp(40)
+            setPadding(dp(10), dp(6), dp(28), dp(6)) // room for small clear icon
             setTextColor(primaryText)
             setHintTextColor(if (isDark) Color.rgb(148, 163, 184) else Color.rgb(107, 114, 128))
-            inputType = InputType.TYPE_CLASS_TEXT or
-                InputType.TYPE_TEXT_FLAG_MULTI_LINE or
-                InputType.TYPE_TEXT_FLAG_CAP_SENTENCES
+            inputType = InputType.TYPE_CLASS_TEXT or InputType.TYPE_TEXT_FLAG_CAP_SENTENCES
+            isFocusable = true
+            isFocusableInTouchMode = true
+            // Remove the default EditText underline under the text.
+            setBackgroundResource(0)
             onImageReceived = { uri ->
                 runCatching {
                     contentResolver.openInputStream(uri)?.use { stream ->
                         val bmp = android.graphics.BitmapFactory.decodeStream(stream)
                         typingImagePreview.setImageBitmap(bmp)
                         typingImagePreview.visibility = android.view.View.VISIBLE
-                        typingImageStatus.text = getString(R.string.typing_image_received)
-                        typingImageStatus.visibility = android.view.View.VISIBLE
                     }
                 }.onFailure {
                     Toast.makeText(this@MainActivity, "Không mở được ảnh dán", Toast.LENGTH_SHORT).show()
                 }
             }
         }
+        val clearIcon = resources.getDrawable(android.R.drawable.ic_menu_close_clear_cancel, theme).mutate().also { d ->
+            val s = dp(12)
+            d.setBounds(0, 0, s, s)
+            d.setTint(if (isDark) Color.rgb(154, 160, 166) else Color.rgb(120, 124, 128))
+        }
         val typingField = TextInputLayout(this).apply {
-            boxBackgroundMode = TextInputLayout.BOX_BACKGROUND_OUTLINE
-            boxBackgroundColor = cardColor
-            boxStrokeColor = selectedColor
-            setEndIconTintList(ColorStateList.valueOf(selectedColor))
+            // No box stroke / filled underline — only placeholder text inside.
+            boxBackgroundMode = TextInputLayout.BOX_BACKGROUND_NONE
+            isHintEnabled = false
+            setEndIconTintList(
+                ColorStateList.valueOf(if (isDark) Color.rgb(154, 160, 166) else Color.rgb(120, 124, 128)),
+            )
+            endIconMode = TextInputLayout.END_ICON_CUSTOM
+            endIconMinSize = dp(14)
+            setEndIconDrawable(clearIcon)
+            setEndIconContentDescription(getString(R.string.typing_clear))
+            setEndIconOnClickListener {
+                typingTest.setText("")
+                typingImagePreview.setImageDrawable(null)
+                typingImagePreview.visibility = android.view.View.GONE
+            }
             addView(typingTest, LinearLayout.LayoutParams(-1, -2))
         }
         val typingCardContent = LinearLayout(this).apply {
             orientation = LinearLayout.VERTICAL
-            setPadding(dp(10), dp(8), dp(10), dp(8))
-            addView(textView(getString(R.string.typing_card_title), 14f, primaryText).apply {
-                setTypeface(typeface, Typeface.BOLD)
-            })
-            addView(textView(getString(R.string.typing_card_subtitle), 12f, secondaryText).apply {
-                setPadding(0, dp(2), 0, dp(6))
-            })
+            setPadding(dp(6), dp(2), dp(4), dp(2))
             addView(typingField, LinearLayout.LayoutParams(-1, -2))
-            addView(typingImagePreview, LinearLayout.LayoutParams(-1, dp(100)).apply {
-                topMargin = dp(6)
+            addView(typingImagePreview, LinearLayout.LayoutParams(-1, dp(56)).apply {
+                topMargin = dp(4)
             })
-            addView(typingImageStatus)
-            addView(MaterialButton(this@MainActivity).apply {
-                text = getString(R.string.typing_clear)
-                textSize = 12f
-                minHeight = 0
-                minimumHeight = 0
-                insetTop = 0
-                insetBottom = 0
-                setTextColor(selectedColor)
-                backgroundTintList = ColorStateList.valueOf(cardColor)
-                strokeColor = ColorStateList.valueOf(selectedColor)
-                strokeWidth = dp(1)
-                setOnClickListener {
-                    typingTest.setText("")
-                    typingImagePreview.setImageDrawable(null)
-                    typingImagePreview.visibility = android.view.View.GONE
-                    typingImageStatus.visibility = android.view.View.GONE
-                    typingTest.requestFocus()
-                }
-            }, LinearLayout.LayoutParams(-2, dp(36)).apply { topMargin = dp(4) })
         }
         val stickyTypingCard = MaterialCardView(this).apply {
-            radius = dp(16).toFloat()
-            cardElevation = dp(2).toFloat()
+            radius = dp(12).toFloat()
+            cardElevation = dp(1).toFloat()
             setCardBackgroundColor(cardColor)
+            // Soft card edge only — not the text underline.
             strokeColor = outlineColor
-            strokeWidth = dp(2)
+            strokeWidth = dp(1)
             addView(typingCardContent)
         }
         fun addSwitch(target: LinearLayout, label: Int, key: String, checked: Boolean): MaterialSwitch {
@@ -839,7 +826,7 @@ class MainActivity : Activity() {
             if (screenGradient != null) this.background = screenGradient else setBackgroundColor(background)
             addView(settingsScroll, FrameLayout.LayoutParams(-1, -1))
             addView(stickyTypingCard, FrameLayout.LayoutParams(-1, -2, Gravity.BOTTOM).apply {
-                leftMargin = dp(16); rightMargin = dp(16); bottomMargin = dp(6)
+                leftMargin = dp(12); rightMargin = dp(12); bottomMargin = dp(4)
             })
             ViewCompat.setOnApplyWindowInsetsListener(this) { view, insets ->
                 val systemBars = insets.getInsets(WindowInsetsCompat.Type.systemBars())
@@ -850,7 +837,8 @@ class MainActivity : Activity() {
                 } else {
                     0f
                 }
-                settingsScroll.setPadding(0, 0, 0, maxOf(systemBars.bottom, ime.bottom) + dp(168))
+                // Compact sticky bar (~56–72dp); leave a little air for image preview when shown.
+                settingsScroll.setPadding(0, 0, 0, maxOf(systemBars.bottom, ime.bottom) + dp(72))
                 insets
             }
         }

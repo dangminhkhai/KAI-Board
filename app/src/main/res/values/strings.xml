@@ -6,11 +6,11 @@
     <string name="app_name">KAI Board</string>
     <string name="subtype_vietnamese">KAI Board</string>
     <string name="setup_title">KAI Board</string>
-    <string name="typing_test_hint">Chạm để gõ / dán text · HTML · ảnh</string>
-    <string name="typing_card_title">Ô thử (thay Messages)</string>
+    <string name="typing_test_hint">Thử gõ / dán…</string>
+    <string name="typing_card_title">Ô thử</string>
     <string name="typing_card_subtitle">Dùng panel Clipboard để dán chữ, HTML hoặc ảnh vào đây</string>
-    <string name="typing_image_received">Đã nhận ảnh từ clipboard</string>
-    <string name="typing_clear">Xóa ô thử</string>
+    <string name="typing_image_received">Ảnh</string>
+    <string name="typing_clear">Xóa</string>
     <string name="clipboard_image_missing">Không tìm thấy file ảnh clipboard</string>
     <string name="clipboard_image_paste_failed">Không thể chuẩn bị ảnh để dán</string>
     <string name="clipboard_image_unsupported">Ô này không nhận ảnh (URL, tìm kiếm, mật khẩu…). Thử ô thử trong Cài đặt KAI Board.</string>

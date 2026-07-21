@@ -41,6 +41,8 @@ sealed interface KeyAction {
     data object CloseAi : KeyAction
     data object SendAi : KeyAction
     data class SetAiCursor(val index: Int) : KeyAction
+    /** Place caret in the on-keyboard translation source field. */
+    data class SetTranslationCursor(val index: Int) : KeyAction
     data object ToggleEmoji : KeyAction
     data object ToggleClipboard : KeyAction
     data class SelectEmojiGroup(val index: Int) : KeyAction

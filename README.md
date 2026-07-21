@@ -140,9 +140,12 @@ Nhà cung cấp hiện hỗ trợ:
 ### Dịch và giọng nói
 
 - Dịch bằng Google ML Kit; người dùng chọn và tải model theo từng ngôn ngữ để sử dụng offline.
+- Ô nguồn dịch trên bàn phím chỉnh sửa như text field (cursor, chạm/kéo, Space vuốt, Telex tại cursor).
+- Mở AI/Dịch từ panel clipboard không kẹt clipboard hay rơi về chỉ phím chữ.
 - Model dịch không được đóng gói sẵn vào APK, giúp giảm dung lượng tải ban đầu.
 - Mic cho AI và Dịch hiển thị lời nói trực tiếp trong vùng bàn phím, có tạm dừng/tiếp tục, Backspace và chỉnh sửa trước khi xử lý.
 - Khi tạm dừng mic Dịch, văn bản được đưa vào ô dịch và quá trình dịch tự chạy nếu model sẵn sàng.
+- Ô thử trong Cài đặt dạng sticky gọn (không tự bật IME khi mở app).
 
 ## Giao diện và tùy chỉnh
 

@@ -4,6 +4,18 @@ Lịch sử mốc phát triển nội bộ (không còn pipeline ship).
 
 ## Debug / đang phát triển
 
+### AI / Dịch panel + gợi ý command (2026-07-21)
+
+- **Clipboard → AI / Dịch:** mở AI hoặc Dịch từ panel clipboard không kẹt body clipboard / không “về ABC” oan; `setAiState` / `setTranslationState` xóa `panel` media; `rebuildKeys` ưu tiên feature body; offline AI check **trước** `finishComposing`.
+- **Ô input AI & Dịch** giống text field: caret, chạm/kéo đặt con trỏ, vuốt Space dịch cursor, gõ/⌫/Space **tại cursor** (Dịch có `translationCursor` + `SetTranslationCursor`).
+- **Gợi ý AI command — next-word only:**
+  - Không gộp cụm 2 từ (`đề ngắn`); học/transition 1 từ.
+  - Gõ `Tiêu` → `đề` (không `Đề` / `Tiêu` / starter global `Limo` từ lệnh khác).
+  - Khi đã có next-word AI: **không** merge lexicon/dictionary (tránh chip trùng từ đang gõ).
+  - Context depth ≥ 1: không trộn empty-context starters; fallback global chỉ khi không có contextual hit.
+- HTTP **413** = payload too large (server từ chối body); prompt ngắn kiểu *“Viết tiêu đề thảm taplo…”* **không** đủ dài để gây 413 trên Groq/NVIDIA NIM — xem status khác (key/model/mạng).
+- Ô thử Cài đặt: compact sticky, placeholder ngắn, bỏ gạch chân (`setBackgroundResource(0)`), icon X nhỏ; giữ stroke card.
+
 ### Clipboard rich + UI Gboard-style (2026-07-21)
 
 - Lịch sử **text / HTML / ảnh** local (`ClipboardHistoryStore`); ảnh JPEG trong `filesDir/clipboard_images/` (FileProvider).

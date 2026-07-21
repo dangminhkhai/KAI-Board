@@ -5,7 +5,12 @@ import java.util.Locale
 
 data class AiPromptEdit(val prompt: String, val cursor: Int)
 
-/** Fast, offline command completion for the AI prompt editor. */
+/**
+ * Fast, offline command completion for the AI prompt editor.
+ *
+ * Suggestions are always the **next single word** (Gboard-style), never a multi-word
+ * blob like "đề ngắn". After the user picks "đề", the next offer can be "ngắn".
+ */
 object AiCommandSuggestionEngine {
     private const val FIELD = "\u001E"
     private val tokenRegex = Regex("[\\p{L}\\p{N}._+-]+")
@@ -32,28 +37,48 @@ object AiCommandSuggestionEngine {
         }
 
         val ranked = LinkedHashMap<String, Int>()
-        if (partial.isNotEmpty()) {
+        val completingPartial = partial.isNotEmpty()
+        if (completingPartial) {
             val needle = normalize(partial)
             transitions.forEach { (key, weight) ->
                 val candidate = decode(key).second
+                // Only complete the current word — never expand into a multi-word phrase.
+                if (!isSingleWord(candidate)) return@forEach
                 if (normalize(candidate).startsWith(needle) && !candidate.equals(partial, true)) {
                     ranked[candidate] = maxOf(ranked[candidate] ?: Int.MIN_VALUE, 50_000 + weight * 100)
                 }
             }
         }
-        for (contextSize in minOf(2, context.size) downTo 0) {
-            val suffix = context.takeLast(contextSize)
-            candidatesFor(transitions, suffix).forEach { (candidate, weight) ->
-                // A longer matching context must always beat a globally frequent
-                // command starter. Frequency only ranks candidates at the same depth.
-                val score = contextSize * 100_000 + weight * 1_000 + if (' ' in candidate) 10 else 0
+        // Next-word from real context first. Do NOT mix empty-context "command starters"
+        // (e.g. Limo) when we already have a word like "Tiêu" — that polluted the bar.
+        val maxCtx = minOf(2, context.size)
+        if (maxCtx > 0) {
+            for (contextSize in maxCtx downTo 1) {
+                val suffix = context.takeLast(contextSize)
+                candidatesFor(transitions, suffix).forEach { (candidate, weight) ->
+                    if (!isSingleWord(candidate)) return@forEach
+                    // Skip echoing the last context token itself.
+                    if (context.lastOrNull()?.let { it.equals(candidate, ignoreCase = true) } == true) return@forEach
+                    val score = contextSize * 100_000 + weight * 1_000
+                    ranked[candidate] = maxOf(ranked[candidate] ?: Int.MIN_VALUE, score)
+                }
+            }
+        }
+        // Global starters only when the prompt has no context yet (or no contextual hits).
+        if (maxCtx == 0 || ranked.isEmpty()) {
+            candidatesFor(transitions, emptyList()).forEach { (candidate, weight) ->
+                if (!isSingleWord(candidate)) return@forEach
+                if (partial.isNotEmpty() && candidate.equals(partial, ignoreCase = true)) return@forEach
+                val score = weight * 1_000
                 ranked[candidate] = maxOf(ranked[candidate] ?: Int.MIN_VALUE, score)
             }
         }
         return ranked.entries
             .sortedWith(compareByDescending<Map.Entry<String, Int>> { it.value }.thenBy { it.key.length })
-            .map { matchCase(it.key, partial.ifEmpty { context.lastOrNull().orEmpty() }) }
+            // Next-word keeps learned casing (đề not Đề). Only partial-completions follow typed case.
+            .map { if (completingPartial) matchCase(it.key, partial) else it.key }
             .distinctBy(::normalize)
+            .filterNot { partial.isNotEmpty() && it.equals(partial, ignoreCase = true) }
             .take(limit)
     }
 
@@ -90,13 +115,12 @@ object AiCommandSuggestionEngine {
         commands.forEach { command ->
             val words = tokens(command)
             words.indices.forEach { index ->
+                // Next-word only (size 1). Multi-word candidates made "Tiêu" suggest "đề ngắn".
+                val candidate = words[index]
                 for (contextSize in 0..minOf(2, index)) {
                     val context = words.subList(index - contextSize, index).map(::normalize)
-                    for (candidateSize in 1..minOf(2, words.size - index)) {
-                        val candidate = words.subList(index, index + candidateSize).joinToString(" ")
-                        val key = encode(context, candidate)
-                        result[key] = (result[key] ?: 0) + baseWeight
-                    }
+                    val key = encode(context, candidate)
+                    result[key] = (result[key] ?: 0) + baseWeight
                 }
             }
         }
@@ -109,6 +133,12 @@ object AiCommandSuggestionEngine {
     }
 
     private fun tokens(value: String): List<String> = tokenRegex.findAll(value).map { it.value }.toList()
+
+    /** True for one token only — rejects legacy multi-word blobs already on disk. */
+    private fun isSingleWord(value: String): Boolean {
+        val trimmed = value.trim()
+        return trimmed.isNotEmpty() && ' ' !in trimmed && '\t' !in trimmed
+    }
 
     private fun normalize(value: String): String = Normalizer.normalize(value, Normalizer.Form.NFD)
         .replace(Regex("\\p{Mn}+"), "")
