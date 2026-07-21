@@ -130,3 +130,21 @@ adb install app\build\outputs\apk\debug\app-arm64-v8a-debug.apk
 ```
 
 **Docs chi tiết:** `CHANGELOG.md` (mốc), `TESTING.md` (7.8–7.12 clipboard, 9.4b no-auto-IME), `PRIVACY.md` (ảnh local).
+
+---
+
+## Skill chống regression (đổi máy vẫn dùng)
+
+Nằm **trong git** (mọi máy `git pull` là có):
+
+```text
+.grok/skills/kai-board-continue/SKILL.md
+.grok/skills/kai-board-continue/references/smoke-ime.md
+```
+
+| Cách gọi | |
+| --- | --- |
+| Slash | `/kai-board-continue` |
+| Chat | “đổi máy”, “tiếp tục KAI Board”, “smoke sau cài”, “đừng để tính năng cũ lỗi” |
+
+Agent sẽ: pull/orient HANDOFF → shared keystore → build/install → **smoke G1–G9** (IME panel reset, Settings no auto-IME, clipboard, Telex tối thiểu).
