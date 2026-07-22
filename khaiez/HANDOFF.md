@@ -2,16 +2,17 @@
 
 **Repo:** https://github.com/dangminhkhai/KAI-Board  
 **Nhánh:** `main`  
-**Cập nhật:** 2026-07-21 (clipboard scroll/UI + AI quote sanitize + model filter)
+**Cập nhật:** 2026-07-22 (touch adaptation shipped; cài Vivo USB)
 
 ```powershell
 git pull origin main
 .\gradlew.bat testDebugUnitTest assembleDebug
 .\dev-install.cmd
-# WiFi (Vivo gần đây):
-adb connect 192.168.10.217:37121
+# USB (Vivo V2366GA gần đây):
+adb devices -l
 adb install -r app\build\outputs\apk\debug\app-arm64-v8a-debug.apk
 adb shell am force-stop vn.kai.board
+# WiFi: port wireless đổi mỗi lần pair — xem màn Wireless debugging
 ```
 
 | | |
@@ -24,7 +25,18 @@ adb shell am force-stop vn.kai.board
 
 ---
 
-## Session 2026-07-21 (mới) — Clipboard UI + AI sanitize
+## Session 2026-07-22 — học vị trí chạm (đã cài Vivo USB)
+
+- `TouchAdaptationStore` + bias trong `TouchTargetPolicy` (hit-test theo tâm học, **không** dời phím vẽ)
+- Gõ letter/space/⌫/Shift/Enter → học offset; private / tắt setting → không học
+- Cài đặt **Học vị trí chạm**; clear cùng “Xóa từ đã học”
+- Unit: `TouchAdaptationStoreTest`, `TouchTargetPolicyTest` — pass
+- Cài: Vivo **V2366GA** USB `10AE5U24S0000TQ` — `adb install -r` Success (2026-07-22)
+- Files: `touch/TouchAdaptationStore.kt`, `touch/TouchTargetPolicy.kt`, `KeyboardView` learn/apply, `KeyboardPreferences.TOUCH_ADAPTATION`
+
+---
+
+## Session 2026-07-21 — Clipboard UI + AI sanitize
 
 ### 0. Clipboard panel (scroll / card / tràn chữ) — đã vá + cài Vivo
 
@@ -118,22 +130,27 @@ AI bar: **next-word command** tách khỏi phrase chat (xem mục C).
 - [x] Groq + NVIDIA NIM generate sau quét lại model — **pass** (Vivo 2026-07-21)
 - [x] Clipboard scroll + card 2× + no overflow + no dim — **cài Vivo**
 - [x] AI strip outer quotes on title — **cài Vivo**
-- [ ] Smoke tay: scroll clipboard nhiều item; tap vs scroll; AI “viết tiêu đề” không `""`
+- [x] Touch adaptation — unit + **cài Vivo USB** 2026-07-22
+- [ ] Smoke tay: gõ lệch → sau vài chục lần hit-test “theo tay”; private không học
+- [ ] Smoke tay: scroll clipboard; AI “viết tiêu đề” không `""`
 - [ ] Smoke: clipboard → AI / Dịch; ô Dịch cursor
 - [ ] Release: keystore riêng, không dùng android-debug
 
 ---
 
-## Files chính (session clipboard/AI UI)
+## Files chính (touch adaptation + clipboard/AI UI)
 
 ```text
-app/.../ui/ClipboardTextLayout.kt            # measure wrap/ellipsis
-app/.../ui/KeyboardView.kt                   # clipboard cards, scroll, touch
-app/.../ai/AiOutputSanitizer.kt              # strip quotes / fences
-app/.../ai/AiProviderClient.kt               # systemInstruction + sanitize + chat filter
-app/.../test/.../ClipboardTextLayoutTest.kt
-app/.../test/.../AiOutputSanitizerTest.kt
-khaiez/CHANGELOG.md · HANDOFF.md · TESTING.md · ARCHITECTURE.md
+app/.../touch/TouchAdaptationStore.kt        # offline per-key bias
+app/.../touch/TouchTargetPolicy.kt           # center bias scoring
+app/.../ui/KeyboardView.kt                   # learn on tap + apply bias
+app/.../settings/KeyboardPreferences.kt      # TOUCH_ADAPTATION
+app/.../ui/ClipboardTextLayout.kt
+app/.../ai/AiOutputSanitizer.kt
+app/.../ai/AiProviderClient.kt
+app/.../test/.../TouchAdaptationStoreTest.kt
+app/.../test/.../TouchTargetPolicyTest.kt
+khaiez/CHANGELOG · HANDOFF · TESTING · PRIVACY · ARCHITECTURE · README
 ```
 
 ---

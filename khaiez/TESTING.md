@@ -249,6 +249,7 @@ Chạy trước khi cài bản debug lên máy chính.
 | 9.5 | Backup/restore: theme + Smartbar; **không** key/clipboard/notes | [ ] |
 | 9.6 | `assembleDebug` + `dev-install.cmd`; keystore chung `keystore/android-debug.keystore` | [ ] |
 | 9.7 | Package/version/ABI trên thiết bị (`0.1.0-debug`); máy khác `install -r` cùng cert | [ ] |
+| 9.8 | Touch adaptation: setting bật; gõ thường; private/password không bias; clear học xóa profile chạm | [ ] unit + cài Vivo 2026-07-22 |
 
 ---
 
@@ -265,6 +266,8 @@ Chạy trước khi cài bản debug lên máy chính.
 | 2026-07-21 | Vivo V2366GA WiFi `192.168.10.217:37121` | 0.1.0-debug | agent | Cài adb WiFi OK; vá AI gợi ý next-word + ô input Dịch/AI + clipboard→feature; unit AI engine pass |
 | 2026-07-21 | Vivo V2366GA | 0.1.0-debug | user | Báo gợi ý AI sai (`Đề`/`Tiêu`/`Limo` khi gõ Tiêu) — đã vá agent; cần smoke lại |
 | 2026-07-21 | Vivo V2366GA USB | 0.1.0-debug | agent | Clipboard scroll/card 2×/no overflow/no dim; AI quote sanitize; unit layout+sanitizer pass; adb Success |
+| 2026-07-22 | Vivo V2366GA USB `10AE5U24S0000TQ` | 0.1.0-debug | agent | **Touch adaptation** cài OK; unit `touch.*` pass; WiFi port cũ timeout |
+
 
 | | | | | |
 

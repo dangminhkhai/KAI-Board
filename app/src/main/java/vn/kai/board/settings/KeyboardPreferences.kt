@@ -25,6 +25,8 @@ object KeyboardPreferences {
     const val WORD_SUGGESTIONS = "word_suggestions"
     /** Allow multi-word entries from the built-in word dictionary (not the downloadable PhrasePack). */
     const val PHRASE_SEED = "phrase_seed"
+    /** Learn per-key touch offsets to improve hit targets (local only). */
+    const val TOUCH_ADAPTATION = "touch_adaptation"
     const val OFFLINE_MODE = "offline_mode"
     const val KEY_RADIUS_DP = "key_radius_dp"
     const val KEY_BORDER = "key_border"
@@ -69,6 +71,7 @@ object KeyboardPreferences {
     fun autoCapitalization(context: Context) = prefs(context).getBoolean(AUTO_CAPITALIZATION, true)
     fun wordSuggestions(context: Context) = prefs(context).getBoolean(WORD_SUGGESTIONS, true)
     fun phraseSeedEnabled(context: Context) = prefs(context).getBoolean(PHRASE_SEED, true)
+    fun touchAdaptation(context: Context) = prefs(context).getBoolean(TOUCH_ADAPTATION, true)
     fun offlineMode(context: Context) = prefs(context).getBoolean(OFFLINE_MODE, false)
     fun keyRadiusDp(context: Context) = prefs(context).getInt(KEY_RADIUS_DP, 7).coerceIn(0, 24)
     fun keyBorder(context: Context) = prefs(context).getBoolean(KEY_BORDER, false)

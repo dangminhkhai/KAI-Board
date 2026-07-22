@@ -6,7 +6,7 @@
 | --- | --- |
 | `ime/KaiBoardImeService` | Vòng đời IME; điều phối Telex → editor; AI, dịch, voice |
 | `ui/KeyboardView` | Vẽ bàn phím, geometry, action; không mạng/model |
-| `touch/` | Hit-test, pointer, slide, giữ phím, repeat |
+| `touch/` | Hit-test (+ bias học chạm), pointer, slide, giữ phím, repeat |
 | `telex/TelexEngine` | Biến đổi Telex thuần trạng thái (tone/shape, kiểu mới) |
 | `input/TelexWordComposer` | Chuỗi hiển thị + raw keys + literal lock; append/backspace |
 | `input/ComposingEditorSync` | Quyết định xóa suffix / prefix-shrink / OEM hostile |
@@ -26,6 +26,19 @@ MotionEvent → TouchDispatcher → KeyAction → KaiBoardImeService → InputCo
 ```
 
 Core typing phải chạy khi AI, mạng, micro hoặc model dịch lỗi. Dictionary tải ngoài UI; request AI nền có cancellation/timeout.
+
+### Học vị trí chạm (touch adaptation)
+
+```text
+Tap sạch (letter/space/…)
+  → TouchAdaptationStore.record(stableId, dxFrac, dyFrac)   // local prefs
+  → absoluteBiasPx(keys) → TouchTargetPolicy.setCenterBiasPx
+  → resolve() score khoảng cách tới (center + bias) — không dời phím vẽ
+```
+
+- `stableId` theo ký tự (`c:a`), không theo row index / shift.
+- Private session và setting `TOUCH_ADAPTATION=false` → không học / bias rỗng.
+- Không đưa `touch_adaptation` vào SettingsBackup.
 
 ### Luồng Telex (một từ)
 

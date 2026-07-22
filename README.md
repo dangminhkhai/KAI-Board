@@ -106,6 +106,7 @@ Các bảo vệ cho tiếng Anh và tên riêng:
 - Chế độ một tay và giới hạn chiều cao khi xoay ngang.
 - Preset kích thước/vị trí: Mặc định, Nâng lên, Cao dễ bấm và Tùy chỉnh.
 - Chỉnh trực tiếp chiều cao, chiều rộng, độ lệch và khoảng nâng đáy mà không thay đổi timing commit hay hit-test cốt lõi.
+- **Học vị trí chạm** (mặc định bật): offline, theo từng phím chữ/space/⌫…; hit-test theo tâm đã học, **không** dời phím vẽ; tắt trên ô mật khẩu; xóa kèm “Xóa từ đã học”; tắt trong Cài đặt → Gợi ý / ngôn ngữ.
 - Rung, âm thanh, viền phím và độ dày viền có thể điều chỉnh trong cài đặt.
 
 ### Smartbar, emoji và clipboard
@@ -217,7 +218,7 @@ app/src/main/java/vn/kai/board/
 ├── input/         TelexWordComposer, ComposingEditorSync, gợi ý, clipboard…
 ├── telex/         TelexEngine (tone/shape thuần)
 ├── settings/      Preferences, backup và Theme Extensions
-├── touch/         Hit-test, pointer, slide, giữ phím và repeat
+├── touch/         Hit-test, học offset chạm, pointer, slide, giữ phím và repeat
 ├── translation/   Quản lý model và luồng dịch ML Kit
 ├── ui/            Renderer bàn phím, geometry và preview theme
 └── voice/         Speech recognition cho mic thường, AI và Dịch

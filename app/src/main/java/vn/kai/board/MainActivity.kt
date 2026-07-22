@@ -38,6 +38,7 @@ import vn.kai.board.input.PhraseLearningStore
 import vn.kai.board.input.PhrasePack
 import vn.kai.board.input.WordDictionaryPack
 import vn.kai.board.input.DictionaryLanguagePack
+import vn.kai.board.touch.TouchAdaptationStore
 import vn.kai.board.translation.TranslationModelsActivity
 import android.widget.Toast
 import android.widget.ImageView
@@ -372,6 +373,7 @@ class MainActivity : Activity() {
         addSection(R.string.suggestions_language_title, "suggestions") { section ->
             addSwitch(section, R.string.setting_word_suggestions, KeyboardPreferences.WORD_SUGGESTIONS, KeyboardPreferences.wordSuggestions(this))
             addSwitch(section, R.string.setting_phrase_seed, KeyboardPreferences.PHRASE_SEED, KeyboardPreferences.phraseSeedEnabled(this))
+            addSwitch(section, R.string.setting_touch_adaptation, KeyboardPreferences.TOUCH_ADAPTATION, KeyboardPreferences.touchAdaptation(this))
             section.addView(MaterialCardView(this).apply {
                 radius = dp(14).toFloat()
                 cardElevation = 0f
@@ -609,6 +611,7 @@ class MainActivity : Activity() {
                             EmailSuggestionStore.clear(this@MainActivity)
                             HashtagSuggestionStore.clear(this@MainActivity)
                             PhraseLearningStore.clear(this@MainActivity)
+                            TouchAdaptationStore.clear(this@MainActivity)
                             updateLearnedStatus()
                             Toast.makeText(this@MainActivity, R.string.learned_words_cleared, Toast.LENGTH_SHORT).show()
                         }

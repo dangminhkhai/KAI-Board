@@ -35,4 +35,12 @@ class TouchTargetPolicyTest {
         assertEquals("a", TouchTargetPolicy(2f, 14f).resolve(keys, -12f, 25f)?.id)
         assertNull(TouchTargetPolicy(2f, 14f).resolve(keys, 43f, 25f))
     }
+
+    @Test fun adaptiveBiasCanPreferOffCenterKey() {
+        val policy = TouchTargetPolicy(10f)
+        assertEquals("s", policy.resolve(keys, 45f, 25f)?.id)
+        policy.setCenterBiasPx(mapOf("a" to (14f to 0f)))
+        // Geometric lean to s; biased a-center pulls the decision back.
+        assertEquals("a", policy.resolve(keys, 45f, 25f)?.id)
+    }
 }

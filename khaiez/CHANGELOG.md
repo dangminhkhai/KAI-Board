@@ -27,6 +27,14 @@ Lịch sử mốc phát triển nội bộ (không còn pipeline ship).
 - HTTP **400/404/410/413/422** → thử model/key tiếp (trước đây ném `IllegalStateException` chặn fallback).
 - Sau khi pull: **quét lại API key** trong Quản lý API để làm mới danh sách model.
 
+### Học vị trí chạm (touch adaptation) (2026-07-22)
+
+- Offline: mỗi phím chữ/space/⌫/Shift/Enter lưu offset chạm (phân số bề rộng/cao phím), **không** lưu nội dung gõ.
+- Hit-test dùng tâm đã dịch (`TouchTargetPolicy` + `TouchAdaptationStore`); **không** dời phím vẽ.
+- Strength tăng dần (~12 lần chạm/phím); cap ±32% để không “nuốt” phím kề.
+- Tắt trên private/password; tắt panel emoji/clipboard/symbols; setting **Học vị trí chạm**; xóa kèm “Xóa từ đã học”.
+- Unit `TouchAdaptationStoreTest` / `TouchTargetPolicyTest`; cài Vivo USB 2026-07-22.
+
 ### AI / Dịch panel + gợi ý command (2026-07-21)
 
 - **Clipboard → AI / Dịch:** mở AI hoặc Dịch từ panel clipboard không kẹt body clipboard / không “về ABC” oan; `setAiState` / `setTranslationState` xóa `panel` media; `rebuildKeys` ưu tiên feature body; offline AI check **trước** `finishComposing`.

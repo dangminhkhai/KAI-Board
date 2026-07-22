@@ -42,6 +42,7 @@ import vn.kai.board.settings.KeyboardColorStyle
 import vn.kai.board.settings.KeyboardThemePalette
 import vn.kai.board.touch.KeyGeometry
 import vn.kai.board.touch.TouchTargetPolicy
+import vn.kai.board.touch.TouchAdaptationStore
 import vn.kai.board.touch.TouchDispatcher
 import vn.kai.board.touch.RepeatKeyState
 import vn.kai.board.R
@@ -393,6 +394,8 @@ class KeyboardView(context: Context) : View(context) {
                 emojiSearchActive = false
                 emojiSearchQuery = ""
             }
+            // Never apply personal touch bias on password fields.
+            policy.setCenterBiasPx(emptyMap())
         }
         rebuildKeys(width.toFloat(), height.toFloat())
         invalidate()
@@ -1946,11 +1949,13 @@ class KeyboardView(context: Context) : View(context) {
                 lastShiftTapMs = now
                 onKeyAction(KeyAction.Shift)
             }
+            maybeLearnTouch(state, state.key?.takeIf { it == releasedOver })
         } else if (action != null && !state.longPressed) {
             if (panel == Panel.EMOJI && action is KeyAction.CommitText) {
                 EmojiRecentStore.add(context, action.value)
             }
             onKeyAction(action)
+            maybeLearnTouch(state, state.key?.takeIf { it == releasedOver })
             if ((action is KeyAction.CommitText || action is KeyAction.CommitClipboard) && panel != Panel.NONE) {
                 panel = Panel.NONE
                 rebuildKeys(width.toFloat(), height.toFloat())
@@ -2199,6 +2204,32 @@ class KeyboardView(context: Context) : View(context) {
         if ((featureBody || panel == Panel.NONE) && !voicePanel && !numericMode) {
             addBottomRow(totalWidth, rowCount - 1, rowHeight, margin, gap)
         }
+        applyTouchAdaptationBias()
+    }
+
+    /** Push learned per-key centers into hit-testing (no visual move). */
+    private fun applyTouchAdaptationBias() {
+        if (privateSession || !KeyboardPreferences.touchAdaptation(context) || panel != Panel.NONE || symbols) {
+            policy.setCenterBiasPx(emptyMap())
+            return
+        }
+        policy.setCenterBiasPx(TouchAdaptationStore.absoluteBiasPx(context, keys))
+    }
+
+    /**
+     * Learn from a clean tap on a letter/space/etc. Uses down position (aim) vs key center.
+     * Skips private session, slides, long-press, and near-center taps (store filters).
+     */
+    private fun maybeLearnTouch(state: TouchDispatcher.PointerState?, key: KeyGeometry?) {
+        if (privateSession || !KeyboardPreferences.touchAdaptation(context)) return
+        if (state == null || key == null || state.longPressed || state.cursorSteps != 0) return
+        if (panel != Panel.NONE || symbols) return
+        if (TouchAdaptationStore.stableId(key) == null) return
+        // Only when the finger stayed on the same key (no slide-retarget learning noise).
+        if (state.downKey?.id != key.id) return
+        TouchAdaptationStore.record(context, key, state.downX, state.downY)
+        // Refresh bias so the next key already benefits (cheap map rebuild).
+        applyTouchAdaptationBias()
     }
 
     private fun addNumericPad(totalWidth: Float, rowHeight: Float, margin: Float, gap: Float) {

@@ -4,9 +4,11 @@ Tóm tắt người dùng cũng nằm trong [README gốc](../README.md#quyền-
 
 ## Dữ liệu cục bộ
 
-KAI Board có thể lưu tùy chọn, từ/cặp từ, email, hashtag đã học, emoji gần đây, clipboard (text/HTML/ảnh thu nhỏ local) và ghi chú trên thiết bị. Email/hashtag được xếp hạng bằng số lần sử dụng. Người dùng có thể xóa từng mục clipboard, xóa hết chưa ghim, hoặc xóa dữ liệu học trong ứng dụng.
+KAI Board có thể lưu tùy chọn, từ/cặp từ, email, hashtag đã học, emoji gần đây, clipboard (text/HTML/ảnh thu nhỏ local), ghi chú và **profile chạm phím** (offset hình học theo phím) trên thiết bị. Email/hashtag được xếp hạng bằng số lần sử dụng. Người dùng có thể xóa từng mục clipboard, xóa hết chưa ghim, hoặc xóa dữ liệu học trong ứng dụng (kèm profile chạm).
 
-File sao lưu cài đặt có thể chứa từ/cụm từ, email, hashtag đã học, Theme Extensions và thứ tự Smartbar; không chứa API key, clipboard hoặc ghi chú.
+**Học vị trí chạm** (`touch_adaptation` prefs): chỉ lưu offset chạm so với tâm phím (phân số bề rộng/cao), khóa theo chữ/space/⌫… — **không** lưu nội dung gõ, tọa độ màn hình tuyệt đối hay heatmap có thể đọc lại text. Tắt trên private/password. Không backup; không gửi mạng.
+
+File sao lưu cài đặt có thể chứa từ/cụm từ, email, hashtag đã học, Theme Extensions và thứ tự Smartbar; không chứa API key, clipboard, ghi chú hoặc profile chạm.
 
 Nhận diện OTP, email, URL và số điện thoại trong Clipboard dùng luật cục bộ, không gửi nội dung ra mạng. Ảnh clipboard chỉ lưu file JPEG trong thư mục app; không upload. Lịch sử có thể tự xóa sau 1 giờ hoặc 1 ngày; mục ghim được giữ cho tới khi xóa thủ công.
 
