@@ -193,6 +193,9 @@
     <string name="download_model">Tải xuống</string>
     <string name="delete_model">Xóa gói</string>
     <string name="ai_settings_title">KAI AI</string>
+    <string name="ai_suffix_enabled">Thêm nội dung sau kết quả AI</string>
+    <string name="ai_suffix_hint">Nội dung thêm (hashtag, chữ ký…)</string>
+    <string name="ai_suffix_note">Chỉ dán kèm khi AI gửi từ ô AI lên ô nhập thật. Tắt thì chỉ dán kết quả AI.</string>
     <string name="manage_api">Quản lý API</string>
     <string name="api_management_title">Quản lý API</string>
     <string name="api_management_note">API key được mã hóa bằng Android Keystore, không nằm trong bản sao lưu.</string>

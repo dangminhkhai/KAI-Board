@@ -12,6 +12,12 @@ Lịch sử mốc phát triển nội bộ (không còn pipeline ship).
 - Scroll chỉ đổi offset + `invalidate` — **không** `rebuildKeys` mỗi frame (tránh bàn phím bị mờ/nháy).
 - Unit: `ClipboardTextLayoutTest`.
 
+### AI — hậu tố tùy chọn sau kết quả (Cài đặt)
+
+- Switch **Thêm nội dung sau kết quả AI** + ô nhập (hashtag, chữ ký…, tối đa 500 ký tự).
+- Chỉ áp dụng khi dán output AI từ ô AI IME vào **ô nhập thật** (`commitText`); không đính vào prompt AI.
+- Tắt switch hoặc để trống → chỉ dán kết quả AI. Unit: `AiPreferencesSuffixTest`.
+
 ### AI output — gỡ ngoặc kép tiêu đề + tone (2026-07-21)
 
 - System prompt: không bọc tiêu đề/câu ngắn trong `""` / `“”`; không code fence nếu không cần code.

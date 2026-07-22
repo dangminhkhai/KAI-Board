@@ -18,6 +18,7 @@ Theme tải bằng URL chỉ kết nối HTTPS sau thao tác của người dùn
 
 - Nội dung chỉ được gửi tới nhà cung cấp AI khi người dùng kích hoạt tính năng AI.
 - Provider/model đã chọn và phần văn bản yêu cầu là dữ liệu tối thiểu được gửi.
+- **Hậu tố sau kết quả AI** (Cài đặt): lưu local trong `ai_preferences`; **không** gửi lên provider — chỉ nối vào text khi dán kết quả AI vào ô nhập thật.
 - API key được mã hóa bằng Android Keystore và không nằm trong file sao lưu.
 - Màn Quản lý API chỉ hiển thị key đã che bớt. Thống kê provider/model và lỗi gần nhất phục vụ fallback được liên kết bằng fingerprint SHA-256, không chứa key dạng rõ.
 - Khi API key ưu tiên không dùng được, cùng một nội dung yêu cầu có thể được gửi sang key/provider tiếp theo theo thứ tự người dùng đã kéo thả; clipboard, lịch sử gõ và dữ liệu học không được đính kèm.

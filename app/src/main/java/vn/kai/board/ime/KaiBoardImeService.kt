@@ -1252,7 +1252,9 @@ class KaiBoardImeService : InputMethodService() {
                 if (aiCancellation === cancellation) aiCancellation = null
                 if (generation != aiGeneration || !aiMode) return@post
                 result.onSuccess { generated ->
-                    currentInputConnection?.commitText(generated.output, 1)
+                    // Optional suffix only when pasting AI result into the focused real editor.
+                    val paste = AiPreferences.commitTextWithOptionalSuffix(this, generated.output)
+                    currentInputConnection?.commitText(paste, 1)
                     updateAiUi("Đã xử lý • ${generated.provider} • ${generated.model}")
                 }.onFailure { updateAiUi(it.message ?: "AI không thể xử lý") }
             }

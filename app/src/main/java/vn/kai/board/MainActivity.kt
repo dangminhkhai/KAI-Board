@@ -20,6 +20,9 @@ import android.widget.ScrollView
 import android.widget.HorizontalScrollView
 import android.widget.TextView
 import android.widget.SeekBar
+import android.widget.EditText
+import android.text.TextWatcher
+import android.text.Editable
 import com.google.android.material.button.MaterialButton
 import com.google.android.material.card.MaterialCardView
 import com.google.android.material.materialswitch.MaterialSwitch
@@ -680,6 +683,51 @@ class MainActivity : Activity() {
                     AiPreferences.setAutoSend(this@MainActivity, checked)
                 }
             })
+            section.addView(MaterialSwitch(this).apply {
+                text = getString(R.string.ai_suffix_enabled)
+                textSize = 16f
+                setTextColor(primaryText)
+                isChecked = AiPreferences.suffixEnabled(this@MainActivity)
+                thumbTintList = checkedColors
+                trackTintList = switchTrackColors
+                setPadding(0, dp(8), 0, dp(4))
+                setOnCheckedChangeListener { _, checked ->
+                    AiPreferences.setSuffixEnabled(this@MainActivity, checked)
+                }
+            })
+            section.addView(textView(getString(R.string.ai_suffix_note), 12f, secondaryText).apply {
+                setPadding(dp(2), 0, dp(2), dp(6))
+            })
+            val suffixField = EditText(this).apply {
+                setText(AiPreferences.suffixText(this@MainActivity))
+                hint = getString(R.string.ai_suffix_hint)
+                textSize = 14f
+                setTextColor(primaryText)
+                setHintTextColor(secondaryText)
+                minLines = 2
+                maxLines = 5
+                setPadding(dp(12), dp(10), dp(12), dp(10))
+                inputType = InputType.TYPE_CLASS_TEXT or
+                    InputType.TYPE_TEXT_FLAG_MULTI_LINE or
+                    InputType.TYPE_TEXT_FLAG_CAP_SENTENCES
+                setBackground(
+                    GradientDrawable().apply {
+                        shape = GradientDrawable.RECTANGLE
+                        cornerRadius = dp(10).toFloat()
+                        setColor(if (isDark) Color.rgb(48, 49, 52) else Color.rgb(241, 243, 244))
+                        setStroke(dp(1), outlineColor)
+                    },
+                )
+                filters = arrayOf(android.text.InputFilter.LengthFilter(AiPreferences.SUFFIX_MAX_CHARS))
+                addTextChangedListener(object : TextWatcher {
+                    override fun beforeTextChanged(s: CharSequence?, start: Int, count: Int, after: Int) = Unit
+                    override fun onTextChanged(s: CharSequence?, start: Int, before: Int, count: Int) = Unit
+                    override fun afterTextChanged(s: Editable?) {
+                        AiPreferences.setSuffixText(this@MainActivity, s?.toString().orEmpty())
+                    }
+                })
+            }
+            section.addView(suffixField, LinearLayout.LayoutParams(-1, -2))
         }
         addSection(R.string.tab_layout, "layout") { section ->
             addSwitch(section, R.string.setting_number_row, KeyboardPreferences.NUMBER_ROW, KeyboardPreferences.numberRow(this))
