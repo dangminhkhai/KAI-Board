@@ -37,11 +37,16 @@ object AiProviderClient {
 
     fun detectProvider(apiKey: String): String? = when {
         apiKey.trim().startsWith("sk-or-") -> "OpenRouter"
-        apiKey.trim().startsWith("AIza") -> "Gemini"
+        isGeminiKey(apiKey) -> "Gemini"
         apiKey.trim().startsWith("gsk_") -> "Groq"
         apiKey.trim().startsWith("nvapi-") -> "NVIDIA NIM"
         apiKey.trim().startsWith("sk-") -> "OpenAI"
         else -> null
+    }
+
+    private fun isGeminiKey(apiKey: String): Boolean {
+        val key = apiKey.trim()
+        return key.startsWith("AIza") || key.startsWith("AQ.")
     }
 
     fun discover(apiKey: String, providerHint: String = "Tự động"): AiDiscovery {
@@ -49,7 +54,7 @@ object AiProviderClient {
         if (providerHint != "Tự động") return discoverForProvider(providerHint, key)
         return when {
             key.startsWith("sk-or-") -> discoverOpenRouter(key)
-            key.startsWith("AIza") -> discoverGemini(key)
+            isGeminiKey(key) -> discoverGemini(key)
             key.startsWith("gsk_") -> discoverGroq(key)
             key.startsWith("nvapi-") -> discoverNvidia(key)
             key.startsWith("sk-") -> discoverOpenAi(key)
@@ -116,7 +121,11 @@ object AiProviderClient {
     }
 
     private fun discoverGemini(key: String): AiDiscovery {
-        val json = request("https://generativelanguage.googleapis.com/v1beta/models?key=$key", null)
+        val json = request(
+            "https://generativelanguage.googleapis.com/v1beta/models",
+            bearer = null,
+            googleApiKey = key,
+        )
         val ids = json.getJSONArray("models").let { array ->
             buildList { repeat(array.length()) {
                 val model = array.getJSONObject(it)
@@ -162,12 +171,14 @@ object AiProviderClient {
         AiDiscovery("NVIDIA NIM", listOf(accepted) + NVIDIA_PREFERRED_CHAT.filterNot { it == accepted }, freeTierByQuota = true)
     }
 
-    private fun request(url: String, bearer: String?): JSONObject {
+    private fun request(url: String, bearer: String?, googleApiKey: String? = null): JSONObject {
         val connection = URL(url).openConnection() as HttpURLConnection
         connection.connectTimeout = 12_000
         connection.readTimeout = 15_000
         connection.requestMethod = "GET"
+        connection.instanceFollowRedirects = false
         if (bearer != null) connection.setRequestProperty("Authorization", "Bearer $bearer")
+        if (googleApiKey != null) connection.setRequestProperty("x-goog-api-key", googleApiKey)
         connection.setRequestProperty("Accept", "application/json")
         val status = connection.responseCode
         val body = (if (status in 200..299) connection.inputStream else connection.errorStream)?.bufferedReader()?.use { it.readText() }.orEmpty()
@@ -270,12 +281,24 @@ object AiProviderClient {
     private fun generateGemini(key: String, model: String, tone: AiTone, prompt: String, cancellation: AiRequestCancellation): String {
         val text = "${systemInstruction(tone)}\n\n$prompt"
         val payload = JSONObject().put("contents", org.json.JSONArray().put(JSONObject().put("parts", org.json.JSONArray().put(JSONObject().put("text", text)))))
-        val json = post("https://generativelanguage.googleapis.com/v1beta/models/$model:generateContent?key=$key", null, payload, cancellation)
+        val json = post(
+            "https://generativelanguage.googleapis.com/v1beta/models/$model:generateContent",
+            bearer = null,
+            payload = payload,
+            cancellation = cancellation,
+            googleApiKey = key,
+        )
         val content = json.getJSONArray("candidates").getJSONObject(0).getJSONObject("content").getJSONArray("parts").getJSONObject(0).getString("text")
         return AiOutputSanitizer.sanitize(content)
     }
 
-    private fun post(url: String, bearer: String?, payload: JSONObject, cancellation: AiRequestCancellation): JSONObject {
+    private fun post(
+        url: String,
+        bearer: String?,
+        payload: JSONObject,
+        cancellation: AiRequestCancellation,
+        googleApiKey: String? = null,
+    ): JSONObject {
         val connection = URL(url).openConnection() as HttpURLConnection
         cancellation.attach(connection)
         connection.connectTimeout = 12_000; connection.readTimeout = 30_000
@@ -283,6 +306,7 @@ object AiProviderClient {
         connection.instanceFollowRedirects = false
         connection.setRequestProperty("Content-Type", "application/json")
         if (bearer != null) connection.setRequestProperty("Authorization", "Bearer $bearer")
+        if (googleApiKey != null) connection.setRequestProperty("x-goog-api-key", googleApiKey)
         val status: Int
         val body: String
         try {

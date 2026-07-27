@@ -14,6 +14,9 @@ class AiProviderClientTest {
         assertEquals("OpenRouter", AiProviderClient.detectProvider("sk-or-example"))
         assertEquals("OpenAI", AiProviderClient.detectProvider("sk-example"))
         assertEquals("Gemini", AiProviderClient.detectProvider("AIza-example"))
+        assertEquals("Gemini", AiProviderClient.detectProvider("AQ.example"))
+        assertEquals("Gemini", AiProviderClient.detectProvider("  AQ.example  "))
+        assertNull(AiProviderClient.detectProvider("AQ-example"))
         assertNull(AiProviderClient.detectProvider("unknown"))
     }
 

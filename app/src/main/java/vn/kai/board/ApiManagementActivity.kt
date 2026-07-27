@@ -76,7 +76,14 @@ class ApiManagementActivity : Activity() {
             setPadding(dp(3), dp(10), dp(3), dp(6))
         }
 
-        val apiList = RecyclerView(this).apply {
+        val apiList = object : RecyclerView(this) {
+            override fun onMeasure(widthSpec: Int, heightSpec: Int) {
+                // This list lives inside the settings ScrollView. Measure its complete
+                // content instead of keeping only the first couple of key cards visible.
+                val fullHeight = View.MeasureSpec.makeMeasureSpec(0, View.MeasureSpec.UNSPECIFIED)
+                super.onMeasure(widthSpec, fullHeight)
+            }
+        }.apply {
             layoutManager = LinearLayoutManager(this@ApiManagementActivity)
             isNestedScrollingEnabled = false
             itemAnimator = androidx.recyclerview.widget.DefaultItemAnimator().apply {

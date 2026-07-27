@@ -34,6 +34,8 @@ class RepeatKeyStateTest {
         val delays = List(30) { repeat.nextDelayMs() }
         assertTrue(delays.zipWithNext().all { (first, second) -> second <= first })
         assertTrue(delays.last() < delays.first())
-        assertEquals(18L, delays.last())
+        assertEquals(12L, delays.last())
+        // First step should already be faster than the old 55ms start.
+        assertTrue(delays.first() <= 40L)
     }
 }

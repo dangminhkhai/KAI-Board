@@ -1781,7 +1781,8 @@ class KeyboardView(context: Context) : View(context) {
                 vibrate()
             }
             if (key.action == KeyAction.Backspace && repeatState.start(id)) {
-                postDelayed(repeatRunnable, 400L)
+                // First auto-delete sooner so hold-to-clear feels snappy (was 400ms).
+                postDelayed(repeatRunnable, 280L)
             }
             scheduleLongPress(id, key)
         }

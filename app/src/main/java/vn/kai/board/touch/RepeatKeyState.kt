@@ -11,9 +11,14 @@ class RepeatKeyState {
         repeatCount = 0
         return true
     }
+    /**
+     * Interval before the next repeated Backspace while held.
+     * Accelerates quickly so long holds clear text at Gboard-like speed.
+     */
     fun nextDelayMs(): Long {
         repeatCount++
-        return (55L - repeatCount * 2L).coerceAtLeast(18L)
+        // Start ~38ms, step down by 3ms → floor 12ms (was 55→18).
+        return (41L - repeatCount * 3L).coerceAtLeast(12L)
     }
     fun isActive(id: Int): Boolean = pointerId == id
     fun stop(id: Int): Boolean {
