@@ -40,8 +40,12 @@ object TelexWordComposer {
             return TelexComposeResult(raw, 0, raw)
         }
         val escapedModifier = TelexEngine.isRepeatedModifierEscape(word, key)
-        val transformed = TelexEngine.apply(word, key) ?: "$word$key"
-        val restoredLatin = restoreInvalidSyllable && shouldRestoreRaw(raw, transformed)
+        val applied = TelexEngine.apply(word, key)
+        val keepCompleted = shouldKeepCompletedTelexWord(word, applied, escapedModifier)
+        val transformed = if (keepCompleted) "$word$key" else applied ?: "$word$key"
+        val restoredLatin = restoreInvalidSyllable &&
+            shouldRestoreRaw(raw, transformed) &&
+            !keepCompleted
         val text = if (restoredLatin) raw else transformed
         val lock = when {
             escapedModifier -> text.length
@@ -49,6 +53,33 @@ object TelexWordComposer {
             else -> 0
         }
         return TelexComposeResult(text, lock, raw)
+    }
+
+    /**
+     * Do not explode a completed marked syllable back to raw keystrokes when the next key is
+     * merely a typo (`ddang` → `đang`, then `e` must be `đange`, never `ddange`).
+     *
+     * A non-empty Vietnamese coda is a strong completion signal and avoids changing the useful
+     * Latin recovery for words such as `safe` (`sà` is still an open intermediate syllable).
+     * `đ` is also decisive enough to preserve because an initial `dd` is intentional Telex.
+     */
+    private fun shouldKeepCompletedTelexWord(
+        word: String,
+        applied: String?,
+        escapedModifier: Boolean,
+    ): Boolean {
+        if (escapedModifier || word.none(::isVietnameseMarked)) return false
+        // A real late shape/tone rewrite replaces characters in place. A longer result is
+        // TelexEngine restoring raw modifier keys before a literal typo, which is precisely
+        // what must be suppressed here.
+        if (applied != null && applied.length <= word.length) return false
+        if (word.any { it.lowercaseChar() == 'đ' }) return true
+        val lower = word.lowercase()
+        val firstVowel = lower.indexOfFirst(::isVowel)
+        if (firstVowel < 0) return false
+        var nucleusEnd = firstVowel
+        while (nucleusEnd + 1 < lower.length && isVowel(lower[nucleusEnd + 1])) nucleusEnd++
+        return lower.substring(nucleusEnd + 1) in setOf("c", "ch", "m", "n", "ng", "nh", "p", "t")
     }
 
     fun lockAfterBackspace(newLength: Int, literalLockLength: Int): Int =

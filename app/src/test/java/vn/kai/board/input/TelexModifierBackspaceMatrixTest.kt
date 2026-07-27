@@ -62,6 +62,35 @@ class TelexModifierBackspaceMatrixTest {
         }
     }
 
+    @Test fun typoAfterCompletedTelexWordNeverExplodesToRawKeys() {
+        mapOf(
+            "bans" to ("bán" to 'e'), // s
+            "banf" to ("bàn" to 'e'), // f
+            "banr" to ("bản" to 'e'), // r
+            "banx" to ("bãn" to 'e'), // x
+            "banj" to ("bạn" to 'e'), // j
+            "caan" to ("cân" to 'i'), // aa
+            "teen" to ("tên" to 'i'), // ee
+            "toon" to ("tôn" to 'i'), // oo
+            "cawn" to ("căn" to 'i'), // aw
+            "town" to ("tơn" to 'i'), // ow
+            "tuwng" to ("tưng" to 'i'), // uw
+            "ddang" to ("đang" to 'e'), // dd — reported regression
+        ).forEach { (keys, expected) ->
+            val (rendered, typoKey) = expected
+            val completed = TelexWordComposer.compose(keys)
+            assertEquals("precondition $keys", rendered, completed.text)
+            val typo = TelexWordComposer.append(
+                completed.text,
+                typoKey,
+                completed.literalLockLength,
+                completed.rawText,
+            )
+            assertEquals("$keys + typo", "$rendered$typoKey", typo.text)
+            assertEquals("$keys raw history", "$keys$typoKey", typo.rawText)
+        }
+    }
+
     @Test fun shapeKeysRepeatedEscapeThenBackspaceDeletesVisible() {
         // aaa→aa, eee→ee, … first BS must shorten display (not no-op while raw shrinks).
         mapOf(

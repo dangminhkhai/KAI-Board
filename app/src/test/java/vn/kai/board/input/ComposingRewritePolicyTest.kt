@@ -43,8 +43,8 @@ class ComposingRewritePolicyTest {
         assertEquals(
             ComposingRewriteMode.DirectCommit,
             ComposingRewritePolicy.mode(
-                previous = "Safe",
-                next = "Saf",
+                previous = "đặng",
+                next = "đang",
                 directCommit = false,
                 preferDirectCommit = true,
             ),

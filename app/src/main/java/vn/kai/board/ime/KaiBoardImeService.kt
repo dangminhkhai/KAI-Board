@@ -707,7 +707,11 @@ class KaiBoardImeService : InputMethodService() {
                     } else null
                     if (corrected != null) {
                         composing = corrected
-                        connection.setComposingText(corrected, 1)
+                        // The current word is already plain committed text on Vivo/BBK and
+                        // direct-commit editors. setComposingText() would append the correction
+                        // after it (e.g. "đặngđang"). Rewrite the owned word through the same
+                        // verified delete/commit path used by normal Telex updates.
+                        applyComposingText(connection, original, corrected)
                     }
                     finishComposing()
                     connection.commitText(" ", 1)
