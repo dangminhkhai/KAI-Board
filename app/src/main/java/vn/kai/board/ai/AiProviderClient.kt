@@ -133,7 +133,8 @@ object AiProviderClient {
                 if (methods.contains("generateContent")) add(model.optString("name").removePrefix("models/"))
             } }
         }
-        return AiDiscovery("Gemini", ids, ids.size)
+        val chat = prioritizeChatModels("Gemini", ids)
+        return AiDiscovery("Gemini", chat, chat.size)
     }
 
     private fun discoverNvidia(key: String): AiDiscovery = try {
@@ -207,7 +208,9 @@ object AiProviderClient {
                     }
                 } catch (error: QuotaAiException) {
                     lastError = error
-                    break
+                    // Gemini limits are model-specific (RPM/TPM/RPD). Another stable
+                    // Flash model may still be available for this same API key.
+                    if (provider != "Gemini") break
                 } catch (error: InvalidApiKeyException) {
                     throw error
                 } catch (error: RetryableAiException) {
@@ -340,6 +343,7 @@ object AiProviderClient {
     internal fun prioritizeChatModels(provider: String, models: List<String>): List<String> {
         val filtered = models.map { it.trim() }.filter { it.isNotEmpty() && isLikelyChatModel(provider, it) }
         val preferred = when (provider) {
+            "Gemini" -> GEMINI_PREFERRED_CHAT
             "Groq" -> GROQ_PREFERRED_CHAT
             "NVIDIA NIM" -> NVIDIA_PREFERRED_CHAT
             else -> emptyList()
@@ -354,10 +358,11 @@ object AiProviderClient {
         val excluded = listOf(
             "whisper", "tts", "guard", "embed", "rerank", "retrieval", "clip",
             "transcri", "speech", "audio", "moderation", "playai", "distance",
-            "nv-embed", "nv-rerank", "ocr", "detect",
+            "nv-embed", "nv-rerank", "ocr", "detect", "image", "live", "omni",
         )
         if (excluded.any { m.contains(it) }) return false
         return when (provider) {
+            "Gemini" -> m.startsWith("gemini-")
             "Groq" -> m.contains("llama") || m.contains("gemma") || m.contains("mixtral") ||
                 m.contains("qwen") || m.contains("deepseek") || m.contains("gpt-oss") ||
                 m.contains("compound") || m.contains("moonshot") || m.contains("kimi") ||
@@ -376,6 +381,15 @@ object AiProviderClient {
     private class HttpStatusException(val status: Int, message: String) : RuntimeException(message)
     private const val MAX_RESPONSE_CHARS = 1_000_000
     /** Soft preference order — only used when still present in the live catalog. */
+    private val GEMINI_PREFERRED_CHAT = listOf(
+        "gemini-3.5-flash-lite",
+        "gemini-3.1-flash-lite",
+        "gemini-2.5-flash-lite",
+        "gemini-3.6-flash",
+        "gemini-3.5-flash",
+        "gemini-2.5-flash",
+        "gemini-flash-latest",
+    )
     private val GROQ_PREFERRED_CHAT = listOf(
         "llama-3.3-70b-versatile",
         "llama-3.1-8b-instant",

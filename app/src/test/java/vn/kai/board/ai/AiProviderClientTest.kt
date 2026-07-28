@@ -49,6 +49,23 @@ class AiProviderClientTest {
     }
 
     @Test
+    fun geminiPrefersStableFlashTextModels() {
+        val raw = listOf(
+            "gemini-3.1-pro-preview",
+            "gemini-3.1-flash-image",
+            "gemini-2.5-flash",
+            "gemini-3.5-flash-lite",
+            "gemini-3.1-flash-live-preview",
+        )
+        val ordered = AiProviderClient.prioritizeChatModels("Gemini", raw)
+        assertEquals(
+            listOf("gemini-3.5-flash-lite", "gemini-2.5-flash", "gemini-3.1-pro-preview"),
+            ordered,
+        )
+        assertFalse(ordered.any { it.contains("image") || it.contains("live") })
+    }
+
+    @Test
     fun isLikelyChatModelRejectsAudioAndGuard() {
         assertFalse(AiProviderClient.isLikelyChatModel("Groq", "whisper-large-v3-turbo"))
         assertFalse(AiProviderClient.isLikelyChatModel("Groq", "meta-llama/llama-guard-4-12b"))
