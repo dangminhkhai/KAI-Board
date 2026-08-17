@@ -9,6 +9,7 @@ import org.junit.Test
 class AiProviderClientTest {
     @Test
     fun detectsProviderWithoutSendingKeyToWrongEndpoint() {
+        assertEquals("TokenRouter", AiProviderClient.detectProvider("tr_example"))
         assertEquals("Groq", AiProviderClient.detectProvider("gsk_example"))
         assertEquals("NVIDIA NIM", AiProviderClient.detectProvider("nvapi-example"))
         assertEquals("OpenRouter", AiProviderClient.detectProvider("sk-or-example"))
@@ -18,6 +19,12 @@ class AiProviderClientTest {
         assertEquals("Gemini", AiProviderClient.detectProvider("  AQ.example  "))
         assertNull(AiProviderClient.detectProvider("AQ-example"))
         assertNull(AiProviderClient.detectProvider("unknown"))
+    }
+
+    @Test
+    fun tokenRouterUsesEndpointMatchingKeyFamily() {
+        assertEquals("https://api.tokenrouter.io/v1", AiProviderClient.tokenRouterBaseUrl("tr_example"))
+        assertEquals("https://api.tokenrouter.com/v1", AiProviderClient.tokenRouterBaseUrl("sk-example"))
     }
 
     @Test

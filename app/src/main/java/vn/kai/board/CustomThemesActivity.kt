@@ -42,6 +42,7 @@ class CustomThemesActivity : Activity() {
             ThemeMode.SYSTEM -> setTheme(R.style.Theme_KAIBoard)
         }
         super.onCreate(savedInstanceState)
+        ThemeExtensionStore.installBundledDefaults(this)
         dark = KeyboardPreferences.theme(this) == ThemeMode.DARK ||
             KeyboardPreferences.theme(this) == ThemeMode.SYSTEM &&
             resources.configuration.uiMode and Configuration.UI_MODE_NIGHT_MASK == Configuration.UI_MODE_NIGHT_YES

@@ -13,7 +13,24 @@ data class ThemeExtension(val id: String, val name: String, val author: String)
 object ThemeExtensionStore {
     private const val DIRECTORY = "theme_extensions"
     private const val MAX_BYTES = 64 * 1024
+    private const val BUNDLED_STATE = "theme_extensions_bundled"
     private val safeId = Regex("[a-z0-9][a-z0-9._-]{1,47}")
+    private val bundledThemes = listOf(
+        "paradox-teal-v1" to "themes/paradox_teal.json",
+    )
+
+    fun installBundledDefaults(context: Context) {
+        val state = context.getSharedPreferences(BUNDLED_STATE, Context.MODE_PRIVATE)
+        bundledThemes.forEach { (version, assetPath) ->
+            if (!state.getBoolean(version, false)) {
+                runCatching {
+                    context.assets.open(assetPath).use { install(context, it) }
+                }.onSuccess {
+                    state.edit().putBoolean(version, true).apply()
+                }
+            }
+        }
+    }
 
     fun installed(context: Context): List<ThemeExtension> = directory(context).listFiles()
         .orEmpty().filter { it.extension == "json" }.mapNotNull { file ->

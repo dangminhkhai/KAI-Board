@@ -35,7 +35,7 @@ data class KeyboardThemePalette(
             text = Color.rgb(32, 33, 36),
             hint = Color.rgb(95, 99, 104),
             accent = Color.rgb(60, 64, 67),
-            actionKey = Color.rgb(60, 64, 67),
+            actionKey = Color.rgb(232, 234, 237),
         )
 
         private fun neutralDark() = KeyboardThemePalette(
@@ -46,7 +46,7 @@ data class KeyboardThemePalette(
             text = Color.rgb(241, 243, 244),
             hint = Color.rgb(189, 193, 198),
             accent = Color.rgb(154, 160, 166),
-            actionKey = Color.rgb(95, 99, 104),
+            actionKey = Color.rgb(48, 49, 52),
         )
 
         /** Pure ARGB helpers keep palette resolution testable on the local JVM. */

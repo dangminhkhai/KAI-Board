@@ -24,11 +24,12 @@ class KeyboardColorStyleTest {
         assertEquals(KeyboardColorStyle.CLASSIC, KeyboardColorStyle.fromStorage("unknown_style"))
     }
 
-    @Test fun classicPaletteHasNoGradient() {
-        val classic = KeyboardThemePalette.resolve(KeyboardColorStyle.CLASSIC, false)
-        assertNull(classic.gradientColors)
-        assertEquals(0xFF4CAF50.toInt(), classic.accent)
-        assertEquals(0xFF4CAF50.toInt(), classic.actionKey)
+    @Test fun classicPaletteUsesSpecialKeyColorForEnter() {
+        listOf(false, true).forEach { dark ->
+            val classic = KeyboardThemePalette.resolve(KeyboardColorStyle.CLASSIC, dark)
+            assertNull(classic.gradientColors)
+            assertEquals(classic.specialKey, classic.actionKey)
+        }
     }
 
     @Test fun nonIllustratedRegularKeysAreWhiteInLightMode() {

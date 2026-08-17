@@ -33,9 +33,10 @@ data class AiDiscovery(
 }
 
 object AiProviderClient {
-    val providerChoices = listOf("Tự động", "OpenRouter", "Gemini", "OpenAI", "Groq", "NVIDIA NIM")
+    val providerChoices = listOf("Tự động", "TokenRouter", "OpenRouter", "Gemini", "OpenAI", "Groq", "NVIDIA NIM")
 
     fun detectProvider(apiKey: String): String? = when {
+        apiKey.trim().startsWith("tr_") -> "TokenRouter"
         apiKey.trim().startsWith("sk-or-") -> "OpenRouter"
         isGeminiKey(apiKey) -> "Gemini"
         apiKey.trim().startsWith("gsk_") -> "Groq"
@@ -53,6 +54,7 @@ object AiProviderClient {
         val key = apiKey.trim()
         if (providerHint != "Tự động") return discoverForProvider(providerHint, key)
         return when {
+            key.startsWith("tr_") -> discoverTokenRouter(key)
             key.startsWith("sk-or-") -> discoverOpenRouter(key)
             isGeminiKey(key) -> discoverGemini(key)
             key.startsWith("gsk_") -> discoverGroq(key)
@@ -63,6 +65,7 @@ object AiProviderClient {
     }
 
     private fun discoverForProvider(provider: String, key: String) = when (provider) {
+        "TokenRouter" -> discoverTokenRouter(key)
         "OpenRouter" -> discoverOpenRouter(key)
         "Gemini" -> discoverGemini(key)
         "OpenAI" -> discoverOpenAi(key)
@@ -70,6 +73,23 @@ object AiProviderClient {
         "NVIDIA NIM" -> discoverNvidia(key)
         else -> throw IllegalArgumentException("Nhà cung cấp chưa được hỗ trợ")
     }
+
+    private fun discoverTokenRouter(key: String): AiDiscovery {
+        val baseUrl = tokenRouterBaseUrl(key)
+        val discovered = discoverOpenAiCompatible(
+            "TokenRouter",
+            "$baseUrl/models",
+            key,
+        )
+        return discovered.copy(models = prioritizeChatModels("TokenRouter", discovered.models))
+    }
+
+    internal fun tokenRouterBaseUrl(key: String): String =
+        if (key.trim().startsWith("tr_")) {
+            "https://api.tokenrouter.io/v1"
+        } else {
+            "https://api.tokenrouter.com/v1"
+        }
 
     private fun discoverGroq(key: String): AiDiscovery {
         val discovered = discoverOpenAiCompatible(
@@ -199,6 +219,7 @@ object AiProviderClient {
                 cancellation.check()
                 try {
                     return model to when (provider) {
+                        "TokenRouter" -> generateChat("${tokenRouterBaseUrl(apiKey)}/chat/completions", apiKey, model, tone, prompt, cancellation)
                         "Gemini" -> generateGemini(apiKey, model, tone, prompt, cancellation)
                         "OpenRouter" -> generateChat("https://openrouter.ai/api/v1/chat/completions", apiKey, model, tone, prompt, cancellation)
                         "OpenAI" -> generateChat("https://api.openai.com/v1/chat/completions", apiKey, model, tone, prompt, cancellation)

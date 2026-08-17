@@ -1,0 +1,30 @@
+{
+  "schemaVersion": 1,
+  "id": "paradox-teal",
+  "name": "Paradox Teal",
+  "author": "KAI Board · Lemon Paper Lab palette",
+  "light": {
+    "background": "#D3E4E7",
+    "key": "#FFFFFF",
+    "specialKey": "#82ACAB",
+    "pressed": "#2A777C",
+    "text": "#032A33",
+    "hint": "#0B4B54",
+    "accent": "#2A777C",
+    "actionKey": "#82ACAB",
+    "gradient": ["#D3E4E7", "#82ACAB"],
+    "fontFamily": "sans-serif-rounded"
+  },
+  "dark": {
+    "background": "#032A33",
+    "key": "#0B4B54",
+    "specialKey": "#2A777C",
+    "pressed": "#82ACAB",
+    "text": "#D3E4E7",
+    "hint": "#82ACAB",
+    "accent": "#82ACAB",
+    "actionKey": "#2A777C",
+    "gradient": ["#032A33", "#0B4B54"],
+    "fontFamily": "sans-serif-rounded"
+  }
+}

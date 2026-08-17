@@ -302,7 +302,7 @@ class KeyboardView(context: Context) : View(context) {
     private fun rebuildKeysForActiveGeometry() {
         val hDp = activeHeightDp()
         val bDp = activeBottomDp()
-        val layoutH = if (adjustmentMode) {
+        val layoutH = if (activeAdjustmentMode()) {
             estimatedTotalHeightPx(hDp, bDp)
         } else {
             height.toFloat()
@@ -327,17 +327,31 @@ class KeyboardView(context: Context) : View(context) {
         return baseHeight + extraNumberRow + toolbarHeight + featurePanelExtra + bottomDp * density
     }
 
-    private fun activeHeightDp(): Int =
-        if (resizeDragging || adjustmentMode) previewHeightDp else keyboardHeightDp
+    private fun landscapeDefaults(): Boolean =
+        resources.configuration.orientation == Configuration.ORIENTATION_LANDSCAPE
 
-    private fun activeBottomDp(): Int =
-        if (resizeDragging || adjustmentMode) previewBottomDp else bottomOffsetDp
+    private fun activeAdjustmentMode(): Boolean =
+        KeyboardOrientationPolicy.adjustmentEnabled(adjustmentMode, landscapeDefaults())
 
-    private fun activeWidthPercent(): Int =
-        if (resizeDragging || adjustmentMode) previewWidthPercent else widthPercent
+    private fun activeHeightDp(): Int = KeyboardOrientationPolicy.heightDp(
+        if (resizeDragging || adjustmentMode) previewHeightDp else keyboardHeightDp,
+        landscapeDefaults(),
+    )
 
-    private fun activeLeftDp(): Int =
-        if (resizeDragging || adjustmentMode) previewLeftDp else leftOffsetDp
+    private fun activeBottomDp(): Int = KeyboardOrientationPolicy.bottomOffsetDp(
+        if (resizeDragging || adjustmentMode) previewBottomDp else bottomOffsetDp,
+        landscapeDefaults(),
+    )
+
+    private fun activeWidthPercent(): Int = KeyboardOrientationPolicy.widthPercent(
+        if (resizeDragging || adjustmentMode) previewWidthPercent else widthPercent,
+        landscapeDefaults(),
+    )
+
+    private fun activeLeftDp(): Int = KeyboardOrientationPolicy.leftOffsetDp(
+        if (resizeDragging || adjustmentMode) previewLeftDp else leftOffsetDp,
+        landscapeDefaults(),
+    )
 
     /** Content box of the keyboard inside the (possibly larger) adjustment viewport. */
     private fun contentFrame(): RectF {
@@ -351,8 +365,8 @@ class KeyboardView(context: Context) : View(context) {
 
     override fun onMeasure(widthMeasureSpec: Int, heightMeasureSpec: Int) {
         // Gboard-style: during resize mode hold max viewport so drag never needs requestLayout.
-        val heightDp = if (adjustmentMode) resizeMaxHeightDp else keyboardHeightDp
-        val bottomDp = if (adjustmentMode) resizeMaxBottomDp else bottomOffsetDp
+        val heightDp = if (activeAdjustmentMode()) resizeMaxHeightDp else activeHeightDp()
+        val bottomDp = if (activeAdjustmentMode()) resizeMaxBottomDp else activeBottomDp()
         val requestedHeight = estimatedTotalHeightPx(heightDp, bottomDp).toInt()
         val landscape = resources.configuration.orientation == Configuration.ORIENTATION_LANDSCAPE
         val cappedHeight = KeyboardHeightPolicy.cap(
@@ -368,7 +382,7 @@ class KeyboardView(context: Context) : View(context) {
 
     override fun onSizeChanged(w: Int, h: Int, oldw: Int, oldh: Int) {
         updateBackgroundGradient(w, h)
-        if (adjustmentMode) {
+        if (activeAdjustmentMode()) {
             rebuildKeysForActiveGeometry()
         } else {
             rebuildKeys(w.toFloat(), h.toFloat())
@@ -558,9 +572,13 @@ class KeyboardView(context: Context) : View(context) {
         val scaleX = drawWidthPercent / 100f
         val translateX = leftPxFor(drawLeftDp, scaleX)
         val contentH = estimatedTotalHeightPx(drawHeightDp, drawBottomDp)
-        val translateY = height - contentH
+        val translateY = KeyboardHeightPolicy.contentTranslateY(
+            viewHeight = height.toFloat(),
+            requestedContentHeight = contentH,
+            adjustmentMode = activeAdjustmentMode(),
+        )
         // In adjust mode only fill the keyboard band so the raised/shrunken frame can float.
-        if (adjustmentMode) {
+        if (activeAdjustmentMode()) {
             val bandTop = translateY.coerceAtLeast(0f)
             if (backgroundGradient != null) {
                 keyPaint.shader = backgroundGradient
@@ -700,7 +718,7 @@ class KeyboardView(context: Context) : View(context) {
         textPaint.textScaleX = 1f
         popupTextPaint.textScaleX = 1f
         hintPaint.textScaleX = 1f
-        if (adjustmentMode) {
+        if (activeAdjustmentMode()) {
             drawResizeOverlay(canvas, contentFrame())
         }
     }
@@ -811,15 +829,44 @@ class KeyboardView(context: Context) : View(context) {
 
     private fun drawSuggestionLabel(canvas: Canvas, key: KeyGeometry) {
         val previousSize = textPaint.textSize
-        textPaint.textSize = 19f * density
-        val baseline = key.centerY - (textPaint.ascent() + textPaint.descent()) / 2f
         val horizontalOffset = when {
             key.id.endsWith("-0") -> -6f * density
             key.id.endsWith("-2") -> 6f * density
             else -> 0f
         }
-        canvas.drawText(key.label, key.centerX + horizontalOffset, baseline, textPaint)
+        val centerX = key.centerX + horizontalOffset
+        val at = key.label.indexOf('@')
+        if (at > 0 && at < key.label.lastIndex) {
+            drawEmailSuggestionLabel(canvas, key, centerX, at)
+        } else {
+            textPaint.textSize = 19f * density
+            val baseline = key.centerY - (textPaint.ascent() + textPaint.descent()) / 2f
+            canvas.drawText(key.label, centerX, baseline, textPaint)
+        }
         textPaint.textSize = previousSize
+    }
+
+    private fun drawEmailSuggestionLabel(canvas: Canvas, key: KeyGeometry, centerX: Float, at: Int) {
+        val maxWidth = (key.right - key.left - 8f * density).coerceAtLeast(1f)
+        textPaint.textSize = 15f * density
+        if (textPaint.measureText(key.label) <= maxWidth) {
+            val baseline = key.centerY - (textPaint.ascent() + textPaint.descent()) / 2f
+            canvas.drawText(key.label, centerX, baseline, textPaint)
+            return
+        }
+
+        val lines = listOf(key.label.substring(0, at), key.label.substring(at))
+        textPaint.textSize = 11f * density
+        val widest = lines.maxOf(textPaint::measureText).coerceAtLeast(1f)
+        if (widest > maxWidth) {
+            textPaint.textSize = (textPaint.textSize * maxWidth / widest)
+                .coerceAtLeast(7.5f * density)
+        }
+        val lineHeight = (textPaint.fontMetrics.descent - textPaint.fontMetrics.ascent) * 0.9f
+        val firstBaseline = key.centerY - lineHeight / 2f -
+            (textPaint.ascent() + textPaint.descent()) / 2f
+        canvas.drawText(lines[0], centerX, firstBaseline, textPaint)
+        canvas.drawText(lines[1], centerX, firstBaseline + lineHeight, textPaint)
     }
 
     private fun updateBackgroundGradient(targetWidth: Int = width, targetHeight: Int = height) {
@@ -1749,7 +1796,7 @@ class KeyboardView(context: Context) : View(context) {
     }
 
     override fun onTouchEvent(event: MotionEvent): Boolean {
-        if (adjustmentMode) return handleResizeTouch(event)
+        if (activeAdjustmentMode()) return handleResizeTouch(event)
         if (clipboardItemPopup != null || clipboardClearPopup != null) {
             return handleClipboardPopupTouch(event)
         }
@@ -2161,9 +2208,10 @@ class KeyboardView(context: Context) : View(context) {
             else -> 0f
         }
         addToolbar(totalWidth)
-        val layoutBottomDp = if (adjustmentMode) activeBottomDp() else bottomOffsetDp
+        val layoutBottomDp = activeBottomDp()
         val usableHeight = totalHeight - keyboardTop - layoutBottomDp * density
-        val rowCount = if (numberRowEnabled && !numericMode) 5 else 4
+        // Symbol pages always have a permanent digit row. Only the rows below it change.
+        val rowCount = if (symbols || numberRowEnabled && !numericMode) 5 else 4
         val rowHeight = (usableHeight - margin * 2 - gap * (rowCount - 1)) / rowCount
         // Feature modes (AI / Dịch / voice) always own the body — never leave CLIPBOARD/EMOJI
         // underneath their chrome (that made taps from clipboard look like "stuck" or wrong UI).
@@ -2177,23 +2225,11 @@ class KeyboardView(context: Context) : View(context) {
         } else if (numericMode) {
             addNumericPad(totalWidth, rowHeight, margin, gap)
         } else if (symbols) {
-            if (symbolPage == 0) {
-                addCharacterRow("1234567890", 0, 0f, 0f, rowHeight, margin, gap)
-                val offset = if (numberRowEnabled) {
-                    addCharacterRow("`~[]{}<>^|", 1, 0f, 0f, rowHeight, margin, gap)
-                    1
-                } else 0
-                addCharacterRow("@#₫_&-+()/", offset + 1, 0f, 0f, rowHeight, margin, gap)
-                addActionCharacterRow("*\"':;!?", offset + 2, totalWidth, rowHeight, margin, gap)
-            } else {
-                val offset = if (numberRowEnabled) {
-                    addCharacterRow("1234567890", 0, 0f, 0f, rowHeight, margin, gap)
-                    1
-                } else 0
-                addCharacterRow("`~[]{}<>^|", offset, 0f, 0f, rowHeight, margin, gap)
-                addCharacterRow("€£¥₫%‰°•÷×", offset + 1, 0f, 0f, rowHeight, margin, gap)
-                addActionCharacterRow("$¢₹₩¿¡…", offset + 2, totalWidth, rowHeight, margin, gap)
-            }
+            val page = GboardSymbolLayout.page(symbolPage)
+            addCharacterRow(page.numberRow, 0, 0f, 0f, rowHeight, margin, gap)
+            addCharacterRow(page.topRow, 1, 0f, 0f, rowHeight, margin, gap)
+            addCharacterRow(page.middleRow, 2, totalWidth * 0.035f, totalWidth * 0.035f, rowHeight, margin, gap)
+            addActionCharacterRow(page.actionRow, 3, totalWidth, rowHeight, margin, gap)
         } else {
             val offset = if (numberRowEnabled) 1 else 0
             if (numberRowEnabled) addCharacterRow("1234567890", 0, 0f, 0f, rowHeight, margin, gap)
@@ -2459,7 +2495,7 @@ class KeyboardView(context: Context) : View(context) {
 
     private fun addVoicePanel(totalWidth: Float, totalHeight: Float, margin: Float) {
         val buttonWidth = 104f * density
-        val bottom = totalHeight - bottomOffsetDp * density - margin
+        val bottom = totalHeight - activeBottomDp() * density - margin
         addKey(
             "voice-toggle",
             "",
@@ -2495,7 +2531,7 @@ class KeyboardView(context: Context) : View(context) {
     private fun drawVoicePanel(canvas: Canvas) {
         val margin = 8f * density
         val top = keyboardTop + margin
-        val bottom = height - bottomOffsetDp * density - margin
+        val bottom = height - activeBottomDp() * density - margin
         val card = RectF(margin, top, width - margin, bottom)
         keyPaint.style = Paint.Style.FILL
         keyPaint.color = themePalette.specialKey
@@ -2579,7 +2615,8 @@ class KeyboardView(context: Context) : View(context) {
         val edgeWidth = 50f * density
         val middleLeft = margin + edgeWidth + gap
         val middleRight = totalWidth - margin - edgeWidth - gap
-        val candidateWidth = (middleRight - middleLeft - gap * 2) / 3f
+        val candidateCount = suggestions.size.coerceIn(1, 3)
+        val candidateWidth = (middleRight - middleLeft - gap * (candidateCount - 1)) / candidateCount
         addKey("toolbar-back", "", KeyAction.HideKeyboard, margin, 4f * density, margin + edgeWidth, bottom)
         suggestions.forEachIndexed { index, value ->
             val left = middleLeft + index * (candidateWidth + gap)
@@ -2980,8 +3017,8 @@ class KeyboardView(context: Context) : View(context) {
 
     private fun toKeyboardX(screenX: Float): Float {
         // Hit-testing always uses committed geometry so typing targets stay stable mid-drag.
-        val scaleX = widthPercent / 100f
-        return (screenX - effectiveLeftPx(scaleX)) / scaleX
+        val scaleX = activeWidthPercent() / 100f
+        return (screenX - leftPxFor(activeLeftDp(), scaleX)) / scaleX
     }
 
     private fun drawResizeOverlay(canvas: Canvas, frame: RectF) {
@@ -3192,14 +3229,14 @@ class KeyboardView(context: Context) : View(context) {
             key == KeyboardPreferences.LEFT_OFFSET_DP
 
     /** True while the Gboard-style resize chrome is showing. */
-    fun isInAdjustmentMode(): Boolean = adjustmentMode
+    fun isInAdjustmentMode(): Boolean = activeAdjustmentMode()
 
     /**
      * Y offset (px) from the top of this view to the top of the keyboard content band.
      * Used by the IME to set content/touchable insets so the app stays interactive above.
      */
     fun adjustmentContentTopPx(): Int {
-        if (!adjustmentMode) return 0
+        if (!activeAdjustmentMode()) return 0
         val contentH = estimatedTotalHeightPx(activeHeightDp(), activeBottomDp())
         return (height - contentH).toInt().coerceAtLeast(0)
     }
