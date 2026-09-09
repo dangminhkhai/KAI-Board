@@ -2225,7 +2225,7 @@ class KeyboardView(context: Context) : View(context) {
         } else if (numericMode) {
             addNumericPad(totalWidth, rowHeight, margin, gap)
         } else if (symbols) {
-            val page = GboardSymbolLayout.page(symbolPage)
+            val page = LabanSymbolLayout.page(symbolPage)
             addCharacterRow(page.numberRow, 0, 0f, 0f, rowHeight, margin, gap)
             addCharacterRow(page.topRow, 1, 0f, 0f, rowHeight, margin, gap)
             addCharacterRow(page.middleRow, 2, totalWidth * 0.035f, totalWidth * 0.035f, rowHeight, margin, gap)
@@ -2961,7 +2961,7 @@ class KeyboardView(context: Context) : View(context) {
         val keyWidth = available / chars.length
         val leadingLabel = when {
             !symbols -> "⇧"
-            extendedSymbolsEnabled -> if (symbolPage == 0) "#+=" else "123"
+            extendedSymbolsEnabled -> if (symbolPage == 0) "=\\<" else "?123"
             else -> "ABC"
         }
         val leadingAction = when {
